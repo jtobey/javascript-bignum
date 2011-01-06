@@ -39,15 +39,12 @@ if (typeof BigRational === "undefined" || typeof runTests === "undefined") {
     }
 
     BigRational = require("bigrational").BigRational;
-    BRI = require("bigrational").BigInteger;
-    BigInteger = require("biginteger").BigInteger;
+    BRI         = require("bigrational").BigInteger;
+    BigInteger  = require("biginteger").BigInteger;
 
-    var test = require("test");
-    assertPropertyExists = test.assertPropertyExists;
-    assertTrue = test.assertTrue;
-    assertThrows = test.assertThrows;
-    fail = test.fail;
-    runTests = test.runTests;
+    for (var i in require("test")) {
+        this[i] = require("test")[i];
+    }
 }
 
 function checkBigRational(r, n, d) {
@@ -138,6 +135,17 @@ function testBigRationalInteger() {
     checkBigRational(BRI(4).add("1/2"), 9, 2);
 }
 
+function testLog() {
+    assertEquals(BigRational.ONE.log(), 0);
+    assertEqualsApprox(BigRational(10).log(), 2.302585092994046);
+    assertEqualsApprox(BigRational.log(BigInteger(10).pow(1000)),
+                       2302.585092994046);
+    assertEqualsApprox(BigRational("10/3").pow(2000).log(), 2407.94560865187);
+    assertEquals(BigRational.ZERO.log(), -Infinity);
+    assertNaN(BigRational.M_ONE.log());
+    assertNaN(BigRational("-22/7").pow(1999).log());
+}
+
 function TestBigRational() {
     this.start = new Date();
 }
@@ -148,6 +156,7 @@ TestBigRational.prototype = {
     testParse: testParse,
     testPow: testPow,
     testBigRationalInteger: testBigRationalInteger,
+    testLog: testLog,
 
 /* Keep track of the time for each test */
     tearDown: function(show) {

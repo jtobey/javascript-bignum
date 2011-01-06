@@ -713,6 +713,30 @@ function testModPow() {
 	powValues, powValues, powValues);
 };
 
+// Test log().  Don't use runUnaryOperationTest, because that asserts
+// exact equality.  But feel free to add test cases and move the data
+// into files.
+var logValues = [
+				 1,
+				 10,
+				 BigRationalInteger(10).pow(1000),
+				 0
+				 ].map(BigRationalInteger);
+var logResults = [
+				  0,
+				  2.302585092994046,
+				  2302.585092994046,
+				  -Infinity
+				  ];
+function testLog() {
+	for (var i = 0; i < logResults.length; i++) {
+		var value = logValues[i];
+		assertEqualsApprox(logResults[i], value.log());
+		if (value.isPositive()) {
+			assertNaN(value.negate().log());
+		}
+	}
+}
 
 function TestBigInteger() {
 	this.start = new Date();
@@ -733,6 +757,7 @@ TestBigInteger.prototype = {
 	testPrev: testPrev,
 	testAbs: testAbs,
 	testSquare: testSquare,
+    testLog: testLog,
 /* Binary Functions */
 	testAdd: testAdd,
 	testSubtract: testSubtract,

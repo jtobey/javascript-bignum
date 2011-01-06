@@ -20,7 +20,7 @@
 
 	As an example, these calls are equivalent.
 
-	> BigInteger(4).multiply(5); // returns BigIngeger(20);
+	> BigInteger(4).multiply(5); // returns BigInteger(20);
 	> BigInteger.multiply(4, 5); // returns BigInteger(20);
 
 	> var a = 42;
@@ -93,6 +93,7 @@ function BigInteger(n, s) {
 		return BigInteger.parse(n);
 	}
 
+	n = n || [];
 	while (n.length && !n[n.length - 1]) {
 		--n.length;
 	}
@@ -1436,6 +1437,41 @@ BigInteger.prototype.modPow = function(exponent, modulus) {
 };
 
 /*
+	Function: log
+	Get the natural logarithm of a <BigInteger> as a native JavaScript number.
+
+	This is equivalent to
+
+	> Math.log(this.toJSValue())
+
+	but handles values outside of the native number range.
+
+	Returns:
+
+		log( *this* )
+
+	See Also:
+
+		<toJSValue>
+*/
+BigInteger.prototype.log = function() {
+	switch (this._s) {
+	case 0:	 return -Infinity;
+	case -1: return NaN;
+	default: // Fall through.
+	}
+
+	var l = this._d.length;
+
+	if (l < 30) {
+		return Math.log(this.toJSValue());
+	}
+
+	var first30digits = this._d.slice(l-30).reverse().join("");
+	return Math.log(first30digits) + (l - 30) * Math.log(10);
+};
+
+/*
 	Function: valueOf
 	Convert a <BigInteger> to a native JavaScript integer.
 
@@ -1497,7 +1533,7 @@ BigInteger.MAX_EXP = BigInteger(0x7FFFFFFF);
 
 	(function() {
 		var i, fn;
-		var unary = "toJSValue,isEven,isOdd,sign,isZero,isNegative,abs,isUnit,square,negate,isPositive,toString,next,prev".split(",");
+		var unary = "toJSValue,isEven,isOdd,sign,isZero,isNegative,abs,isUnit,square,negate,isPositive,toString,next,prev,log".split(",");
 		var binary = "compare,remainder,divRem,subtract,add,quotient,divide,multiply,pow,compareAbs".split(",");
 		var trinary = ["modPow"];
 

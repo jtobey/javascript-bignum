@@ -5,20 +5,6 @@
 
    Dependency: Silent Matt Crumley's BigInteger library.
    http://silentmatt.com/biginteger/
-
-   TODO:
-
-   * More tests.
-
-   * More documentation.
-
-   * Consider hooking parse() into BigInteger.parse.expandExponential
-     to support syntax like "1.234*10^3" but of course retain
-     fractional parts.
-
-   * New methods as per the ECMA spec for Number.prototype:
-     toLocaleString, toFixed, toExponential, toPrecision.  Consider
-     inheriting from Number.
 */
 
 /*
@@ -460,6 +446,10 @@ BigRational.prototype.pow = function(n) {
                        BigInteger.pow(den, n), ALREADY_REDUCED);
 };
 
+BigRational.prototype.log = function() {
+    return this._n.log() - this._d.log();
+}
+
 // Wrap all the BigInteger methods and functions so they accept
 // BigRational arguments.  BigRationalInteger should be a drop-in
 // replacement for BigInteger.
@@ -542,11 +532,10 @@ function wrapValue(value) {
 }
 
 // Subclass BigInteger.
-//var biproto = new BigInteger();
-var biproto = new BigInteger([], 0); // XXX BigInteger constructor should tolerate 0 arguments.
+var biproto = new BigInteger();
 
 // These methods take no argument and return a native value.
-var retNative = " toJSValue isZero isPositive isNegative isEven isOdd isUnit sign isInteger ";
+var retNative = " toJSValue isZero isPositive isNegative isEven isOdd isUnit sign isInteger log ";
 var dontWrap = retNative + "toString valueOf ";
 
 // These methods take no argument.  The return type is a bignum of the
@@ -733,6 +722,8 @@ BigRationalInteger.parse = function(a, b) {
     return BigRationalInteger(ret);
 };
 
+BigRationalInteger.small = wrapValue(BigInteger.small);
+
 for (var i in BigInteger) {
     if (typeof BigRationalInteger[i] !== "undefined") {
         continue;
@@ -810,42 +801,6 @@ for (var i in BigRational.prototype) {
     if (typeof BigRational[i] === "undefined") {
         print("Missing BigRational." + i);
     }
-}
-
-if (false) {
-
-/*
-    Function: log
-    Get the natural logarithm of a <BigInteger> as a native JavaScript number.
-
-    This is equivalent to
-
-    > Math.log(this.toJSValue())
-
-    but handles values outside of the native number range.
-
-    Returns:
-
-        log( *this* )
-
-    See Also:
-
-        <toJSValue>
-*/
-BigInteger.prototype.log = function() {
-    if (!this.isPositive()) {
-        return NaN;
-    }
-
-    var l = this._d.length;
-
-    if (l < 30) {
-        return Math.log(this.toJSValue());
-    }
-
-    var first30digits = this._d.slice(l-30).reverse().join("");
-    return Math.log(first30digits) + (l - 30) * Math.log(10);
-};
 }
 
 if (typeof exports !== "undefined") {
