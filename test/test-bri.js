@@ -1,9 +1,16 @@
 // Copyright (c) 2009 Matthew Crumley <email@matthewcrumley.com>
+// Copyright (c) 2011 John Tobey <John.Tobey@gmail.com>
 load("../biginteger.js");
+load("../bigrational.js");
 load("test.js");
 
 load("testValues.js");
 load("powValues.js");
+
+testValues1 = testValues1.map(BigRationalInteger);
+testValues2 = testValues2.map(BigRationalInteger);
+shortTestValues = shortTestValues.map(BigRationalInteger);
+powValues = powValues.map(BigRationalInteger);
 
 function getAnswers(file) {
 	file = "expected/" + file + ".js";
@@ -127,226 +134,198 @@ function checkBigInteger(n, d, s) {
 	}
 }
 
-function testConstructor() {
-	var n = new BigInteger([], 1);
-	checkBigInteger(n, [], 0);
-
-	n = new BigInteger([0,0,0], 1);
-	checkBigInteger(n, [], 0);
-
-	n = new BigInteger([1], 1);
-	checkBigInteger(n, [1], 1);
-
-	n = new BigInteger([2,0], 1);
-	checkBigInteger(n, [2], 1);
-
-	n = new BigInteger([3], 0);
-	checkBigInteger(n, [3], 1);
-
-	n = new BigInteger([4], -1);
-	checkBigInteger(n, [4], -1);
-
-	n = new BigInteger([1,2,3], -1);
-	checkBigInteger(n, [1,2,3], -1);
-
-	var a = [3,2,1];
-	n = new BigInteger(a, 1);
-	a.unshift(4);
-	checkBigInteger(n, [4,3,2,1], 1);
-};
-
 function testConversion() {
-	var n = BigInteger(-1);
+	var n = BigRationalInteger(-1);
 	checkBigInteger(n, [1], -1);
 
-	var n = BigInteger(-123);
+	var n = BigRationalInteger(-123);
 	checkBigInteger(n, [3,2,1], -1);
 
-	var n = BigInteger(456);
+	var n = BigRationalInteger(456);
 	checkBigInteger(n, [6, 5, 4], 1);
 
-	var n = BigInteger("+42");
+	var n = BigRationalInteger("+42");
 	checkBigInteger(n, [2, 4], 1);
 
-	var n = BigInteger("23x10^5");
+	var n = BigRationalInteger("23x10^5");
 	checkBigInteger(n, [0,0,0,0,0,3,2], 1);
 
-	var n = BigInteger("3425 x 10 ^ -2");
+	var n = BigRationalInteger("3425 x 10 ^ -2");
 	checkBigInteger(n, [4,3], 1);
 
-	var n = BigInteger("342.5 x 10 ^ -2");
+	var n = BigRationalInteger("342.5 x 10 ^ -2");
 	checkBigInteger(n, [3], 1);
 
-	var n = BigInteger("-23x10^5");
+	var n = BigRationalInteger("-23x10^5");
 	checkBigInteger(n, [0,0,0,0,0,3,2], -1);
 
-	var n = BigInteger("-3425 x 10 ^ -2");
+	var n = BigRationalInteger("-3425 x 10 ^ -2");
 	checkBigInteger(n, [4,3], -1);
 
-	var n = BigInteger("23.45x10^5");
+	var n = BigRationalInteger("23.45x10^5");
 	checkBigInteger(n, [0,0,0,5,4,3,2], 1);
 
-	var n = BigInteger("3425e-12");
+	var n = BigRationalInteger("3425e-12");
 	checkBigInteger(n, [], 0);
 
-	var n = BigInteger("-3425e8");
+	var n = BigRationalInteger("-3425e8");
 	checkBigInteger(n, [0,0,0,0,0,0,0,0,5,2,4,3], -1);
 
-	var n = BigInteger("3425e-12");
+	var n = BigRationalInteger("3425e-12");
 	checkBigInteger(n, [], 0);
 
-	var n = BigInteger("+3425e0");
+	var n = BigRationalInteger("+3425e0");
 	checkBigInteger(n, [5,2,4,3], 1);
 
-	var n = BigInteger("0xDeadBeef");
+	var n = BigRationalInteger("0xDeadBeef");
 	checkBigInteger(n, [9,5,5,8,2,9,5,3,7,3], 1);
 
-	var n = BigInteger("-0c715");
+	var n = BigRationalInteger("-0c715");
 	checkBigInteger(n, [1,6,4], -1);
 
-	var n = BigInteger("+0b1101");
+	var n = BigRationalInteger("+0b1101");
 	checkBigInteger(n, [3,1], 1);
 };
 
 function testParse() {
 	var n;
-	n = BigInteger.parse("0", 10);
+	n = BigRationalInteger.parse("0", 10);
 	checkBigInteger(n, [], 0);
 
-	n = BigInteger.parse("");
+	n = BigRationalInteger.parse("");
 	checkBigInteger(n, [], 0);
 
-	n = BigInteger.parse("1");
+	n = BigRationalInteger.parse("1");
 	checkBigInteger(n, [1], 1);
 
-	n = BigInteger.parse("-1");
+	n = BigRationalInteger.parse("-1");
 	checkBigInteger(n, [1], -1);
 
-	n = BigInteger.parse("+42", 10);
+	n = BigRationalInteger.parse("+42", 10);
 	checkBigInteger(n, [2, 4], 1);
 
-	n = BigInteger.parse("+42", 5);
+	n = BigRationalInteger.parse("+42", 5);
 	checkBigInteger(n, [2, 2], 1);
 
-	n = BigInteger.parse("23x10^5");
+	n = BigRationalInteger.parse("23x10^5");
 	checkBigInteger(n, [0,0,0,0,0,3,2], 1);
 
-	n = BigInteger.parse("3425 x 10 ^ -2");
+	n = BigRationalInteger.parse("3425 x 10 ^ -2");
 	checkBigInteger(n, [4,3], 1);
 
-	n = BigInteger.parse("342.5 x 10 ^ -2");
+	n = BigRationalInteger.parse("342.5 x 10 ^ -2");
 	checkBigInteger(n, [3], 1);
 
-	n = BigInteger.parse("-23x10^5");
+	n = BigRationalInteger.parse("-23x10^5");
 	checkBigInteger(n, [0,0,0,0,0,3,2], -1);
 
-	n = BigInteger.parse("-3425 x 10 ^ -2");
+	n = BigRationalInteger.parse("-3425 x 10 ^ -2");
 	checkBigInteger(n, [4,3], -1);
 
-	n = BigInteger.parse("23.45x10^5");
+	n = BigRationalInteger.parse("23.45x10^5");
 	checkBigInteger(n, [0,0,0,5,4,3,2], 1);
 
-	n = BigInteger.parse("3425e-12");
+	n = BigRationalInteger.parse("3425e-12");
 	checkBigInteger(n, [], 0);
 
-	n = BigInteger.parse("-3425e8");
+	n = BigRationalInteger.parse("-3425e8");
 	checkBigInteger(n, [0,0,0,0,0,0,0,0,5,2,4,3], -1);
 
-	n = BigInteger.parse("-3425e-12");
+	n = BigRationalInteger.parse("-3425e-12");
 	checkBigInteger(n, [], 0);
 
-	n = BigInteger.parse("+3425e0");
+	n = BigRationalInteger.parse("+3425e0");
 	checkBigInteger(n, [5,2,4,3], 1);
 
-	n = BigInteger.parse("0xDeadBeef");
+	n = BigRationalInteger.parse("0xDeadBeef");
 	checkBigInteger(n, [9,5,5,8,2,9,5,3,7,3], 1);
 
-	n = BigInteger.parse("12abz", 36);
+	n = BigRationalInteger.parse("12abz", 36);
 	checkBigInteger(n, [9,1,3,6,8,7,1], 1);
 
-	n = BigInteger.parse("-0c715");
+	n = BigRationalInteger.parse("-0c715");
 	checkBigInteger(n, [1,6,4], -1);
 
-	n = BigInteger.parse("-0C715", 10);
+	n = BigRationalInteger.parse("-0C715", 10);
 	checkBigInteger(n, [5,1,7], -1);
 
-	n = BigInteger.parse("+0b1101");
+	n = BigRationalInteger.parse("+0b1101");
 	checkBigInteger(n, [3,1], 1);
 
-	n = BigInteger.parse("1011", 2);
+	n = BigRationalInteger.parse("1011", 2);
 	checkBigInteger(n, [1,1], 1);
 
-	n = BigInteger.parse("1011", 3);
+	n = BigRationalInteger.parse("1011", 3);
 	checkBigInteger(n, [1,3], 1);
 
-	n = BigInteger.parse("1011", 4);
+	n = BigRationalInteger.parse("1011", 4);
 	checkBigInteger(n, [9,6], 1);
 
-	n = BigInteger.parse("1011", 5);
+	n = BigRationalInteger.parse("1011", 5);
 	checkBigInteger(n, [1,3,1], 1);
 
-	n = BigInteger.parse("1011", 6);
+	n = BigRationalInteger.parse("1011", 6);
 	checkBigInteger(n, [3,2,2], 1);
 
-	n = BigInteger.parse("1011", 7);
+	n = BigRationalInteger.parse("1011", 7);
 	checkBigInteger(n, [1,5,3], 1);
 
-	n = BigInteger.parse("1011", 10);
+	n = BigRationalInteger.parse("1011", 10);
 	checkBigInteger(n, [1,1,0,1], 1);
 
-	n = BigInteger.parse("1011", 11);
+	n = BigRationalInteger.parse("1011", 11);
 	checkBigInteger(n, [3,4,3,1], 1);
 
-	n = BigInteger.parse("1011", 12);
+	n = BigRationalInteger.parse("1011", 12);
 	checkBigInteger(n, [1,4,7,1], 1);
 
-	n = BigInteger.parse("1011", 15);
+	n = BigRationalInteger.parse("1011", 15);
 	checkBigInteger(n, [1,9,3,3], 1);
 
-	n = BigInteger.parse("1011", 16);
+	n = BigRationalInteger.parse("1011", 16);
 	checkBigInteger(n, [3,1,1,4], 1);
 
-	n = BigInteger.parse("1011", 36);
+	n = BigRationalInteger.parse("1011", 36);
 	checkBigInteger(n, [3,9,6,6,4], 1);
 
-	BigInteger.parse("1", 2);
-	BigInteger.parse("2", 3);
-	BigInteger.parse("3", 4);
-	BigInteger.parse("4", 5);
-	BigInteger.parse("5", 6);
-	BigInteger.parse("6", 7);
-	BigInteger.parse("7", 8);
-	BigInteger.parse("8", 9);
-	BigInteger.parse("9", 10);
+	BigRationalInteger.parse("1", 2);
+	BigRationalInteger.parse("2", 3);
+	BigRationalInteger.parse("3", 4);
+	BigRationalInteger.parse("4", 5);
+	BigRationalInteger.parse("5", 6);
+	BigRationalInteger.parse("6", 7);
+	BigRationalInteger.parse("7", 8);
+	BigRationalInteger.parse("8", 9);
+	BigRationalInteger.parse("9", 10);
 
-	BigInteger.parse("a", 11);
-	BigInteger.parse("b", 12);
-	BigInteger.parse("c", 13);
-	BigInteger.parse("d", 14);
-	BigInteger.parse("e", 15);
-	BigInteger.parse("f", 16);
-	BigInteger.parse("g", 17);
-	BigInteger.parse("h", 18);
-	BigInteger.parse("i", 19);
-	BigInteger.parse("j", 20);
+	BigRationalInteger.parse("a", 11);
+	BigRationalInteger.parse("b", 12);
+	BigRationalInteger.parse("c", 13);
+	BigRationalInteger.parse("d", 14);
+	BigRationalInteger.parse("e", 15);
+	BigRationalInteger.parse("f", 16);
+	BigRationalInteger.parse("g", 17);
+	BigRationalInteger.parse("h", 18);
+	BigRationalInteger.parse("i", 19);
+	BigRationalInteger.parse("j", 20);
 
-	BigInteger.parse("k", 21);
-	BigInteger.parse("l", 22);
-	BigInteger.parse("m", 23);
-	BigInteger.parse("n", 24);
-	BigInteger.parse("o", 25);
-	BigInteger.parse("p", 26);
-	BigInteger.parse("q", 27);
-	BigInteger.parse("r", 28);
-	BigInteger.parse("s", 29);
-	BigInteger.parse("t", 30);
+	BigRationalInteger.parse("k", 21);
+	BigRationalInteger.parse("l", 22);
+	BigRationalInteger.parse("m", 23);
+	BigRationalInteger.parse("n", 24);
+	BigRationalInteger.parse("o", 25);
+	BigRationalInteger.parse("p", 26);
+	BigRationalInteger.parse("q", 27);
+	BigRationalInteger.parse("r", 28);
+	BigRationalInteger.parse("s", 29);
+	BigRationalInteger.parse("t", 30);
 
-	BigInteger.parse("u", 31);
-	BigInteger.parse("v", 32);
-	BigInteger.parse("w", 33);
-	BigInteger.parse("x", 34);
-	BigInteger.parse("y", 35);
-	BigInteger.parse("z", 36);
+	BigRationalInteger.parse("u", 31);
+	BigRationalInteger.parse("v", 32);
+	BigRationalInteger.parse("w", 33);
+	BigRationalInteger.parse("x", 34);
+	BigRationalInteger.parse("y", 35);
+	BigRationalInteger.parse("z", 36);
 };
 
 function testParseFail() {
@@ -354,7 +333,7 @@ function testParseFail() {
 		if (arguments.length < 2) {
 			radix = 10;
 		}
-		return function() { BigInteger.parse(s, radix); };
+		return function() { BigRationalInteger.parse(s, radix); };
 	}
 
 	var radixError  = /^Illegal radix \d+./;
@@ -413,25 +392,25 @@ function testParseFail() {
 function testToString() {
 	var narray = [
 		new BigInteger([], 1),
-		BigInteger(-1),
-		BigInteger(-123),
-		BigInteger(456),
-		BigInteger("+42"),
-		BigInteger("23x10^5"),
-		BigInteger("342.5 x 10 ^ -2"),
-		BigInteger("-23x10^5"),
-		BigInteger("-3425 x 10 ^ -2"),
-		BigInteger("23.45x10^5"),
-		BigInteger("3425e-12"),
-		BigInteger("-3425e8"),
-		BigInteger("+3425e0").toString(10),
-		BigInteger("0xDeadBeef").toString(16),
-		BigInteger("-0c715").toString(8),
-		BigInteger("+0b1101").toString(2),
-		BigInteger.parse("+42", 5).toString(10),
-		BigInteger.parse("+42", 5).toString(5),
-		BigInteger.parse("12abz", 36).toString(36),
-		BigInteger.parse("-0c715"),
+		BigRationalInteger(-1),
+		BigRationalInteger(-123),
+		BigRationalInteger(456),
+		BigRationalInteger("+42"),
+		BigRationalInteger("23x10^5"),
+		BigRationalInteger("342.5 x 10 ^ -2"),
+		BigRationalInteger("-23x10^5"),
+		BigRationalInteger("-3425 x 10 ^ -2"),
+		BigRationalInteger("23.45x10^5"),
+		BigRationalInteger("3425e-12"),
+		BigRationalInteger("-3425e8"),
+		BigRationalInteger("+3425e0").toString(10),
+		BigRationalInteger("0xDeadBeef").toString(16),
+		BigRationalInteger("-0c715").toString(8),
+		BigRationalInteger("+0b1101").toString(2),
+		BigRationalInteger.parse("+42", 5).toString(10),
+		BigRationalInteger.parse("+42", 5).toString(5),
+		BigRationalInteger.parse("12abz", 36).toString(36),
+		BigRationalInteger.parse("-0c715"),
 	];
 	var sarray = [
 		"0",
@@ -461,47 +440,47 @@ function testToString() {
 };
 
 function testConstants() {
-	assertEquals(37, BigInteger.small.length);
+	assertEquals(37, BigRationalInteger.small.length);
 
-	checkBigInteger(BigInteger.small[0], [], 0);
-	checkBigInteger(BigInteger._0, [], 0);
-	checkBigInteger(BigInteger.ZERO, [], 0);
-	checkBigInteger(BigInteger._1, [1], 1);
-	checkBigInteger(BigInteger.ONE, [1], 1);
-	checkBigInteger(BigInteger.M_ONE, [1], -1);
+	checkBigInteger(BigRationalInteger.small[0], [], 0);
+	checkBigInteger(BigRationalInteger._0, [], 0);
+	checkBigInteger(BigRationalInteger.ZERO, [], 0);
+	checkBigInteger(BigRationalInteger._1, [1], 1);
+	checkBigInteger(BigRationalInteger.ONE, [1], 1);
+	checkBigInteger(BigRationalInteger.M_ONE, [1], -1);
 
 	for (var i = 1; i <= 9; i++) {
-		checkBigInteger(BigInteger.small[i], [i], 1);
+		checkBigInteger(BigRationalInteger.small[i], [i], 1);
 	}
 	for (var i = 10; i <= 36; i++) {
-		checkBigInteger(BigInteger.small[i], [Math.floor(i % 10), Math.floor(i / 10)], 1);
+		checkBigInteger(BigRationalInteger.small[i], [Math.floor(i % 10), Math.floor(i / 10)], 1);
 	}
 
-	checkBigInteger(BigInteger.MAX_EXP, null, 1);
+	checkBigInteger(BigRationalInteger.MAX_EXP, null, 1);
 };
 
 function testToJSValue() {
 	var narray = [
 		new BigInteger([], 1).toJSValue(),
-		BigInteger(-1).toJSValue(),
-		BigInteger(-123).toJSValue(),
-		BigInteger(456).toJSValue(),
-		BigInteger("+42").toJSValue(),
-		BigInteger("23x10^5").toJSValue(),
-		BigInteger("342.5 x 10 ^ -2").toJSValue(),
-		BigInteger("-23x10^5").toJSValue(),
-		BigInteger("-3425 x 10 ^ -2").toJSValue(),
-		BigInteger("23.45x10^5").toJSValue(),
-		BigInteger("3425e-12").toJSValue(),
-		BigInteger("-3425e8").toJSValue(),
-		BigInteger("+3425e0").toJSValue(),
-		BigInteger("0xDeadBeef").toJSValue(),
-		BigInteger("-0c715").toJSValue(),
-		BigInteger("+0b1101").toJSValue(),
-		BigInteger.parse("+42", 5).toJSValue(),
-		BigInteger.parse("+42", 5).toJSValue(),
-		BigInteger.parse("12abz", 36).toJSValue(),
-		BigInteger.parse("-0C715").toJSValue()
+		BigRationalInteger(-1).toJSValue(),
+		BigRationalInteger(-123).toJSValue(),
+		BigRationalInteger(456).toJSValue(),
+		BigRationalInteger("+42").toJSValue(),
+		BigRationalInteger("23x10^5").toJSValue(),
+		BigRationalInteger("342.5 x 10 ^ -2").toJSValue(),
+		BigRationalInteger("-23x10^5").toJSValue(),
+		BigRationalInteger("-3425 x 10 ^ -2").toJSValue(),
+		BigRationalInteger("23.45x10^5").toJSValue(),
+		BigRationalInteger("3425e-12").toJSValue(),
+		BigRationalInteger("-3425e8").toJSValue(),
+		BigRationalInteger("+3425e0").toJSValue(),
+		BigRationalInteger("0xDeadBeef").toJSValue(),
+		BigRationalInteger("-0c715").toJSValue(),
+		BigRationalInteger("+0b1101").toJSValue(),
+		BigRationalInteger.parse("+42", 5).toJSValue(),
+		BigRationalInteger.parse("+42", 5).toJSValue(),
+		BigRationalInteger.parse("12abz", 36).toJSValue(),
+		BigRationalInteger.parse("-0C715").toJSValue()
 	];
 	var jsarray = [
 		0,
@@ -533,25 +512,25 @@ function testToJSValue() {
 function testValueOf() {
 	var narray = [
 		+new BigInteger([], 1),
-		+BigInteger(-1),
-		+BigInteger(-123),
-		+BigInteger(456),
-		+BigInteger("+42"),
-		+BigInteger("23x10^5"),
-		+BigInteger("342.5 x 10 ^ -2"),
-		+BigInteger("-23x10^5"),
-		+BigInteger("-3425 x 10 ^ -2"),
-		+BigInteger("23.45x10^5"),
-		+BigInteger("3425e-12"),
-		+BigInteger("-3425e8"),
-		+BigInteger("+3425e0"),
-		+BigInteger("0xDeadBeef"),
-		+BigInteger("-0c715"),
-		+BigInteger("+0b1101"),
-		+BigInteger.parse("+42", 5),
-		+BigInteger.parse("+42", 5),
-		+BigInteger.parse("12abz", 36),
-		+BigInteger.parse("-0c715")
+		+BigRationalInteger(-1),
+		+BigRationalInteger(-123),
+		+BigRationalInteger(456),
+		+BigRationalInteger("+42"),
+		+BigRationalInteger("23x10^5"),
+		+BigRationalInteger("342.5 x 10 ^ -2"),
+		+BigRationalInteger("-23x10^5"),
+		+BigRationalInteger("-3425 x 10 ^ -2"),
+		+BigRationalInteger("23.45x10^5"),
+		+BigRationalInteger("3425e-12"),
+		+BigRationalInteger("-3425e8"),
+		+BigRationalInteger("+3425e0"),
+		+BigRationalInteger("0xDeadBeef"),
+		+BigRationalInteger("-0c715"),
+		+BigRationalInteger("+0b1101"),
+		+BigRationalInteger.parse("+42", 5),
+		+BigRationalInteger.parse("+42", 5),
+		+BigRationalInteger.parse("12abz", 36),
+		+BigRationalInteger.parse("-0c715")
 	];
 	var jsarray = [
 		0,
@@ -696,7 +675,7 @@ function testSign() {
 function testExp10() {
 	runShortBinaryOperationTest(exp10Results, function(a, b) {
 		if (Math.abs(Number(b)) > 1000) {
-			b = Number(BigInteger.MAX_EXP.next());
+			b = Number(BigRationalInteger.MAX_EXP.next());
 		}
 		try {
 			return a.exp10(b).toString();
@@ -710,6 +689,9 @@ function testExp10() {
 function testPow() {
 	runBinaryOperationTest(powResults, function(a, b) {
 		try {
+			if (b.isNegative() && a.compareAbs(BigInteger.ONE) > 0) {
+				return "0";
+			}
 			return a.pow(b).toString();
 		}
 		catch (e) {
@@ -738,7 +720,6 @@ function TestBigInteger() {
 
 TestBigInteger.prototype = {
 /* Basic Functions */
-	testConstructor: testConstructor,
 	testConstants: testConstants,
 	testConversion: testConversion,
 	testParse: testParse,

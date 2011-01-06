@@ -86,8 +86,8 @@ function reduce(n, d) {
 
     var g = gcd(n.abs(), d.abs());
 
-    n = BigInteger.divide(n, g);
-    d = BigInteger.divide(d, g);
+    n = n.quotient(g);
+    d = d.quotient(g);
 
     if (d.isNegative()) {
         return [n.negate(), d.negate()];
@@ -146,7 +146,7 @@ function divide(n, d) {
 
         <parse>, <BigRational>, <BigInteger>
 */
-function BigRational(n, d, flags) {
+BigRational = function(n, d, flags) {
 
     if (!(this instanceof BigRational)) {
 
@@ -279,8 +279,8 @@ BigRational.prototype.denominator = function() {
 BigRational.prototype.add = function(r) {
     r = BigRational(r);
     var g = gcd(this._d, r._d);
-    var d_g = BigInteger.divide(this._d, g);
-    return canonicalize(BigInteger.divide(r._d, g).multiply(this._n)
+    var d_g = this._d.quotient(g);
+    return canonicalize(r._d.quotient(g).multiply(this._n)
                         .add(d_g.multiply(r._n)), d_g.multiply(r._d));
 };
 
@@ -384,9 +384,9 @@ BigRational.prototype.floor = function() {
         return this._n;
     }
     if (this.isNegative()) {
-        return BigInteger.divide(this._n, this._d).prev();
+        return this._n.quotient(this._d).prev();
     }
-    return BigInteger.divide(this._n, this._d);
+    return this._n.quotient(this._d);
 };
 
 BigRational.prototype.ceiling = function() {
@@ -394,9 +394,9 @@ BigRational.prototype.ceiling = function() {
         return this._n;
     }
     if (this.isNegative()) {
-        return BigInteger.divide(this._n, this._d);
+        return this._n.quotient(this._d);
     }
-    return BigInteger.divide(this._n, this._d).next();
+    return this._n.quotient(this._d).next();
 };
 
 BigRational.prototype.round = function() {
@@ -419,7 +419,7 @@ BigRational.prototype.round = function() {
 };
 
 BigRational.prototype.truncate = function() {
-    return BigInteger.divide(this._n, this._d);
+    return this._n.quotient(this._d);
 };
 
 BigRational.prototype.square = function() {
@@ -432,7 +432,6 @@ BigRational.prototype.pow = function(n) {
         throw new Error("pow: can not handle non-integer exponent: " + n);
     }
     n = n._n;
-    n = BigInteger(n.toString()); // XXX "divide" incompatibility.
 
     if (n.isUnit()) {
         return n.isPositive() ? this : this.reciprocal();
@@ -444,7 +443,7 @@ BigRational.prototype.pow = function(n) {
     }
 
     var num, den;
-    if (s === 1) {
+    if (s > 0) {
         num = this._n;
         den = this._d;
     }
@@ -452,6 +451,9 @@ BigRational.prototype.pow = function(n) {
         n = n.negate();
         num = this._d;
         den = this._n;
+        if (den.isZero()) {
+            throw new Error("Divide by zero");
+        }
     }
 
     return BigRational(BigInteger.pow(num, n),
@@ -591,25 +593,27 @@ biproto.reciprocal = function() {
     return canonicalize(BigRationalInteger.ONE, this);
 };
 
+biproto.pow = function(n) {
+    var ret = BigRational(this).pow(n);
+    if (ret.isInteger()) {
+        return ret.numerator();
+    }
+    return ret;
+}
+
 var indent="";
 function logEntry(name, ch) {
-    //    print(indent + ch + ">" + name); indent = indent + " ";
+    //print(indent + ch + ">" + name); indent = indent + " ";
 }
 function logExit(name, ch) {
-    //    indent = indent.substring(1); print(indent + "<" + ch + name);
+    //indent = indent.substring(1); print(indent + "<" + ch + name);
 }
 function makeBriMethod(name) {
     var search = " " + name + " ";
     var mi = BigInteger.prototype[name];
 
     if (dontWrap.indexOf(search) !== -1) {
-        //return mi;
-        return function() {
-            logEntry(name, '-');
-            var ret = mi.call(this);
-            logExit(name, '-');
-            return ret;
-        }
+        return mi;
     }
 
     if (retSame.indexOf(search) !== -1) {
@@ -740,8 +744,9 @@ for (var i in BigInteger) {
             throw new Error("Forgot BigInteger function " + i);
         }
         value = function(a) {
-            return wrapValue(meth.apply(BigRationalInteger(this),
-                                        copyArguments(arguments)));
+            var args = copyArguments(arguments);
+            var first = args.shift();
+            return wrapValue(meth.apply(BigRationalInteger(first), args));
         };
     }
     else if (value instanceof BigInteger) {

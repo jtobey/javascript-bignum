@@ -8,5 +8,6 @@ set -e
 test -f testValues.js || ln -s ../../javascript-biginteger/test/testValues.js .
 test -f powValues.js || ln -s ../../javascript-biginteger/test/powValues.js .
 test -d expected || ln -s ../../javascript-biginteger/test/expected .
+$shell test-bri.js $verbosity
+#$shell test-biginteger.js $verbosity
 $shell test-bigrational.js $verbosity
-$shell test-biginteger.js $verbosity

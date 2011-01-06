@@ -394,7 +394,7 @@ BigInteger.parse = function(s, base) {
 
 	See Also:
 
-		<subtract>, <multiply>, <divide>, <next>
+		<subtract>, <multiply>, <quotient>, <next>
 */
 BigInteger.prototype.add = function(n) {
 	if (this._s === 0) {
@@ -490,7 +490,7 @@ BigInteger.prototype.abs = function() {
 
 	See Also:
 
-		<add>, <multiply>, <divide>, <prev>
+		<add>, <multiply>, <quotient>, <prev>
 */
 BigInteger.prototype.subtract = function(n) {
 	if (this._s === 0) {
@@ -776,7 +776,7 @@ BigInteger.prototype.isUnit = function() {
 
 	See Also:
 
-		<add>, <subtract>, <divide>, <square>
+		<add>, <subtract>, <quotient>, <square>
 */
 BigInteger.prototype.multiply = function(n) {
 	// TODO: Consider adding Karatsuba multiplication for large numbers
@@ -957,10 +957,10 @@ BigInteger.prototype.square = function() {
 };
 
 /*
-	Function: divide
-	Divide two <BigIntegers>.
+	Function: quotient
+	Divide two <BigIntegers> and truncate towards zero.
 
-	<divide> throws an exception if *n* is zero.
+	<quotient> throws an exception if *n* is zero.
 
 	Parameters:
 
@@ -974,9 +974,15 @@ BigInteger.prototype.square = function() {
 
 		<add>, <subtract>, <multiply>, <divRem>, <remainder>
 */
-BigInteger.prototype.divide = function(n) {
+BigInteger.prototype.quotient = function(n) {
 	return this.divRem(n)[0];
 };
+
+/*
+	Function: divide
+	Deprecated synonym for <quotient>.
+*/
+BigInteger.prototype.divide = BigInteger.prototype.quotient;
 
 /*
 	Function: remainder
@@ -995,7 +1001,7 @@ BigInteger.prototype.divide = function(n) {
 
 	See Also:
 
-		<divRem>, <divide>
+		<divRem>, <quotient>
 */
 BigInteger.prototype.remainder = function(n) {
 	return this.divRem(n)[1];
@@ -1019,13 +1025,13 @@ BigInteger.prototype.remainder = function(n) {
 
 		is exactly equivalent to
 
-		> [a.divide(b), a.remainder(b)]
+		> [a.quotient(b), a.remainder(b)]
 
 		except it is faster, because they are calculated at the same time.
 
 	See Also:
 
-		<divide>, <remainder>
+		<quotient>, <remainder>
 */
 BigInteger.prototype.divRem = function(n) {
 	n = BigInteger(n);
@@ -1285,7 +1291,7 @@ BigInteger.prototype.isZero = function() {
 	>     return this.multiply(BigInteger("1e" + n));
 	> }
 	> else { // n <= 0
-	>     return this.divide(BigInteger("1e" + -n));
+	>     return this.quotient(BigInteger("1e" + -n));
 	> }
 
 	Parameters:
@@ -1385,7 +1391,7 @@ BigInteger.prototype.pow = function(n) {
 			}
 		}
 		x = x.square();
-		n = n.divide(two);
+		n = n.quotient(two);
 	}
 
 	return aux;
@@ -1420,7 +1426,7 @@ BigInteger.prototype.modPow = function(exponent, modulus) {
 			result = result.multiply(base).remainder(modulus);
 		}
 
-		exponent = exponent.divide(BigInteger.small[2]);
+		exponent = exponent.quotient(BigInteger.small[2]);
 		if (exponent.isPositive()) {
 			base = base.square().remainder(modulus);
 		}
@@ -1492,7 +1498,7 @@ BigInteger.MAX_EXP = BigInteger(0x7FFFFFFF);
 	(function() {
 		var i, fn;
 		var unary = "toJSValue,isEven,isOdd,sign,isZero,isNegative,abs,isUnit,square,negate,isPositive,toString,next,prev".split(",");
-		var binary = "compare,remainder,divRem,subtract,add,divide,multiply,pow,compareAbs".split(",");
+		var binary = "compare,remainder,divRem,subtract,add,quotient,divide,multiply,pow,compareAbs".split(",");
 		var trinary = ["modPow"];
 
 		for (i = 0; i < unary.length; i++) {
