@@ -1,15 +1,16 @@
 Bignum library for JavaScript.
 Copyright (c) 2010,2011 John Tobey <John.Tobey@gmail.com>
+Copyright (c) 2009 Matthew Crumley <email@matthewcrumley.com>
 Licensed under the MIT license, file LICENSE.
 https://github.com/jtobey/javascript-bignum
 
-Dependency: javascript-biginteger
+Based on: javascript-biginteger
 https://github.com/silentmatt/javascript-biginteger
 
 INSTALLATION
 
-Copy bigrational.js (from this directory) and biginteger.js (from
-javascript-biginteger) to your JavaScript directory.
+Copy bigrational.js and biginteger.js from this directory to your
+JavaScript directory.
 
 Browse Matt's famous BigInteger documentation at
 <http://silentmatt.com/biginteger/> or create it by installing

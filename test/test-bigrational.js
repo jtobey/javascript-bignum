@@ -22,17 +22,20 @@ if (typeof BigRational === "undefined" || typeof runTests === "undefined") {
             };
         }
         try {
-            load("test/require.js");
+            var path = "test/require.js";
+            if (!java.io.File || java.io.File(path).exists()) {
+                load(path);
+            }
         }
         catch (ex) {
+        }
+        if (typeof require === "undefined") {
             load("require.js");
             top = "../";
         }
     }
     if (require.paths) {
-        require.paths.push(top,
-                           top + "../javascript-biginteger",
-                           top + "../javascript-biginteger/test");
+        require.paths.push(top, top + "test/");
     }
 
     BigRational = require("bigrational").BigRational;

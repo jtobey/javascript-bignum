@@ -1,0 +1,12 @@
+#!/bin/bash
+
+shell=${1:-rhino}
+verbosity=${2:-1}
+
+cd test
+set -e
+test -f testValues.js || ln -s ../../javascript-biginteger/test/testValues.js .
+test -f powValues.js || ln -s ../../javascript-biginteger/test/powValues.js .
+test -d expected || ln -s ../../javascript-biginteger/test/expected .
+$shell test-bigrational.js $verbosity
+$shell test-biginteger.js $verbosity

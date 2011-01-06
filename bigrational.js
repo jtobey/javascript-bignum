@@ -1,6 +1,6 @@
 /* BigRational JavaScript library version 0.6
    http://john-edwin-tobey.org/bigrational/bigrational.js
-   Copyright (c) 2010 by John Tobey <John.Tobey@gmail.com>
+   Copyright (c) 2010,2011 by John Tobey <John.Tobey@gmail.com>
    Licensed under the MIT license.
 
    Dependency: Silent Matt Crumley's BigInteger library.
@@ -11,10 +11,6 @@
    * More tests.
 
    * More documentation.
-
-   * Packaging.
-
-   * Distribution.
 
    * Consider hooking parse() into BigInteger.parse.expandExponential
      to support syntax like "1.234*10^3" but of course retain
