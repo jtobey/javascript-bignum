@@ -1,0 +1,24 @@
+Bignum library for JavaScript.
+Copyright (c) 2010,2011 John Tobey <John.Tobey@gmail.com>
+Licensed under the MIT license, file LICENSE.
+https://github.com/jtobey/javascript-bignum
+
+Dependency: javascript-biginteger
+https://github.com/silentmatt/javascript-biginteger
+
+INSTALLATION
+
+Copy bigrational.js (from this directory) and biginteger.js (from
+javascript-biginteger) to your JavaScript directory.
+
+Browse Matt's famous BigInteger documentation at
+<http://silentmatt.com/biginteger/> or create it by installing
+NaturalDocs and running the build-docs script in
+javascript-biginteger.
+
+Suffer the incomplete BigRational documentation by making what sense
+you can of the files bigrational.js and test/test-bigrational.js in
+this distribution.  Accept my apologies if this situation has
+persisted over a month since the initial release.
+
+January 6, 2011
