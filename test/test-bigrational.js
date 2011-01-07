@@ -48,15 +48,20 @@ if (typeof BigRational === "undefined" || typeof runTests === "undefined") {
 }
 
 function checkBigRational(r, n, d) {
-    assertPropertyExists(r, "_n");
-    assertPropertyExists(r, "_d");
-    assertBigIntegerEquals(r._n, n);
-    assertBigIntegerEquals(r._d, d);
-    assertTrue(r._d.isPositive(), "denominator should be positive");
+    if (r instanceof BRI) {
+        assertBigIntegerEquals(r, n);
+        assertBigIntegerEquals(BRI.ONE, d);
+    }
+    else {
+        assertPropertyExists(r, "_n");
+        assertPropertyExists(r, "_d");
+        assertBigIntegerEquals(r._n, n);
+        assertBigIntegerEquals(r._d, d);
+        assertTrue(r._d.compare(1) > 0, "denominator should be >1");
+    }
 }
 
 function assertBigIntegerEquals(got, expected) {
-    //if (!(got instanceof BRI)) {
     if (!(got instanceof BigInteger)) {
         fail("expected a BigRationalInteger, got <" + got + ">");
     }
@@ -146,6 +151,14 @@ function testLog() {
     assertNaN(BigRational("-22/7").pow(1999).log());
 }
 
+function testAdd() {
+    checkBigRational(BigRational.add("9/2","1/2"), 5, 1);
+    checkBigRational(BigRational(1,2).add("1/2"), 1, 1);
+    checkBigRational(BigRational(-1,2).add(BigRational(1,2)), 0, 1);
+    checkBigRational(BigRational(1,3).add(BigRational(-2,5)), -1, 15);
+    checkBigRational(BigRational(1,20).add(BigRational(-4)), -79, 20);
+}
+
 function TestBigRational() {
     this.start = new Date();
 }
@@ -154,8 +167,9 @@ TestBigRational.prototype = {
     testNoConstructor: testNoConstructor,
     testConversion: testConversion,
     testParse: testParse,
-    testPow: testPow,
+    testAdd: testAdd,
     testBigRationalInteger: testBigRationalInteger,
+    testPow: testPow,
     testLog: testLog,
 
 /* Keep track of the time for each test */

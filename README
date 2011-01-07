@@ -7,6 +7,10 @@ https://github.com/jtobey/javascript-bignum
 Based on: javascript-biginteger
 https://github.com/silentmatt/javascript-biginteger
 
+THIS IS SPARSELY DOCUMENTED ALPHA CODE --- INTERFACES ARE SUBJECT TO CHANGE.
+See the file LICENSE regarding your non-warranty.  See the file TODO
+for a non-exhaustive list of likely future changes.
+
 INSTALLATION
 
 Copy bigrational.js and biginteger.js from this directory to your

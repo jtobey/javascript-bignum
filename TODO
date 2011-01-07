@@ -5,7 +5,7 @@ TODO:
 * More documentation.
 
 * Consider hooking BigRational parse() into
-  BigInteger.parse.expandExponential to support syntax like
+  BigInteger.parse's "expandExponential" to support syntax like
   "1.234*10^3" but of course retain fractional parts.
 
 * New methods as per the ECMA spec for Number.prototype:
@@ -14,12 +14,12 @@ TODO:
 
 * Consider having BigInteger pow() reject non-integer arguments.
 
-* Consider automatically converting integer BigRational values to
-  BigRationalInteger.
-
 * Consider aliasing or renaming BigInteger.toString() so as not to
   conflict with the default toString().  Give BigRationalInteger and
   BigRational a similar interface.
 
 * Consider exposing the library version like BigRational.VERSION ===
   BigInteger.VERSION === "1.0"
+
+* Reconsider returning a native number from pow() when the result is
+  irrational.

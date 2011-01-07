@@ -59,13 +59,15 @@ function gcd(a, b) {
     var c;
     while (!a.isZero()) {
         c = a;
-        a = b.remainder(a);
+        a = BigInteger.remainder(b, a);
         b = c;
     }
-    return b;
+    return (b instanceof BigRationalInteger ? b : BigRationalInteger(b));
 }
 
 function reduce(n, d) {
+    //assert(n instanceof BigRationalInteger);
+    //assert(d instanceof BigRationalInteger);
     if (d.isZero()) {
         throw new Error("Divide by zero");
     }
@@ -87,13 +89,16 @@ function canonicalize(n, d) {
     if (n.isZero()) {
         return BigRational.ZERO;
     }
-    if (d.isUnit() && n.isUnit()) {
-        return (n.isPositive() ? BigRational.ONE : BigRational.M_ONE);
+    if (d === BigRationalInteger.ONE) {
+        return n;
     }
     return new BigRational(n, d, INTERNAL);
 }
 
 function divide(n, d) {
+    if (d === BigRationalInteger.ONE) {
+        return n;
+    }
     var nd = reduce(n, d);
     return canonicalize(nd[0], nd[1]);
 }
@@ -250,9 +255,7 @@ BigRational.prototype.valueOf = function() {
     return this._n / this._d;
 };
 
-BigRational.prototype.toJSValue = function() {
-    return this._n / this._d;
-};
+BigRational.prototype.toJSValue = BigRational.prototype.valueOf;
 
 BigRational.prototype.numerator = function() {
     return this._n;
@@ -264,10 +267,15 @@ BigRational.prototype.denominator = function() {
 
 BigRational.prototype.add = function(r) {
     r = BigRational(r);
-    var g = gcd(this._d, r._d);
+    var r_d = r.denominator();
+    var d = this.denominator();
+    if (d.compare(r_d) === 0) {
+        return divide(this._n.add(r.numerator()), d);
+    }
+    var g = gcd(this._d, r_d);
     var d_g = this._d.quotient(g);
-    return canonicalize(r._d.quotient(g).multiply(this._n)
-                        .add(d_g.multiply(r._n)), d_g.multiply(r._d));
+    return divide(r_d.quotient(g).multiply(this._n)
+                  .add(d_g.multiply(r.numerator())), d_g.multiply(r_d));
 };
 
 BigRational.prototype.negate = function() {
@@ -280,7 +288,8 @@ BigRational.prototype.subtract = function(r) {
 
 BigRational.prototype.multiply = function(r) {
     r = BigRational(r);
-    return divide(this._n.multiply(r._n), this._d.multiply(r._d));
+    return divide(this._n.multiply(r.numerator()),
+                  this._d.multiply(r.denominator()));
 };
 
 BigRational.prototype.reciprocal = function() {
@@ -325,11 +334,17 @@ BigRational.prototype.sign = function() {
 };
 
 function compareAbsInternal(q, r) {
-    if (q._d.compare(r._d) === 0) {
-        return q._n.compareAbs(r._n);
+    var q_n = q.numerator();
+    var q_d = q.denominator();
+    var r_n = r.numerator();
+    var r_d = r.denominator();
+
+    if (BigInteger.compare(q_d, r_d) === 0) {
+        return BigInteger.compareAbs(q_n, r_n);
     }
 
-    return q._n.multiply(r._d).compareAbs(q._d.multiply(r._n));
+    return BigInteger.compareAbs(BigInteger.multiply(q_n, r_d),
+                                 BigInteger.multiply(q_d, r_n));
 }
 
 BigRational.prototype.compareAbs = function(r) {
@@ -343,18 +358,14 @@ BigRational.prototype.compareAbs = function(r) {
 };
 
 BigRational.prototype.compare = function(r) {
-    if (this === r) {
-        return 0;
-    }
-
     r = BigRational(r);
-    var s = this._n.sign();
+    var s = this.sign();
 
     if (s === 0) {
-        return -r._n.sign();
+        return -r.sign();
     }
 
-    if (s !== r._n.sign()) {
+    if (s !== r.sign()) {
         return s;
     }
 
@@ -362,11 +373,12 @@ BigRational.prototype.compare = function(r) {
 };
 
 BigRational.prototype.isInteger = function() {
-    return this._d.isUnit();
+    //return this._d.isUnit();
+    return false;
 };
 
 BigRational.prototype.floor = function() {
-    if (this._d.isUnit()) {
+    if (this._d === BigRationalInteger.ONE) {
         return this._n;
     }
     if (this.isNegative()) {
@@ -376,7 +388,7 @@ BigRational.prototype.floor = function() {
 };
 
 BigRational.prototype.ceiling = function() {
-    if (this._d.isUnit()) {
+    if (this._d === BigRationalInteger.ONE) {
         return this._n;
     }
     if (this.isNegative()) {
@@ -386,7 +398,7 @@ BigRational.prototype.ceiling = function() {
 };
 
 BigRational.prototype.round = function() {
-    if (this._d.isUnit()) {
+    if (this._d === BigRationalInteger.ONE) {
         return this._n;
     }
     if (this.isNegative()) {
@@ -412,38 +424,58 @@ BigRational.prototype.square = function() {
     return canonicalize(this._n.square(), this._d.square());
 };
 
-BigRational.prototype.pow = function(n) {
-    n = BigRational(n);
-    if (!n.isInteger()) {
-        throw new Error("pow: can not handle non-integer exponent: " + n);
-    }
-    n = n._n;
-
-    if (n.isUnit()) {
-        return n.isPositive() ? this : this.reciprocal();
+function powInternal(base, exp) {
+    exp = BigRational(exp);
+    if (exp === BigRationalInteger.ONE) {
+        return exp.isPositive() ? base : base.reciprocal();
     }
 
-    var s = n.sign();
+    var num = base.numerator();
+    var den = base.denominator();
+
+    if (!exp.isInteger()) {
+        switch (num.sign()) {
+        case -1:
+            throw new RangeError
+                ("Can't raise a negative to a non-integer power.");
+        case 0:
+            if (exp.isNegative()) {
+                throw new Error("Divide by zero");
+            }
+            return BigRational.ZERO;
+        default:  // 1
+            if (num === BigRationalInteger.ONE &&
+                den === BigRationalInteger.ONE)
+            {
+                return BigRational.ONE;
+            }
+            // XXX Shouldn't the returned value support various methods
+            // such as .add() etc. ???
+            return Math.exp((num.log() - den.log()) * exp.toJSValue());
+        }
+    }
+
+    var s = exp.sign();
     if (s === 0) {
         return BigRational.ONE;
     }
 
-    var num, den;
-    if (s > 0) {
-        num = this._n;
-        den = this._d;
-    }
-    else {
-        n = n.negate();
-        num = this._d;
-        den = this._n;
+    if (s < 0) {
+        exp = exp.negate();
+        var tmp = num;
+        num = den;
+        den = tmp;
         if (den.isZero()) {
             throw new Error("Divide by zero");
         }
     }
 
-    return BigRational(BigInteger.pow(num, n),
-                       BigInteger.pow(den, n), ALREADY_REDUCED);
+    return BigRational(BigInteger.pow(num, exp),
+                       BigInteger.pow(den, exp), ALREADY_REDUCED);
+}
+
+BigRational.prototype.pow = function(n) {
+    return powInternal(this, n);
 };
 
 BigRational.prototype.log = function() {
@@ -467,18 +499,16 @@ BigRationalInteger = function(x, flag) {
         if (x instanceof BigRationalInteger) {
             return x;
         }
-        if (x instanceof BigRational) {
-            return x.truncate();
-        }
         if (!(x instanceof BigInteger)) {
-            x = BigInteger.apply(this, copyArguments(arguments));
+            x = BigInteger(x, flag);
         }
-        if (x.isZero()) {
-            return BigRationalInteger.ZERO;
+        if (x.isNegative()) {
+            if (x.isUnit()) {
+                return BigRationalInteger.M_ONE;
+            }
         }
-        if (x.isUnit()) {
-            return (x.isPositive() ? BigRationalInteger.ONE
-                    : BigRationalInteger.M_ONE);
+        else if (x.compare(maxSmall) <= 0) {
+            return BigRationalInteger.small[x.toString()];
         }
         return new BigRationalInteger(x, INTERNAL);
     }
@@ -494,7 +524,11 @@ BigRationalInteger = function(x, flag) {
 
     // Copy private BigInteger properties to the new object.
 
-    if (Object.getOwnPropertyNames) {
+    if (true) {
+        this._d = x._d;
+        this._s = x._s;
+    }
+    else if (Object.getOwnPropertyNames) {
         // XXX UNTESTED!  Fresh off the ECMA press.  Not supported in
         // my JS engines.
         var names = Object.getOwnPropertyNames(x);
@@ -555,7 +589,8 @@ var rationalRetNative = " compare compareAbs ";
 
 // These methods take a rational argument and return a bignum.  If both
 // this and the argument are integers, the returned value is an integer.
-var rationalRetSame = " add subtract multiply ";
+var rationalRetSameCommutative = " add multiply ";
+var rationalRetSame = " subtract ";
 
 // These methods take a rational argument and return a rational.
 var rationalRetRational = " divide ";
@@ -576,19 +611,17 @@ biproto.round    = biproto.numerator;
 biproto.truncate = biproto.numerator;
 
 biproto.reciprocal = function() {
-    if (this.isNegative()) {
+    switch (this.sign()) {
+    case 0: throw new Error("Divide by zero");
+    case 1: return canonicalize(BigRationalInteger.ONE, this);
+    default: // -1
         return canonicalize(BigRationalInteger.M_ONE, this.negate());
     }
-    return canonicalize(BigRationalInteger.ONE, this);
 };
 
 biproto.pow = function(n) {
-    var ret = BigRational(this).pow(n);
-    if (ret.isInteger()) {
-        return ret.numerator();
-    }
-    return ret;
-}
+    return powInternal(this, n);
+};
 
 var indent="";
 function logEntry(name, ch) {
@@ -653,6 +686,27 @@ function makeBriMethod(name) {
         };
     }
 
+    if (rationalRetSameCommutative.indexOf(search) !== -1) {
+        return function(a) {
+            var ret;
+            logEntry(name, '%');
+            if (a instanceof BigInteger) {
+                ret = BigRationalInteger(mi.call(this, a));
+            }
+            else {
+                a = BigRational(a);
+                if (a.isInteger()) {
+                    ret = BigRationalInteger(mi.call(this, a));
+                }
+                else {
+                    ret = mr.call(a, this);
+                }
+            }
+            logExit(name, '%');
+            return ret;
+        };
+    }
+
     if (rationalRetSame.indexOf(search) !== -1) {
         return function(a) {
             var ret;
@@ -663,10 +717,10 @@ function makeBriMethod(name) {
             else {
                 a = BigRational(a);
                 if (a.isInteger()) {
-                    ret = BigRationalInteger(mi.call(this, a.numerator()));
+                    ret = BigRationalInteger(mi.call(this, a));
                 }
                 else {
-                    ret = mr.call(BigRational(this), a);
+                    ret = mr.call(this, a);
                 }
             }
             logExit(name, '*');
@@ -722,7 +776,14 @@ BigRationalInteger.parse = function(a, b) {
     return BigRationalInteger(ret);
 };
 
-BigRationalInteger.small = wrapValue(BigInteger.small);
+BigRationalInteger.small = new Array(BigInteger.small.length);
+BigRationalInteger.small[0] = BigRationalInteger.ZERO;
+BigRationalInteger.small[1] = BigRationalInteger.ONE;
+for (var i = 2; i < BigInteger.small.length; i++) {
+    BigRationalInteger.small[i] = new BigRationalInteger(BigInteger.small[i],
+                                                         INTERNAL);
+}
+var maxSmall = BigRationalInteger.small[BigRationalInteger.small.length - 1];
 
 for (var i in BigInteger) {
     if (typeof BigRationalInteger[i] !== "undefined") {
@@ -750,51 +811,61 @@ for (var i in BigInteger) {
 
 // Constant: ZERO
 // <BigRational> 0.
-BigRational.ZERO = new BigRational(BigInteger.ZERO, BigInteger.ONE, INTERNAL);
+BigRational.ZERO = BigRationalInteger.ZERO;
 
 // Constant: ONE
 // <BigRational> 1.
-BigRational.ONE = new BigRational(BigInteger.ONE, BigInteger.ONE, INTERNAL);
+BigRational.ONE = BigRationalInteger.ONE;
 
 // Constant: M_ONE
 // <BigRational> -1.
-BigRational.M_ONE = new BigRational(BigInteger.M_ONE, BigInteger.ONE, INTERNAL);
+BigRational.M_ONE = BigRationalInteger.M_ONE;
 
-// Wrap methods in functions that normalize their arguments.
-function makeUnary(fn) {
+// Wrap methods in functions that normalize their arguments.  Don't
+// optimize as in biginteger.js, since we use interface inheritance.
+// BigRational.add(4,"1/2") would call BigRational.prototype.add
+// instead of BigRationalInteger.prototype.add as it should (since
+// BigRational(4) is a BigRationalInteger).  The functions generated
+// by makeUnary and makeBinary are convenience wrappers.
+
+function makeUnary(name) {
     return function(a) {
-        return fn.call(BigRational(a));
+        return BigRational(a)[name]();
     };
 }
 
-function makeBinary(fn) {
+function makeBinary(name) {
     return function(a, b) {
-        return fn.call(BigRational(a), b);
+        return BigRational(a)[name](b);
     };
 }
 
-if (!String.prototype.trim) {
-    String.prototype.trim = function() {
-        return this.replace(/^\s+/, "").replace(/\s+$/, "");
-    }
-}
-var unary = new String(retNative + retSame + retRational + retBigInteger)
-    .trim().split(/ +/);
-var binary = new String(rationalRetNative + rationalRetSame + rationalRetRational)
-    .trim().split(/ +/);
+var trim = (String.prototype.trim ? function(s) { return s.trim(); } :
+            function(s) {
+                return s.replace(/^\s+/, "").replace(/\s+$/, "");
+            });
+
+var unary = trim(new String(retNative + retSame + retRational + retBigInteger))
+    .split(/ +/);
+var binary = trim(new String(rationalRetNative + rationalRetSame + rationalRetSameCommutative + rationalRetRational))
+    .split(/ +/);
 
 for (var i = 0; i < unary.length; i++) {
     var fn = unary[i];
-    BigRational[fn] = makeUnary(BigRational.prototype[fn]);
+    BigRational[fn] = makeUnary(fn);
 }
 
 for (var i = 0; i < binary.length; i++) {
     var fn = binary[i];
-    BigRational[fn] = makeBinary(BigRational.prototype[fn]);
+    BigRational[fn] = makeBinary(fn);
 }
 
 BigRational.pow = function(r, n) {
     return BigRational(r).pow(n);
+}
+
+BigRational.log = function(r) {
+    return BigRational(r).log();
 }
 
 for (var i in BigRational.prototype) {

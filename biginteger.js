@@ -93,7 +93,7 @@ function BigInteger(n, s) {
 		return BigInteger.parse(n);
 	}
 
-	n = n || [];
+	n = n || [];  // Provide the nullary constructor for subclasses.
 	while (n.length && !n[n.length - 1]) {
 		--n.length;
 	}
