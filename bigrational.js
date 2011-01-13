@@ -89,14 +89,14 @@ function canonicalize(n, d) {
     if (n.isZero()) {
         return BigRational.ZERO;
     }
-    if (d === BigRationalInteger.ONE) {
+    if (d === BigRational.ONE) {
         return n;
     }
     return new BigRational(n, d, INTERNAL);
 }
 
 function divide(n, d) {
-    if (d === BigRationalInteger.ONE) {
+    if (d === BigRational.ONE) {
         return n;
     }
     var nd = reduce(n, d);
@@ -162,8 +162,7 @@ BigRational = function(n, d, flags) {
                 return n;
             }
             if (n instanceof BigInteger) {
-                return canonicalize(BigRationalInteger(n),
-                                    BigRationalInteger.ONE);
+                return canonicalize(BigRationalInteger(n), BigRational.ONE );
             }
             return BigRational.parse(n);
         }
@@ -235,7 +234,7 @@ BigRational.parse = function(s) {
 
         var tens = exponent - fraction.length;
         if (tens >= 0) {
-            return BigRational(integer + zeroes(tens), BigRationalInteger.ONE);
+            return BigRationalInteger(integer + zeroes(tens));
         }
         return BigRational(integer, "1" + zeroes(-tens));
     }
@@ -244,7 +243,7 @@ BigRational.parse = function(s) {
         throw new Error("Invalid BigRational format: " + s);
     }
 
-    return canonicalize(BigRationalInteger(s), BigRationalInteger.ONE);
+    return canonicalize(BigRationalInteger(s), BigRational.ONE);
 };
 
 BigRational.prototype.toString = function() {
@@ -295,9 +294,6 @@ BigRational.prototype.multiply = function(r) {
 BigRational.prototype.reciprocal = function() {
     var n = this._d;
     var d = this._n;
-    if (d.isZero()) {
-        throw new Error("Divide by zero");
-    }
     if (d.isNegative()) {
         d = d.negate();
         n = n.negate();
@@ -310,7 +306,7 @@ BigRational.prototype.divide = function(r) {
 };
 
 BigRational.prototype.isZero = function() {
-    return this._n.isZero();
+    return false;
 };
 
 BigRational.prototype.isPositive = function() {
@@ -322,7 +318,7 @@ BigRational.prototype.isNegative = function() {
 };
 
 BigRational.prototype.isUnit = function() {
-    return this._n.isUnit() && this._d.isUnit();
+    return false;
 };
 
 BigRational.prototype.abs = function() {
@@ -373,14 +369,10 @@ BigRational.prototype.compare = function(r) {
 };
 
 BigRational.prototype.isInteger = function() {
-    //return this._d.isUnit();
     return false;
 };
 
 BigRational.prototype.floor = function() {
-    if (this._d === BigRationalInteger.ONE) {
-        return this._n;
-    }
     if (this.isNegative()) {
         return this._n.quotient(this._d).prev();
     }
@@ -388,9 +380,6 @@ BigRational.prototype.floor = function() {
 };
 
 BigRational.prototype.ceiling = function() {
-    if (this._d === BigRationalInteger.ONE) {
-        return this._n;
-    }
     if (this.isNegative()) {
         return this._n.quotient(this._d);
     }
@@ -398,9 +387,6 @@ BigRational.prototype.ceiling = function() {
 };
 
 BigRational.prototype.round = function() {
-    if (this._d === BigRationalInteger.ONE) {
-        return this._n;
-    }
     if (this.isNegative()) {
         return this.negate().round().negate();
     }
@@ -426,7 +412,7 @@ BigRational.prototype.square = function() {
 
 function powInternal(base, exp) {
     exp = BigRational(exp);
-    if (exp === BigRationalInteger.ONE) {
+    if (exp === BigRational.ONE) {
         return exp.isPositive() ? base : base.reciprocal();
     }
 
@@ -444,9 +430,7 @@ function powInternal(base, exp) {
             }
             return BigRational.ZERO;
         default:  // 1
-            if (num === BigRationalInteger.ONE &&
-                den === BigRationalInteger.ONE)
-            {
+            if (base.isUnit()) {
                 return BigRational.ONE;
             }
             // XXX Shouldn't the returned value support various methods
@@ -504,7 +488,7 @@ BigRationalInteger = function(x, flag) {
         }
         if (x.isNegative()) {
             if (x.isUnit()) {
-                return BigRationalInteger.M_ONE;
+                return BigRational.M_ONE;
             }
         }
         else if (x.compare(maxSmall) <= 0) {
@@ -603,7 +587,7 @@ biproto.numerator = function() {
     return this;
 };
 biproto.denominator = function() {
-    return BigRationalInteger.ONE;
+    return BigRational.ONE;
 };
 biproto.floor    = biproto.numerator;
 biproto.ceiling  = biproto.numerator;
@@ -613,9 +597,9 @@ biproto.truncate = biproto.numerator;
 biproto.reciprocal = function() {
     switch (this.sign()) {
     case 0: throw new Error("Divide by zero");
-    case 1: return canonicalize(BigRationalInteger.ONE, this);
-    default: // -1
-        return canonicalize(BigRationalInteger.M_ONE, this.negate());
+    case 1: return canonicalize(BigRational.ONE, this);
+    default:
+    case -1: return canonicalize(BigRational.M_ONE, this.negate());
     }
 };
 
