@@ -21,5 +21,5 @@ TODO:
 * Consider exposing the library version like BigRational.VERSION ===
   BigInteger.VERSION === "1.0"
 
-* Reconsider returning a native number from pow() when the result is
-  irrational.
+* Consider a number implementation based on a native number, like
+  Number but implementing the rational interface.
