@@ -433,9 +433,13 @@ function powInternal(base, exp) {
             if (base.isUnit()) {
                 return BigRational.ONE;
             }
-            // XXX Shouldn't the returned value support various methods
-            // such as .add() etc. ???
-            return Math.exp((num.log() - den.log()) * exp.toJSValue());
+            // Wrap the returned value so it supports various methods
+            // such as .add() etc.
+            // TODO: Consider creating a BigRational variant that
+            // holds a native number instead of numerator and denominator.
+            print("got here");
+            return BigRational(Math.exp((num.log() - den.log())
+                                        * exp.toJSValue()));
         }
     }
 

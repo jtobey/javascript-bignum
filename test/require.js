@@ -64,9 +64,6 @@ var require = (function() {
     }
 
     function req(id) {
-        if (typeof id === "undefined") {
-            return internal;
-        }
         if (loaded[id]) {
             return loaded[id];
         }
@@ -115,8 +112,14 @@ var require = (function() {
         throw new Error("Module " + id + " not found.  Searched: " + ps);
     }
 
-    // Help with debugging.
-    function translateSourceLine(line) {
+    // Help with debugging.  Usage:
+    // js> require("bigrational")
+    // js> print(require.where(100))
+    // ./bigrational line 100
+    // js> print(require.where(1000))
+    // ./biginteger line 132
+
+    req.translateSourceLine = function(line) {
         if (line < 1 || line > newlines.length) {
             return {module: "eval", line: line};
         }
@@ -130,15 +133,10 @@ var require = (function() {
                         + startLines + ", newlines.length=" + newlines.length
                         + ", line=" + line);
     }
-    function where(line) {
-        var src = translateSourceLine(line);
+    req.where = function(line) {
+        var src = req.translateSourceLine(line);
         return src.module + " line " + src.line;
     }
-
-    var internal = {
-        translateSourceLine: translateSourceLine,
-        where: where
-    };
 
     return req;
 })();
