@@ -680,7 +680,13 @@ BigInteger.prototype.compareAbs = function(n) {
 		return 0;
 	}
 
-	n = BigInteger(n);
+	if (!(n instanceof BigInteger)) {
+		if (!isFinite(n)) {
+			return(isNaN(n) ? n : -1);
+		}
+		n = BigInteger(n);
+	}
+
 	if (this._s === 0) {
 		return (n._s !== 0) ? -1 : 0;
 	}
