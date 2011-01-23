@@ -1799,7 +1799,13 @@ EI_Big.prototype._exp10 = function(n) {
 SN.enhanceNumber = function(number) {
     if (!number)
         number = Number;
-    var seen = { "toString": true, "valueOf": true };
+    var seen = {  // Don't override these built-in Number methods.
+        "toString": true,
+        "valueOf": true,
+        "toFixed": true,
+        "toExponential": true,
+        "toPrecision": true
+    };
     function doClass(cl) {
         function make(fname) {
             switch (cl.prototype[fname].length) {
@@ -1829,7 +1835,10 @@ SN.enhanceNumber = function(number) {
 SN.enhanceString = function(string) {
     if (!string)
         string = String;
-    var seen = { "toString": true, "valueOf": true };
+    var seen = {  // Don't override these built-in String methods.
+        "toString": true,
+        "valueOf": true
+    };
     function doClass(cl) {
         if (!cl)
             return;
