@@ -31,8 +31,6 @@ function retFalse1(x) { return false; }
 function retTrue1(x)  { return true;  }
 function retThis()  { return this; }
 
-var integerRegex = /^[-+]?[0-9]+$/;
-
 // SN: public interface, exported as SchemeNumber.
 // Abstract base class of all numbers.
 
@@ -53,7 +51,7 @@ function toSN(x) {
         return toFlonum(x);
     if (x instanceof Number)
         return toFlonum(Number(x));
-    return parseComplex(x);
+    return parseNumber(x);
 }
 
 function toReal(x) {
@@ -68,6 +66,10 @@ function toInteger(n) {
     if (n.isInteger())
         return n;
     throw new TypeError("Not an integer: " + n);
+}
+
+function exactDivisionByZero() {
+    return new RangeError("Exact division by zero");
 }
 
 SN.prototype = new Number();
@@ -101,6 +103,7 @@ SN.prototype.isRational = retFalse;
 SN.prototype.isInteger  = retFalse;
 SN.prototype.isFlonum   = retFalse;
 SN.prototype.isFixnum   = retFalse;
+SN.prototype.isExact    = retFalse;
 
 SN.prototype.isInexact = function() {
     return !this.isExact();
@@ -145,16 +148,18 @@ SN.makePolar = function(r, th) {
     return toRectangular(r.multiply(th.cos()), r.multiply(th.sin()));
 };
 
-SN.parse = parseComplex;
+SN.parse = parseNumber;
 
 SN.exact = function(x) {
     if (arguments.length !== 1)
         throw new TypeError("Usage: SchemeNumber.exact(x)");
+    if (x instanceof SN)
+        return x.toExact();
     if (x instanceof Number)
         x = Number(x);
     if (typeof x === "number")
         return numberToER(x);
-    return toSN(x).toExact(); // XXX
+    return parseNumber(x, true);
 };
 
 function maxMin(cmp, a, arguments) {
@@ -248,15 +253,142 @@ SN.lcm = function() {
 
 // C: Complex abstract base class.
 
-function parseComplex(s) {
-    // XXX should support Scheme number syntaxes, e.g. #e1.1@2, 2/3
-    if (s[s.length - 1] !== "i")
-        return parseReal(s);
-    var match = /(.*[0-9.])([-+].*)i/.exec(s);
-    if (match)
-        return makeRectangular(parseReal(match[1]),
-                               match[2] ? parseReal(match[2]) : ONE);
-    throw new SyntaxError("Invalid number: " + s);
+// How to split a rectangular literal into real and imaginary components:
+var decimalComplex = /^(.*[^a-zA-Z]|)([-+].*)i$/;
+var radixComplex = /^(.*)([-+].*)i$/;
+
+var nanInfPattern = /^[-+](nan|inf)\.0$/;
+var exponentMarkerPattern = /[eEsSfFdDlL]/;
+var mantissaWidthPattern = /\|[0-9]+$/;
+var decimal10Pattern = /^([0-9]+\.?|[0-9]*\.[0-9]+)([eEsSfFdDlL][-+]?[0-9]+)?$/;
+
+var uintegerPattern = {
+    2: /^[01]+$/, 8: /^[0-7]+$/, 10: /^[0-9]+$/, 16: /^[0-9a-fA-F]+$/
+};
+
+// Scheme number syntaxes, e.g. #e1.1@-2d19, 2/3
+function parseNumber(s, exact, radix) {
+    var i = 0;
+
+    function barf() {
+        throw new SyntaxError("Invalid number: " + s);
+    }
+    function setExact(value) {
+        if (exact !== undefined) barf();
+        exact = value; i += 2;
+    }
+    function setRadix(value) {
+        if (radix) barf();
+        radix = value; i += 2;
+    }
+    function parseUinteger(s, sign) {
+        if (!uintegerPattern[radix].test(s))
+            barf();
+
+        var n = parseInt(s, radix);
+
+        if (exact === false)
+            return toFlonum(sign * n);
+
+        if (n < 9007199254740992)
+            return toEI_Native(sign * n);
+
+        return toEI_Big(BigInteger.parse(s, radix));
+    }
+    function parseReal(s) {
+        if (nanInfPattern.test(s)) {
+            if (exact)
+                throw new RangeError("No exact representation for " + s);
+            switch (s) {
+            case "+inf.0": return INFINITY;
+            case "-inf.0": return M_INFINITY;
+            default: return NAN;
+            }
+        }
+
+        var sign = 1;
+        switch (s[0]) {
+        case '-': sign = -1;  // fall through
+        case '+': s = s.substring(1);
+        }
+
+        var slash = s.indexOf('/');
+        if (slash != -1)
+            return parseUinteger(s.substring(0, slash), sign)
+                .divide(parseUinteger(s.substring(slash + 1), 1));
+
+        if (radix !== 10)
+            barf();
+
+        // We have only one floating point width.
+        s = s.replace(mantissaWidthPattern, '')
+            .replace(exponentMarkerPattern, 'e');
+
+        var dot = s.indexOf('.');
+        var e = s.indexOf('e');
+        if (dot === -1 && e === -1)
+            return parseUinteger(s, sign);
+
+        if (!decimal10Pattern.test(s))
+            barf();
+
+        if (!exact)
+            return toFlonum(sign * parseFloat(s));
+
+        var integer = s.substring(0, dot === -1 ? e : dot);
+        var exponent = 0;
+        var fraction;
+
+        if (e === -1)
+            fraction = s.substring(dot + 1);
+        else {
+            if (dot === -1)
+                fraction = "";
+            else
+                fraction = s.substring(dot + 1, e);
+            exponent = parseInt(s.substring(e + 1));
+        }
+
+        return parseUinteger(integer + fraction, sign)
+            ._exp10(exponent - fraction.length);
+    }
+    function parseComplex(s) {
+        var a = s.indexOf('@');
+        if (a !== -1)
+            return makePolar(parseReal(s.substring(0, a)),
+                             parseReal(s.substring(a + 1)));
+
+        if (s[s.length - 1] !== "i")
+            return parseReal(s);
+
+        if (s === "i") {
+            if (exact === false)
+                return toRectangular(INEXACT_ZERO, toFlonum(1));
+            return I;
+        }
+
+        var match = (radix === 10 ? decimalComplex : radixComplex).exec(s);
+        if (!match)
+            barf();
+
+        return toRectangular(parseReal(match[1] || '0'),
+                             parseReal(match[2] || '1'));
+    }
+
+    while (s[i] === "#") {
+        switch (s[i+1]) {
+        case 'i': case 'I': setExact(false); break;
+        case 'e': case 'E': setExact(true ); break;
+        case 'b': case 'B': setRadix( 2); break;
+        case 'o': case 'O': setRadix( 8); break;
+        case 'd': case 'D': setRadix(10); break;
+        case 'x': case 'X': setRadix(16); break;
+        default: barf();
+        }
+    }
+
+    radix = radix || 10;
+    return parseComplex(s.substring(i));
 }
 
 function C() {}
@@ -273,7 +405,7 @@ if (this.WANT_COMPLEX_NUMBERS) {  // Incomplete.
 function toRectangular(x, y) {
     if (y.isZero())
         return x;
-    if (x.isZero() && y.isUnit())
+    if (x.isZero() && x.isExact() && y.isUnit())
         return (y.isPositive() ? I : M_I);
     return new Rectangular(x, y);
 }
@@ -422,12 +554,6 @@ var M_I = SN.M_I = new Rectangular(ZERO, M_ONE);
 
 // R: Real abstract base class.
 
-function parseReal(s) {
-    if (integerRegex.test(s))
-        return parseEI(s);
-    return toFlonum(parseFloat(s));   // XXX
-}
-
 function R() {}
 
 R.prototype = new C();
@@ -524,12 +650,21 @@ Flonum.prototype.toJSValue = function() {
 };
 Flonum.prototype.valueOf = Flonum.prototype.toJSValue;
 
-Flonum.prototype.toString = function(radix) {
-    if (typeof radix !== "undefined" && radix !== 10)
-        throw new Error("Unimplemented: toString radix");
-    var s = "" + this.toJSValue();
-    if (integerRegex.test(s))
-        s += ".0";  // Force inexact.
+// Flonum toString.  XXX I'd like to make this more like Scheme's
+// number->string.
+Flonum.prototype.toString = function(radix, precision) {
+    if (!isFinite(this._)) {
+        if (isNaN(this._))
+            return("+nan.0");
+        return (this._ > 0 ? "+inf.0" : "-inf.0");
+    }
+    radix = radix || 10;
+
+    var s = new Number(this.toJSValue()).toString(radix);
+    if (s.indexOf('.') === -1)
+        s += ".";  // Force inexact.
+    if (typeof precision !== "undefined")
+        s += "|" + precision;  // XXX
     return s;
 };
 
@@ -674,7 +809,7 @@ Flonum.prototype.divAndMod = function(x) {
     if (typeof x !== "number")
         x = toReal(x).toJSValue();
     if (x === 0)
-        throw new RangeError("Division by zero");
+        throw new RangeError("div/mod by zero");
 
     var t = this._;
     var div = Math.floor(t / x);
@@ -794,10 +929,9 @@ Flonum.prototype.atan2 = function(x) {
 };
 
 Flonum.prototype.expt = function(z) {
-    z = toSN(z);
-    if (z instanceof Flonum)
-        return toFlonum(Math.pow(this._, z._));
-    return z._upgrade(this).expt(z);
+    if (typeof z !== "number")
+        z = toSN(z).toJSValue();
+    return toFlonum(Math.pow(this._, z));
 };
 
 ['E', 'LN10', 'LN2', 'LOG2E', 'LOG10E', 'PI', 'SQRT1_2', 'SQRT2']
@@ -821,11 +955,17 @@ ER_Native.prototype.isExact = retTrue;
 ER_Native.prototype.isRational = retTrue;
 ER_Native.prototype.isFlonum = retFalse;
 
+function exactNativeToString(n) {
+    if (n > -9007199254740992 && n < 9007199254740992)
+        return n.toString();
+    return numberToBigInteger(n).toString();
+}
+
 ER_Native.prototype.toString = function(radix) {
     if (typeof radix !== "undefined" && radix !== 10)
         throw new Error("Unimplemented: toString radix");
     var d = nativeDenominator(this._);
-    return (this._ * d) + "/" + d;
+    return exactNativeToString(this._ * d) + "/" + exactNativeToString(d);
 };
 
 if (DEBUG)
@@ -867,7 +1007,7 @@ ER_Native.prototype.abs = function() {
 ER_Native.prototype.subtract = function(z) {
     z = toSN(z);
     if (!(z instanceof ER_Native))
-        return z._upgrade(this).add(z);
+        return z._upgrade(this).subtract(z);
     if (z._ === 0)
         return this;
     return upgradeER(this).subtract(z);
@@ -895,7 +1035,7 @@ ER_Native.prototype.divide = function(z) {
     if (!(z instanceof ER_Native))
         return z._upgrade(this).divide(z);
     if (z._ === 0)
-        throw new RangeError("Division by zero");
+        throw exactDivisionByZero();
     if (z._ === 1)
         return this;
     if (z._ === -1)
@@ -994,11 +1134,11 @@ EI_Native.prototype.multiply = function(z) {
 EI_Native.prototype.reciprocal = function() {
     var x = this._;
     if (x === 0)
-        throw new RangeError("Division by zero");
+        throw exactDivisionByZero();
     if (x === 1 || x === -1)
         return this;
     if (x < 0)
-        return canonicalER(ONE, toEI_Native(-x));
+        return canonicalER(M_ONE, toEI_Native(-x));
     return canonicalER(ONE, this);
 };
 
@@ -1013,7 +1153,7 @@ EI_Native.prototype.divide = function(z) {
 
 function divAndModEI_Native(t, x, which) {
     if (x === 0)
-        throw new RangeError("Division by zero");
+        throw exactDivisionByZero();
 
     var div = Math.floor(t / x);
     if (which === 0)
@@ -1062,9 +1202,103 @@ EI_Native.prototype.ceiling  = retThis;
 EI_Native.prototype.round    = retThis;
 EI_Native.prototype.truncate = retThis;
 
-//EI_Native.prototype.exp10 = function XXX;
+EI_Native.prototype._exp10 = function(n) {
+    if (this._ === 0 || n === 0)
+        return this;
 
-//EI_Native.prototype.expt = function XXX;
+    if (n < 0) {
+        var num = String(this._);
+        var i = num.length - 1;
+
+        if (num[i] === '0') {
+            while (num[i] === '0' && n < 0) {
+                n += 1;
+                i -= 1;
+            }
+            num = toEI_Native(Number(num.substring(0, i + 1)));
+            if (n === 0)
+                return num
+        }
+        else {
+            num = this;
+        }
+
+        var den;
+        if (n < -15)
+            den = toEI_Big(BigInteger.ONE.exp10(-n));
+        else
+            den = toEI_Native(Number("1000000000000000".substring(0, 1 - n)));
+        return reduceER(num, den);
+    }
+    if (n < 16) {
+        var result = parseInt("1000000000000000".substring(0, n + 1)) * this._;
+        if (result > -9007199254740992 && result < 9007199254740992)
+            return toEI_Native(result);
+    }
+    return toEI_Big(this._)._exp10(n);
+};
+
+var MAX_LOG = 1e8 * Math.log(10);  // 100 million digits.
+
+SN.getMaxIntDigits = function() {
+    return MAX_LOG / Math.log(10);
+};
+SN.setMaxIntDigits = function(max) {
+    MAX_LOG = max * Math.log(10);
+};
+
+function positiveIntegerExpt(b, p) {
+    //assert(p > 0); assert(p == Math.round(p));
+    print("positiveIntegerExpt(" + b + "," + p + ")");
+    var result = Math.pow(b, p);
+    if (result > -9007199254740992 && result < 9007199254740992)
+        return toEI_Native(result);
+    if (Math.log(b) * p > MAX_LOG)
+        throw new Error("expt: integer exceeds limit of " +
+                        (MAX_LOG / Math.log(10)) + " digits; adjust with " +
+                        "SchemeNumber.setMaxIntDigits(...)");
+    return new EI_Big(BigInteger(b).pow(p));
+}
+
+EI_Native.prototype.expt = function(p) {
+    p = toSN(p);
+
+    if (!p.isReal())
+        return p._upgrade(this).expt(p);
+
+    if (!p.isExact())
+        return toFlonum(Math.pow(this._, p.toJSValue()));
+
+    if (p.isZero())
+        return ONE;
+
+    if (this._ === 1)
+        return this;
+
+    if (this._ === 0) {
+        if (p.isPositive())
+            return this;
+        if (p.isZero())
+            return ONE;
+        throw exactDivisionByZero();
+    }
+
+    if (this._ === -1 && p.isInteger())
+        return p.isEven() ? ONE : this;
+
+    if (p.isInteger()) {
+        var s = p.sign();
+        // Any inexactness is beyond the range that will fit in
+        // memory, we hope.
+        var a = positiveIntegerExpt(this._, p.abs().toJSValue());
+        return (s > 0 ? a : a.reciprocal());
+    }
+
+    if (this._ > 0)
+        return toFlonum(Math.pow(this._, p.toJSValue()));
+
+    return new Rectangular(this, ZERO).expt(p);
+};
 
 EI_Native.prototype.exactIntegerSqrt = function() {
     var n = Math.floor(Math.sqrt(this._));
@@ -1131,8 +1365,7 @@ function gcdBig(a, b) {
 }
 
 function numberToBigInteger(n) {
-    // XXX toFixed(0) sometimes returns exponential notation.
-    return BigInteger(n.toFixed(0));
+    return BigInteger.parse(n.toString(16), 16);
 }
 
 function toBigInteger(n) {
@@ -1149,9 +1382,8 @@ function gcd(a, b) {
 }
 
 function reduceER(n, d) {
-    if (d.isZero()) {
-        throw new Error("Divide by zero");
-    }
+    if (d.isZero())
+        throw exactDivisionByZero();
 
     var g = gcd(n.abs(), d.abs());
 
@@ -1538,16 +1770,104 @@ EI_Big.prototype.log = function(base) {
     return toFlonum(this._.log());
 };
 
+EI_Big.prototype.expt = function(z) {
+    z = SN(z);
+    if (!z.isReal())
+        return z._upgrade(this).expt(z);
+    if (!z.isExact() || !z.isInteger())
+        return toFlonum(Math.pow(this._.toJSValue(), z.toJSValue()));
+    if (z.isZero())
+        return ONE;
+    if (z.isUnit() && z.isPositive())
+        return this;
+    var a = new EI_Big(this._.pow(toBigInteger(z.abs())));
+    return z.isPositive() ? a : a.reciprocal();
+};
+
+EI_Big.prototype._exp10 = function(n) {
+    return toEI_Big(this._.exp10(n));
+};
+
 ["sqrt", "exactIntegerSqrt", "exp", "sin", "cos", "tan", "asin",
- "acos", "atan", "atan2", "expt"]
+ "acos", "atan", "atan2"]
     .forEach(function(fn) {
             EI_Big.prototype[fn] = function() {
                 throw new Error("Unimplemented: " + fn + " for big integer");
             };
         });
 
+SN.enhanceNumber = function(number) {
+    if (!number)
+        number = Number;
+    var seen = { "toString": true, "valueOf": true };
+    function doClass(cl) {
+        function make(fname) {
+            switch (cl.prototype[fname].length) {
+            case 0: return function() {
+                    return toFlonum(Number(this))[fname]();
+                };
+            case 1: return function(a) {
+                    return toFlonum(Number(this))[fname](a);
+                };
+            case 2: return function(a, b) {
+                    return toFlonum(Number(this))[fname](a, b);
+                };
+            default:
+                wow();
+            }
+        }
+        for (var fname in cl.prototype) {
+            if (fname[0] !== '_' && !seen[fname]) {
+                seen[fname] = true;
+                number.prototype[fname] = make(fname);
+            }
+        }
+    }
+    [SN, C, R, Flonum].forEach(doClass);
+};
+
+SN.enhanceString = function(string) {
+    if (!string)
+        string = String;
+    var seen = { "toString": true, "valueOf": true };
+    function doClass(cl) {
+        if (!cl)
+            return;
+        function make(fname) {
+            switch (cl.prototype[fname].length) {
+            case 0: return function() {
+                    return parseNumber(this)[fname]();
+                };
+            case 1: return function(a) {
+                    return parseNumber(this)[fname](a);
+                };
+            case 2: return function(a, b) {
+                    return parseNumber(this)[fname](a, b);
+                };
+            default:
+                wow();
+            }
+        }
+        for (var fname in cl.prototype) {
+            if (fname[0] !== '_' && !seen[fname]) {
+                seen[fname] = true;
+                string.prototype[fname] = make(fname);
+            }
+        }
+    }
+    [SN, C, Rectangular, R, Flonum, ER_Native, EI_Native,
+     ER, ER_General, EI, EI_Big]
+    .forEach(doClass);
+};
+
+SN._ = function() {
+    SN.enhanceNumber();
+    SN.enhanceString();
+}
+
 SchemeNumber = SN;
 if (typeof exports !== "undefined") {
     exports.SchemeNumber = SN;
+    exports._ = SN._;
 }
 })();

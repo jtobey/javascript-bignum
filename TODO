@@ -25,11 +25,16 @@ TODO:
 * SchemeNumber: Consider packaging separately or just dropping
   BigRational.
 
-* SchemeNumber: Finish implementation: parser, expt, transcendentals,
-  toString(radix), rationalize, ???, ...
+* SchemeNumber: Finish implementation: expt, transcendentals,
+  toString with precision, rationalize, ???, ...
 
 * SchemeNumber: Document.
 
 * SchemeNumber: Test.  Hook up some Scheme test suites?
 
 * SchemeNumber: Offer to HOP.  http://hop.inria.fr/
+
+* This hangs:
+  load("schemeNumber.js");
+  SchemeNumber._();
+  print(".5e-17".toExact().denominator())
