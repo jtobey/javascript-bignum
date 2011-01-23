@@ -582,6 +582,14 @@ R.prototype.isInfinite = retFalse;
 
 // Methods implemented using simpler operations.
 
+R.prototype.toString = function(radix) {
+    return this._toString(radix);
+};
+R.prototype.numberToString = function(radix, precision) {
+    // XXX handle precision?  Anyone need it?
+    return this._toString(radix);
+};
+
 R.prototype.valueOf = function() {
     return this.toJSValue();
 };
@@ -650,33 +658,6 @@ Flonum.prototype.toJSValue = function() {
 };
 Flonum.prototype.valueOf = Flonum.prototype.toJSValue;
 
-// Flonum toString.  XXX I'd like to make this more like Scheme's
-// number->string.
-Flonum.prototype.toString = function(radix, precision) {
-    if (!isFinite(this._)) {
-        if (isNaN(this._))
-            return("+nan.0");
-        return (this._ > 0 ? "+inf.0" : "-inf.0");
-    }
-    radix = radix || 10;
-
-    var s = new Number(this.toJSValue()).toString(radix);
-    if (s.indexOf('.') === -1)
-        s += ".";  // Force inexact.
-    if (typeof precision !== "undefined")
-        s += "|" + precision;  // XXX
-    return s;
-};
-
-if (DEBUG)
-    Flonum.prototype.debug = function() {
-        return "Flonum(" + this._ + ")";
-    };
-
-Flonum.prototype.imagPart = function() {
-    return INEXACT_ZERO;
-};
-
 function nativeDenominator(x) {
     // Get the "denominator" of a floating point value.
     // The result will be a power of 2.
@@ -693,6 +674,60 @@ function nativeDenominator(x) {
         return 1;
     return Math.pow(2, s.length - i - 1);
 }
+
+function exactNativeIntegerToString(n, radix) {
+    if (n > -9007199254740992 && n < 9007199254740992)
+        return n.toString(radix);
+    return numberToBigInteger(n).toString(radix);
+}
+
+function nativeToRationalString(n, radix) {
+    var d = nativeDenominator(n);
+    return (exactNativeIntegerToString(n * d, radix) +
+            "/" +
+            exactNativeIntegerToString(d, radix));
+}
+
+function flonumToString(x, radix) {
+    if (!isFinite(x)) {
+        if (isNaN(x))
+            return("+nan.0");
+        return (x > 0 ? "+inf.0" : "-inf.0");
+    }
+
+    var s = (radix ? x.toString(radix) : x.toString());
+
+    if (!radix && s.indexOf('.') === -1) {
+        // Force the result to contain a decimal point as per R6RS.
+        var e = s.indexOf('e');
+        if (e === -1)
+            return s + ".";
+        return s.substring(0, e) + "." + s.substring(e);
+    }
+    return s;
+}
+
+// Flonum toString.  XXX I'd like to make this more like Scheme's
+// number->string.
+Flonum.prototype._toString = function(radix) {
+    return flonumToString(this._, radix);
+};
+
+Flonum.prototype.numberToString = function(radix, precision) {
+    if (!radix || radix === 10 || !isFinite(this._))
+        // XXX Handle precision?
+        return flonumToString(this._, radix);
+    return "#i" + nativeToRationalString(this._, radix);
+};
+
+if (DEBUG)
+    Flonum.prototype.debug = function() {
+        return "Flonum(" + this._ + ")";
+    };
+
+Flonum.prototype.imagPart = function() {
+    return INEXACT_ZERO;
+};
 
 Flonum.prototype.denominator = function() {
     if (!this.isRational())
@@ -947,6 +982,7 @@ var NAN          = SN.NAN          = new Flonum(NaN);
 // ER_Native: Exact rational represented as a native number.
 
 function ER_Native(x) {
+    //assert(typeof x === "number");
     this._ = x;
 }
 
@@ -955,17 +991,13 @@ ER_Native.prototype.isExact = retTrue;
 ER_Native.prototype.isRational = retTrue;
 ER_Native.prototype.isFlonum = retFalse;
 
-function exactNativeToString(n) {
-    if (n > -9007199254740992 && n < 9007199254740992)
-        return n.toString();
-    return numberToBigInteger(n).toString();
-}
+ER_Native.prototype._toString = function(radix) {
+    return nativeToRationalString(this._, radix);
+};
 
-ER_Native.prototype.toString = function(radix) {
-    if (typeof radix !== "undefined" && radix !== 10)
-        throw new Error("Unimplemented: toString radix");
-    var d = nativeDenominator(this._);
-    return exactNativeToString(this._ * d) + "/" + exactNativeToString(d);
+ER_Native.prototype.numberToString = function(radix, precision) {
+    // Can ignore precision, it applies only to inexact numbers.
+    return this._toString(radix);
 };
 
 if (DEBUG)
@@ -1083,7 +1115,7 @@ EI_Native.prototype = new ER_Native(0);
 EI_Native.prototype.isInteger = retTrue;
 EI_Native.prototype.isFixnum = retTrue;
 
-EI_Native.prototype.toString = function(radix) {
+EI_Native.prototype._toString = function(radix) {
     return this._.toString(radix || 10);
 };
 
@@ -1415,8 +1447,8 @@ function ER_General(n, d) {
 
 ER_General.prototype = new ER();
 
-ER_General.prototype.toString = function() {
-    return this._n.toString() + "/" + this._d.toString();
+ER_General.prototype._toString = function(radix) {
+    return (this._n._toString(radix) + "/" + this._d._toString(radix));
 };
 
 ER_General.prototype.toJSValue = function() {
@@ -1658,7 +1690,11 @@ function parseEI_Big(s) {
 
 EI_Big.prototype = new EI();
 
-["toString", "toJSValue", "isZero", "isEven", "isOdd", "sign", "isUnit"]
+EI_Big.prototype._toString = function(radix) {
+    return this._.toString(radix);
+};
+
+["toJSValue", "isZero", "isEven", "isOdd", "sign", "isUnit"]
     .forEach(function(fn) {
             EI_Big.prototype[fn] = function() {
                 return this._[fn]();
@@ -1669,7 +1705,7 @@ EI_Big.prototype.valueOf = EI_Big.prototype.toJSValue;
 
 if (DEBUG)
     EI_Big.prototype.debug = function() {
-        return "EI_Big(" + this._ + ")";
+        return "EI_Big(" + this._.toString() + ")";
     };
 
 EI_Big.prototype._upgrade = function(z) {
