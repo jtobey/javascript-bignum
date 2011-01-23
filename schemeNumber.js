@@ -113,6 +113,10 @@ SN.prototype.ne = function(z) {
     return !this.eq(z);
 };
 
+SN.prototype.eqv = function(o) {
+    return o instanceof SN && o.isExact() === this.isExact() && this.eq(o);
+};
+
 SN.prototype.square = function() {
     return this.multiply(this);
 };
@@ -964,6 +968,10 @@ Flonum.prototype.atan2 = function(x) {
 };
 
 Flonum.prototype.expt = function(z) {
+    if (typeof z === "string")
+        z = parseNumber(z);
+    if (z instanceof SN && !z.isReal())
+        return z._upgrade(this).expt(z);
     if (typeof z !== "number")
         z = toSN(z).toJSValue();
     return toFlonum(Math.pow(this._, z));
@@ -1093,6 +1101,10 @@ ER_Native.prototype.round = function() {
 
 ER_Native.prototype.truncate = function() {
     return numberToEI(truncate(this._));
+};
+
+ER_Native.prototype.expt = function(z) {
+    return upgradeER(this).expt(z);
 };
 
 // EI_Native: Exact integers as native numbers.
@@ -1281,7 +1293,6 @@ SN.setMaxIntDigits = function(max) {
 
 function positiveIntegerExpt(b, p) {
     //assert(p > 0); assert(p == Math.round(p));
-    print("positiveIntegerExpt(" + b + "," + p + ")");
     var result = Math.pow(b, p);
     if (result > -9007199254740992 && result < 9007199254740992)
         return toEI_Native(result);
@@ -1620,6 +1631,25 @@ ER_General.prototype.ne = function(z) {
             this._d.ne(z.denominator()));
 };
 
+ER_General.prototype.expt = function(z) {
+    z = toSN(z);
+    if (!z.isReal())
+        return z._upgrade(this).expt(z);
+    if (z.isZero())
+        return ONE;
+    if (z.eqv(ONE))
+        return this;
+    var num = this._n.expt(z);
+    var den = this._d.expt(z);
+    if (num.isExact() && num.isInteger() && den.isExact() && den.isInteger())
+        return new ER_General(num, den);
+    return num.divide(den);
+};
+
+ER_General.prototype.sqrt = function() {
+    return this._n.sqrt().divide(this._d.sqrt());
+};
+
 // EI: Exact integer abstract base class.
 
 function numberToEI(n) {
@@ -1824,11 +1854,18 @@ EI_Big.prototype._exp10 = function(n) {
     return toEI_Big(this._.exp10(n));
 };
 
-["sqrt", "exactIntegerSqrt", "exp", "sin", "cos", "tan", "asin",
- "acos", "atan", "atan2"]
+EI_Big.prototype.sqrt = function() {
+    return toFlonum(Math.exp(this._.log() / 2));
+};
+
+EI_Big.prototype.exactIntegerSqrt = function() {
+    throw new Error("Unimplemented: exactIntegerSqrt for big integer");
+};
+
+["exp", "sin", "cos", "tan", "asin", "acos", "atan", "atan2"]
     .forEach(function(fn) {
             EI_Big.prototype[fn] = function() {
-                throw new Error("Unimplemented: " + fn + " for big integer");
+                return toFlonum(Math[fn](this._.toJSValue()));
             };
         });
 

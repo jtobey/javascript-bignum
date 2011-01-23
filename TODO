@@ -1,5 +1,23 @@
 TODO:
 
+* SchemeNumber: Make extension of standard Number.prototype the
+  normal, default flonum implementation.
+
+* SchemeNumber: Implement multiple dispatch: Foo.prototype.add =
+  function(z) { return z.addFoo(this); };
+
+* SchemeNumber: Consider packaging separately or just dropping
+  BigRational.
+
+* SchemeNumber: Finish implementation: expt, transcendentals,
+  numberToString with precision, rationalize, complex, ???, ...
+
+* SchemeNumber: Document.
+
+* SchemeNumber: Test.  Hook up some Scheme test suites?
+
+* SchemeNumber: Offer to HOP.  http://hop.inria.fr/
+
 * BigRational: More tests.  Set up input and output files like those
   for BigInteger.
 
@@ -21,20 +39,3 @@ TODO:
 
 * Consider exposing the library version like BigRational.VERSION ===
   BigInteger.VERSION === "1.0"
-
-* SchemeNumber: Consider packaging separately or just dropping
-  BigRational.
-
-* SchemeNumber: Finish implementation: expt, transcendentals,
-  toString with precision, rationalize, ???, ...
-
-* SchemeNumber: Document.
-
-* SchemeNumber: Test.  Hook up some Scheme test suites?
-
-* SchemeNumber: Offer to HOP.  http://hop.inria.fr/
-
-* This hangs:
-  load("schemeNumber.js");
-  SchemeNumber._();
-  print(".5e-17".toExact().denominator())
