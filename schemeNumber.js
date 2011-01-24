@@ -1951,8 +1951,8 @@ EI_Big.prototype.expt = function(z) {
         return ONE;
     if (z.isUnit() && z.isPositive())
         return this;
-    var a = new EI_Big(this._.pow(toBigInteger(z.abs())));
-    return z.isPositive() ? a : a.reciprocal();
+    var a = this._.pow(toBigInteger(z.abs()));
+    return new EI_Big(z.isPositive() ? a : a.reciprocal());
 };
 
 EI_Big.prototype._exp10 = function(n) {
