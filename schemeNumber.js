@@ -135,10 +135,8 @@ SN.isFlonum   = function(x) { return (x instanceof SN) && x.isFlonum();   };
 SN.isFixnum   = function(x) { return (x instanceof SN) && x.isFixnum();   };
 
 function makeRectangular(x, y) {
-    if (x.isExact() !== y.isExact()) {
-        x = x.toInexact();
-        y = y.toInexact();
-    }
+    if (x.isExact() !== y.isExact())
+        return toRectangular(x.toInexact(), y.toInexact());
     return toRectangular(x, y);
 }
 
@@ -249,11 +247,21 @@ SN.lcm = function() {
  "floor", "ceiling", "truncate", "round",
  "realPart", "imagPart",
  "abs", "acos", "asin", "atan", "ceil", "cos", "exp", "floor", "log",
- "round", "sin", "sqrt", "tan", "numerator", "denominator",
+ "round", "sin", "tan", "numerator", "denominator",
  "isEven", "isOdd", "exactIntegerSqrt"]
     .forEach(function(fn) {
             SN[fn] = function(a) { return toSN(a)[fn](); };
         });
+
+// Configurable maximum integer magnitude.
+var MAX_LOG = 1e8 * Math.LN10;  // 100 million digits.
+
+SN.getMaxIntegerDigits = function() {
+    return MAX_LOG / Math.LN10;
+};
+SN.setMaxIntegerDigits = function(max) {
+    MAX_LOG = max * Math.LN10;
+};
 
 // C: Complex abstract base class.
 
@@ -537,6 +545,11 @@ Rectangular.prototype.multiply = function(z) {
     var zy = z.imagPart();
     return toRectangular(this._x.multiply(zx).subtract(this._y.multiply(zy)),
                          this._x.multiply(zy).add(this._y.multiply(zx)));
+};
+
+Rectangular.prototype.square = function() {
+    return toRectangular(this._x.square().subtract(this._y.square()),
+                         this._x.multiply(this._y).multiply(TWO));
 };
 
 Rectangular.prototype.reciprocal = function() {
@@ -954,8 +967,13 @@ Flonum.prototype.ceiling = function() {
     return toFlonum(Math.ceil(this._));
 };
 
-['abs', 'acos', 'asin', 'atan', 'cos', 'exp', 'floor', 'log',
- 'sin', 'sqrt', 'tan']
+Flonum.prototype.sqrt = function() {
+    if (this._ >= 0)
+        return toFlonum(Math.sqrt(this._));
+    return toRectangular(INEXACT_ZERO, Math.sqrt(-this._));
+};
+
+['abs', 'acos', 'asin', 'atan', 'cos', 'exp', 'floor', 'log', 'sin', 'tan']
     .forEach(function(fn) {
             var mathFn = Math[fn];
             Flonum.prototype[fn] = function() {
@@ -1064,6 +1082,10 @@ ER_Native.prototype.multiply = function(z) {
     if (z._ === -1)
         return new ER_Native(-this._);
     return upgradeER(this).multiply(z);
+};
+
+ER_Native.prototype.square = function() {
+    return upgradeER(this).square();
 };
 
 ER_Native.prototype.reciprocal = function() {
@@ -1175,6 +1197,13 @@ EI_Native.prototype.multiply = function(z) {
     return toEI_Big(this._).multiply(z);
 };
 
+EI_Native.prototype.square = function() {
+    var s = this._ * this._;
+    if (s < 9007199254740992)
+        return toEI_Native(s);
+    return new EI_Big(BigInteger(this._).square());
+};
+
 EI_Native.prototype.reciprocal = function() {
     var x = this._;
     if (x === 0)
@@ -1282,15 +1311,6 @@ EI_Native.prototype._exp10 = function(n) {
     return toEI_Big(this._)._exp10(n);
 };
 
-var MAX_LOG = 1e8 * Math.log(10);  // 100 million digits.
-
-SN.getMaxIntDigits = function() {
-    return MAX_LOG / Math.log(10);
-};
-SN.setMaxIntDigits = function(max) {
-    MAX_LOG = max * Math.log(10);
-};
-
 function positiveIntegerExpt(b, p) {
     //assert(p > 0); assert(p == Math.round(p));
     var result = Math.pow(b, p);
@@ -1298,8 +1318,8 @@ function positiveIntegerExpt(b, p) {
         return toEI_Native(result);
     if (Math.log(b) * p > MAX_LOG)
         throw new Error("expt: integer exceeds limit of " +
-                        (MAX_LOG / Math.log(10)) + " digits; adjust with " +
-                        "SchemeNumber.setMaxIntDigits(...)");
+                        (MAX_LOG / Math.LN10) + " digits; adjust with " +
+                        "SchemeNumber.setMaxIntegerDigits(...)");
     return new EI_Big(BigInteger(b).pow(p));
 }
 
@@ -1344,6 +1364,8 @@ EI_Native.prototype.expt = function(p) {
 };
 
 EI_Native.prototype.exactIntegerSqrt = function() {
+    if (this._ < 0)
+        throw new RangeError("exactIntegerSqrt requires a positive argument");
     var n = Math.floor(Math.sqrt(this._));
     return [toEI_Native(n), toEI_Native(this._ - n * n)];
 };
@@ -1404,7 +1426,7 @@ function gcdBig(a, b) {
         a = b.remainder(a);
         b = c;
     }
-    return reduceEI_Big(b);
+    return reduceBigInteger(b);
 }
 
 function numberToBigInteger(n) {
@@ -1543,6 +1565,10 @@ ER_General.prototype.multiply = function(z) {
         return z._upgrade(this).multiply(z);
     return reduceER(this._n.multiply(z.numerator()),
                     this._d.multiply(z.denominator()));
+};
+
+ER_General.prototype.square = function() {
+    return new ER_General(this._n.square(), this._d.square());
 };
 
 ER_General.prototype.reciprocal = function() {
@@ -1704,7 +1730,7 @@ function toEI_Big(n) {
     return new EI_Big(BigInteger(n));
 }
 
-function reduceEI_Big(n) {
+function reduceBigInteger(n) {
     if (n.compareAbs(FIRST_BIG_INTEGER) >= 0)
         return new EI_Big(n);
     return toEI_Native(n.toJSValue());
@@ -1749,7 +1775,7 @@ EI_Big.prototype.add = function(z) {
     if (z.isZero())
         return this;
     if (z instanceof EI_Big || z instanceof EI_Native)
-        return reduceEI_Big(this._.add(z._));
+        return reduceBigInteger(this._.add(z._));
     if (z instanceof ER_Native)
         return upgradeER(z).add(this);
     return z.add(this);
@@ -1770,7 +1796,7 @@ EI_Big.prototype.subtract = function(z) {
     if (z.isZero())
         return this;
     if (z instanceof EI_Big || z instanceof EI_Native)
-        return reduceEI_Big(this._.subtract(z._));
+        return reduceBigInteger(this._.subtract(z._));
     if (z instanceof ER_Native)
         z = upgradeER(z);
     return z._upgrade(this).subtract(z);
@@ -1791,6 +1817,10 @@ EI_Big.prototype.multiply = function(z) {
     return z.multiply(this);
 };
 
+EI_Big.prototype.square = function() {
+    return new EI_Big(this._.square());
+};
+
 EI_Big.prototype.divAndMod = function(z) {
     z = toSN(z);
     if (!z.isInteger())
@@ -1805,7 +1835,7 @@ EI_Big.prototype.divAndMod = function(z) {
         mod = mod.add(z);
         div = div.prev();
     }
-    return [reduceEI_Big(div), reduceEI_Big(mod)]
+    return [reduceBigInteger(div), reduceBigInteger(mod)]
 };
 
 EI_Big.prototype.compare = function(x) {
@@ -1859,7 +1889,36 @@ EI_Big.prototype.sqrt = function() {
 };
 
 EI_Big.prototype.exactIntegerSqrt = function() {
-    throw new Error("Unimplemented: exactIntegerSqrt for big integer");
+
+    // I know of no use cases for this.  Be stupid.  Be correct.
+
+    if (this._.isNegative())
+        throw new RangeError("exactIntegerSqrt requires a positive argument");
+    if (this._.compareAbs(FIRST_BIG_INTEGER) < 0)
+        return toFlonum(this.toJSValue()).exactIntegerSqrt();
+
+    function doit(n, a) {
+        while (true) {
+            var dm = n.divRem(a);
+            var b = dm[0];
+            var diff = a.subtract(b); // n == b*b + b*diff + dm[1], dm[1] < b+1
+            if (diff.isZero())
+                return [ b, dm[1] ]; // n == b*b + dm[1]
+            if (diff.isUnit()) {
+                if (diff.isPositive())
+                    // n == b*b + b + dm[1], dm[1] < b+1
+                    return [ b, b.add(dm[1]) ];
+                // n == b*b - b + dm[1] == (b-1)^2 + b - 1 + dm[1]
+                return [ a, a.add(dm[1]) ];
+            }
+            a = b.add(diff.quotient(2));
+        }
+    }
+
+    var l = this._.log() / 2 / Math.LN10;
+    var a = BigInteger(Math.pow(10, l - Math.floor(l)).toString()
+                       + "e" + Math.floor(l));
+    return doit(this._, a).map(reduceBigInteger);
 };
 
 ["exp", "sin", "cos", "tan", "asin", "acos", "atan", "atan2"]
