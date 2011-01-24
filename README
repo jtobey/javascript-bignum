@@ -53,7 +53,7 @@ IMPLEMENTATION DETAILS
 
 Inexact real numbers are represented as native numbers.
 
-Exact integers of absoluted value less than 2 to the 53rd are
+Exact integers of absolute value less than 2 to the 53rd are
 represented as native numbers.  Outside this range, exact integers are
 represented as BigInteger objects.
 
@@ -68,7 +68,7 @@ or JavaScript directory.
 
 Browse Matt's famous BigInteger documentation at
 <http://silentmatt.com/biginteger/> or create it by installing
-NaturalDocs and running the build-docs script in
+NaturalDocs and running the build-docs script found in
 javascript-biginteger.
 
 Suffer the missing SchemeNumber documentation by making what sense you
