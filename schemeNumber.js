@@ -1,5 +1,5 @@
-// Incomplete, undocumented support for the Scheme numerical tower in
-// JavaScript.
+// Mostly complete, poorly documented support for the Scheme numerical
+// tower in JavaScript.
 
 // Copyright (c) 2011 by John Tobey <John.Tobey@gmail.com>
 
@@ -68,8 +68,8 @@ function toInteger(n) {
     throw new TypeError("Not an integer: " + n);
 }
 
-function exactDivisionByZero() {
-    return new RangeError("Exact division by zero");
+function divisionByExactZero() {
+    return new RangeError("Division by exact zero");
 }
 
 SN.prototype = new Number();
@@ -133,6 +133,16 @@ SN.isRational = function(x) { return (x instanceof SN) && x.isRational(); };
 SN.isInteger  = function(x) { return (x instanceof SN) && x.isInteger();  };
 SN.isFlonum   = function(x) { return (x instanceof SN) && x.isFlonum();   };
 SN.isFixnum   = function(x) { return (x instanceof SN) && x.isFixnum();   };
+
+SN.isRealValued = function(x) {
+    return SN.isComplex(x) && x.imagPart().isZero();
+};
+SN.isRationalValued = function(x) {
+    return SN.isRealValued(x) && x.realPart().isRational();
+};
+SN.isIntegerValued = function(x) {
+    return SN.isRealValued(x) && x.realPart().isInteger();
+};
 
 function makeRectangular(x, y) {
     if (x.isExact() && y.isExact())
@@ -910,6 +920,8 @@ Flonum.prototype.divide = function(z) {
     if (typeof z === "number")
         return toFlonum(this._ / z);
     z = toSN(z);
+    if (z.isZero() && z.isExact())
+        throw divisionByExactZero();
     if (z instanceof Flonum)
         return toFlonum(this._ / z._);
     return z._upgrade(this).divide(z);
@@ -1155,7 +1167,7 @@ ER_Native.prototype.divide = function(z) {
     if (!(z instanceof ER_Native))
         return z._upgrade(this).divide(z);
     if (z._ === 0)
-        throw exactDivisionByZero();
+        throw divisionByExactZero();
     if (z._ === 1)
         return this;
     if (z._ === -1)
@@ -1265,7 +1277,7 @@ EI_Native.prototype.square = function() {
 EI_Native.prototype.reciprocal = function() {
     var x = this._;
     if (x === 0)
-        throw exactDivisionByZero();
+        throw divisionByExactZero();
     if (x === 1 || x === -1)
         return this;
     if (x < 0)
@@ -1284,7 +1296,7 @@ EI_Native.prototype.divide = function(z) {
 
 function divAndModEI_Native(t, x, which) {
     if (x === 0)
-        throw exactDivisionByZero();
+        throw divisionByExactZero();
 
     var div = Math.floor(t / x);
     if (which === 0)
@@ -1401,7 +1413,7 @@ EI_Native.prototype.expt = function(p) {
             return this;
         if (p.isZero())
             return ONE;
-        throw exactDivisionByZero();
+        throw divisionByExactZero();
     }
 
     if (this._ === -1 && p.isInteger())
@@ -1509,7 +1521,7 @@ function gcd(a, b) {
 
 function reduceER(n, d) {
     if (d.isZero())
-        throw exactDivisionByZero();
+        throw divisionByExactZero();
 
     var g = gcd(n.abs(), d.abs());
 

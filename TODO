@@ -3,11 +3,11 @@ TODO:
 * SchemeNumber: Reimplement using multiple dispatch: Foo.prototype.add
   = function(z) { return z.addFoo(this); };
 
-* SchemeNumber: Make extension of standard Number.prototype the
-  normal, default flonum implementation.
+* SchemeNumber: Make extension of Number.prototype the normal, default
+  flonum implementation.
 
-* Finish Scheme tower implementation: numberToString with precision,
-  rationalize.  Look for other missing functions and cases.
+* Finish Scheme tower implementation: mantissa width, div0-and-mod0,
+  rationalize.
 
 * Document SchemeNumber.
 

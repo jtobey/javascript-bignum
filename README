@@ -1,29 +1,81 @@
-Bignum library for JavaScript.
+Scheme arithmetic library for JavaScript.
 Copyright (c) 2010,2011 John Tobey <John.Tobey@gmail.com>
 Copyright (c) 2009 Matthew Crumley <email@matthewcrumley.com>
 Licensed under the MIT license, file LICENSE.
 https://github.com/jtobey/javascript-bignum
-
-Based on: javascript-biginteger
+Big integer implementation based on javascript-biginteger
 https://github.com/silentmatt/javascript-biginteger
 
-THIS IS SPARSELY DOCUMENTED ALPHA CODE --- INTERFACES ARE SUBJECT TO CHANGE.
-See the file LICENSE regarding your non-warranty.  See the file TODO
-for a non-exhaustive list of likely future changes.
+*** WARNING ***
+
+THIS IS SPARSELY DOCUMENTED, BUGGY CODE WHOSE INTERFACES ARE SUBJECT
+TO CHANGE WITHOUT NOTICE.  See the file LICENSE regarding your lack of
+any warranty.
+
+This is INTENTIONALLY underdocumented PRECISELY BECAUSE the interfaces
+are changing.  See the file TODO for a list of likely future changes.
+
+WHAT IT IS
+
+The Scheme language supports "exact" arithmetic and mixing exact with
+inexact numbers.  Several basic operations, including add, subtract,
+multiply, and divide, when given only exact arguments, must return an
+exact, numerically correct result.  They are allowed to fail due to
+running out of memory, but they are not allowed to return
+approximations the way ECMAScript operators do.
+
+For example, adding exact 1/100 to exact 0 one hundred times produces
+exactly 1, not 1.0000000000000007 as in JavaScript.  Raising 2 to the
+1024th power returns a 308-digit integer with complete precision, not
+Infinity as in ECMAScript.
+
+This implementation follows the R6RS Scheme specification, Section
+11.7 (Base library, Arithmetic).  See http://www.r6rs.org/ (I
+recommend the PDF, not the HTML version.
+http://www.r6rs.org/final/r6rs.pdf)
+
+Not yet implemented functions:
+* rationalize
+* div0
+* mod0
+* div0-and-mod0
+
+Not yet implemented cases:
+* numberToString (Scheme's number->string) ignores precision argument.
+* parse (Scheme's string->number) ignores mantissa width.
+
+The atan function is split into "atan" and "atan2" according to
+whether it has one or two arguments.
+
+The complex number support, while believed complete, is unoptimized.
+
+IMPLEMENTATION DETAILS
+
+Inexact real numbers are represented as native numbers.
+
+Exact integers of absoluted value less than 2 to the 53rd are
+represented as native numbers.  Outside this range, exact integers are
+represented as BigInteger objects.
+
+Exact rationals may be represented as native numbers but are usually
+promoted to pairs of exact integers [numerator, denominator] in lowest
+terms.
 
 INSTALLATION
 
-Copy bigrational.js and biginteger.js from this directory to your
-JavaScript directory.
+Copy biginteger.js and schemeNumber.js from this directory to your Web
+or JavaScript directory.
 
 Browse Matt's famous BigInteger documentation at
 <http://silentmatt.com/biginteger/> or create it by installing
 NaturalDocs and running the build-docs script in
 javascript-biginteger.
 
-Suffer the incomplete BigRational documentation by making what sense
-you can of the files bigrational.js and test/test-bigrational.js in
-this distribution.  Accept my apologies if this situation has
-persisted over a month since the initial release.
+Suffer the missing SchemeNumber documentation by making what sense you
+can of schemeNumber.js in this distribution.  Accept my apologies if
+this situation has persisted over a month since today.
 
-January 6, 2011
+The BigRational library, bigrational.js, is deprecated in favor of
+SchemeNumber.
+
+January 24, 2011
