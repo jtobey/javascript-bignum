@@ -135,9 +135,9 @@ SN.isFlonum   = function(x) { return (x instanceof SN) && x.isFlonum();   };
 SN.isFixnum   = function(x) { return (x instanceof SN) && x.isFixnum();   };
 
 function makeRectangular(x, y) {
-    if (x.isExact() !== y.isExact())
-        return toRectangular(x.toInexact(), y.toInexact());
-    return toRectangular(x, y);
+    if (x.isExact() && y.isExact())
+        return exactRectangular(x, y);
+    return inexactRectangular(x.toInexact(), y.toInexact());
 }
 
 SN.makeRectangular = function(x, y) {
@@ -146,9 +146,11 @@ SN.makeRectangular = function(x, y) {
     return makeRectangular(toReal(x), toReal(y));
 };
 
-SN.makePolar = function(r, th) {
-    return toRectangular(r.multiply(th.cos()), r.multiply(th.sin()));
+function makePolar(r, th) {
+    return inexactRectangular(r.multiply(th.cos()), r.multiply(th.sin()));
 };
+
+SN.makePolar = makePolar;
 
 SN.parse = parseNumber;
 
@@ -246,12 +248,19 @@ SN.lcm = function() {
  "toExact", "toInexact", "isExact",
  "floor", "ceiling", "truncate", "round",
  "realPart", "imagPart",
- "abs", "acos", "asin", "atan", "ceil", "cos", "exp", "floor", "log",
+ "abs", "acos", "asin", "atan", "ceil", "cos", "exp", "floor",
  "round", "sin", "tan", "numerator", "denominator",
  "isEven", "isOdd", "exactIntegerSqrt"]
     .forEach(function(fn) {
             SN[fn] = function(a) { return toSN(a)[fn](); };
         });
+
+SN.log = function(z, base) {
+    var ret = toSN(z).log();
+    if (typeof base !== "undefined")
+        ret = ret.divide(toSN(base).log());
+    return ret;
+};
 
 // Configurable maximum integer magnitude.
 var MAX_LOG = 1e8 * Math.LN10;  // 100 million digits.
@@ -375,7 +384,7 @@ function parseNumber(s, exact, radix) {
 
         if (s === "i") {
             if (exact === false)
-                return toRectangular(INEXACT_ZERO, toFlonum(1));
+                return inexactRectangular(INEXACT_ZERO, toFlonum(1));
             return I;
         }
 
@@ -383,8 +392,8 @@ function parseNumber(s, exact, radix) {
         if (!match)
             barf();
 
-        return toRectangular(parseReal(match[1] || '0'),
-                             parseReal(match[2] || '1'));
+        return makeRectangular(parseReal(match[1] || '0'),
+                               parseReal(match[2] || '1'));
     }
 
     while (s[i] === "#") {
@@ -410,15 +419,70 @@ C.prototype.isComplex = retTrue;
 
 if (DEBUG) C.prototype.debug = function() { return "C"; };
 
-if (this.WANT_COMPLEX_NUMBERS) {  // Incomplete.
+C.prototype.sqrt = function() {
+    return makePolar(this.magnitude().sqrt(), this.angle().divide(TWO));
+};
+
+// Complex transcendental functions here for completeness, not optimized.
+
+C.prototype.log = function(base) {
+    var ret = inexactRectangular(this.magnitude().log(), this.angle());
+    if (typeof base === "undefined")
+        return ret;
+    return ret.divide(toSN(base).log());
+};
+
+C.prototype.asin = function() {
+    return M_I.multiply(I.multiply(this)
+                        .add(ONE.subtract(this.square()).sqrt()).log());
+};
+
+C.prototype.acos = function() {
+    return SN.PI.divide(TWO).subtract(this.asin());
+};
+
+C.prototype.atan = function() {
+    var iz = I.multiply(this);
+    return ONE.add(iz).log().subtract(ONE.subtract(iz).log()).divide(TWO)
+        .divide(I);
+};
+
+C.prototype.sin = function() {
+    print(I);
+    var iz = I.multiply(this);
+    return iz.exp().subtract(iz.negate().exp()).divide(TWO).divide(I);
+};
+
+C.prototype.cos = function() {
+    var iz = I.multiply(this);
+    return iz.exp().add(iz.negate().exp()).divide(TWO);
+};
+
+C.prototype.tan = function() {
+    return this.sin().divide(this.cos());
+};
+
+C.prototype.expt = function(z) {
+    return this.log().multiply(z).exp();
+};
 
 // Rectangular: Complex numbers as xy-coordinate pairs.
 
-function toRectangular(x, y) {
+function exactRectangular(x, y) {
     if (y.isZero())
         return x;
-    if (x.isZero() && x.isExact() && y.isUnit())
+    if (x.isZero() && y.isUnit())
         return (y.isPositive() ? I : M_I);
+    return new Rectangular(x, y);
+}
+
+function inexactRectangular(x, y) {
+    return new Rectangular(x, y);
+}
+
+function toRectangular(x, y) {
+    if (x.isExact())  //assert(y.isExact())
+        return exactRectangular(x, y);
     return new Rectangular(x, y);
 }
 
@@ -458,29 +522,31 @@ Rectangular.prototype.realPart = function() { return this._x; };
 Rectangular.prototype.imagPart = function() { return this._y; };
 
 Rectangular.prototype.isExact = function() {
-    return this._x.isExact() && this._y.isExact();
+    return this._x.isExact();
 };
 
 Rectangular.prototype.toInexact = function() {
     if (!this.isExact())
         return this;
-    return toRectangular(this.realPart().toInexact(),
-                         this.imagPart().toInexact());
+    return inexactRectangular(this.realPart().toInexact(),
+                              this.imagPart().toInexact());
 };
 
 Rectangular.prototype.toExact = function() {
     if (this.isExact())
         return this;
-    return toRectangular(this._x.toExact(), this._y.toExact());
+    return exactRectangular(this._x.toExact(), this._y.toExact());
 };
 
 Rectangular.prototype._upgrade = function(z) {
     if (z.isReal())
         return new Rectangular(z, ZERO);
     throw new TypeError("Can't coerce to Rectangular: " + z);
-}
+};
 
-Rectangular.prototype.isZero = retFalse;  // zero is Flonum or EI_Native.
+Rectangular.prototype.isZero = function() {
+    return this._x.isZero() && this._y.isZero();
+};
 
 function rectMagnitude2(z) {
     return z._x.square().add(z._y.square());
@@ -491,8 +557,8 @@ Rectangular.prototype.isUnit = function() {
 };
 
 Rectangular.prototype.magnitude = function() {
-    if (z._x.isZero())
-        return z._y.abs();
+    if (this._x.isZero())
+        return this._y.abs();
     return rectMagnitude2(this).sqrt();
 };
 
@@ -557,17 +623,9 @@ Rectangular.prototype.reciprocal = function() {
     return toRectangular(this._x.divide(m2), this._y.divide(m2).negate());
 };
 
-["sqrt", "exp", "log", "sin", "cos", "tan", "asin",
- "acos", "atan", "expt"]
-    .forEach(function(fn) {
-            Rectangular.prototype[fn] = function() {
-                throw new Error("Unimplemented: " + fn + " for complex");
-            };
-        });
-
-var I   = SN.I   = new Rectangular(ZERO, ONE);
-var M_I = SN.M_I = new Rectangular(ZERO, M_ONE);
-}
+Rectangular.prototype.exp = function() {
+    return makePolar(this._x.exp(), this._y);
+};
 
 // R: Real abstract base class.
 
@@ -970,7 +1028,7 @@ Flonum.prototype.ceiling = function() {
 Flonum.prototype.sqrt = function() {
     if (this._ >= 0)
         return toFlonum(Math.sqrt(this._));
-    return toRectangular(INEXACT_ZERO, Math.sqrt(-this._));
+    return inexactRectangular(INEXACT_ZERO, toFlonum(Math.sqrt(-this._)));
 };
 
 ['abs', 'acos', 'asin', 'atan', 'cos', 'exp', 'floor', 'log', 'sin', 'tan']
@@ -1374,6 +1432,9 @@ var ZERO  = SN.ZERO  = new EI_Native(0);
 var ONE   = SN.ONE   = new EI_Native(1);
 var M_ONE = SN.M_ONE = new EI_Native(-1);
 var TWO   = SN.TWO   = new EI_Native(2);
+
+var I     = SN.I   = new Rectangular(ZERO, ONE);
+var M_I   = SN.M_I = new Rectangular(ZERO, M_ONE);
 
 // ER: Exact rational abstract base class.
 
@@ -1861,9 +1922,11 @@ EI_Big.prototype.compare = function(x) {
 };
 
 EI_Big.prototype.log = function(base) {
-    if (typeof base !== "undefined")
-        throw new Error("Unimplemented: 2-arg log for big integer");
-    return toFlonum(this._.log());
+    switch (arguments.length) {
+    case 0: return toFlonum(this._.log());
+    case 1: return toFlonum(this._.log()).divide(toSN(base).log());
+    default: throw new TypeError("Usage: n.log([base])");
+    }
 };
 
 EI_Big.prototype.expt = function(z) {
@@ -1902,15 +1965,19 @@ EI_Big.prototype.exactIntegerSqrt = function() {
             var dm = n.divRem(a);
             var b = dm[0];
             var diff = a.subtract(b); // n == b*b + b*diff + dm[1], dm[1] < b+1
+
             if (diff.isZero())
                 return [ b, dm[1] ]; // n == b*b + dm[1]
+
             if (diff.isUnit()) {
                 if (diff.isPositive())
                     // n == b*b + b + dm[1], dm[1] < b+1
                     return [ b, b.add(dm[1]) ];
+
                 // n == b*b - b + dm[1] == (b-1)^2 + b - 1 + dm[1]
                 return [ a, a.add(dm[1]) ];
             }
+
             a = b.add(diff.quotient(2));
         }
     }
@@ -1921,7 +1988,11 @@ EI_Big.prototype.exactIntegerSqrt = function() {
     return doit(this._, a).map(reduceBigInteger);
 };
 
-["exp", "sin", "cos", "tan", "asin", "acos", "atan", "atan2"]
+EI_Big.prototype.atan2 = function(x) {
+    return toFlonum(Math.atan2(this._.toJSValue(), toReal(x).toJSValue()));
+};
+
+["exp", "sin", "cos", "tan", "asin", "acos", "atan"]
     .forEach(function(fn) {
             EI_Big.prototype[fn] = function() {
                 return toFlonum(Math[fn](this._.toJSValue()));
