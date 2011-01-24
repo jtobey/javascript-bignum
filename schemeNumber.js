@@ -540,7 +540,7 @@ Rectangular.prototype.toExact = function() {
 
 Rectangular.prototype._upgrade = function(z) {
     if (z.isReal())
-        return new Rectangular(z, ZERO);
+        return new Rectangular(z, z.isExact() ? ZERO : INEXACT_ZERO);
     throw new TypeError("Can't coerce to Rectangular: " + z);
 };
 
