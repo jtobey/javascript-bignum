@@ -64,9 +64,6 @@ INSTALLATION
 Copy biginteger.js and schemeNumber.js from this directory to your Web
 or JavaScript directory.
 
-The BigRational library, bigrational.js, is deprecated in favor of
-schemeNumber.js.
-
 
 USAGE
 

@@ -9,8 +9,6 @@ TODO:
 
 * Automate the test suite (test/gen-test.pl).
 
-* Discontinue development of BigRational.
-
 * Offer SchemeNumber to HOP.  http://hop.inria.fr/
 
 * ECMA Number.prototype methods: toLocaleString, toFixed,
