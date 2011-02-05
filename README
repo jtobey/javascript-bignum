@@ -72,7 +72,7 @@ USAGE
 
 The schemeNumber.js file exports an object "SchemeNumber".  It
 contains a property "fn", which in turn contains the functions
-implementing the numeric tower.  These functions are stored in "fn"
+implementing the numeric types.  These functions are stored in "fn"
 under their Scheme names, so quotation is needed where the names
 contain characters that are incompatible with JavaScript dot notation.
 
@@ -84,7 +84,7 @@ function and "fn" into conveniently named variables, such as "sf" and
     var sf = SchemeNumber.fn;
     var sn = sf["string->number"];
 
-The functions accept a string or JavaScript number wherever a Scheme
+Functions accept a string or JavaScript number wherever a Scheme
 number is required; they convert strings as if by string->number and
 treat native numbers as inexact reals.  So for example, "2" (string)
 would be exact (parsed as Scheme) but 2 (equal to 2.0) would be
@@ -112,6 +112,10 @@ Since 1/3 is a native JavaScript number, the library regards it as
 inexact, and operations such as numerator yield inexact integer
 results.  If we used "1/3" (quoted) instead of 1/3, the numerator and
 denominator would be the mathematically correct 1 and 3.
+
+Functions specified to return two values (div-and-mod and
+exact-integer-sqrt) return a two-element array as per JavaScript
+conventions.
 
 
 CAVEATS
