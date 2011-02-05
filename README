@@ -62,7 +62,8 @@ either both exact or both inexact.
 INSTALLATION
 
 Copy biginteger.js and schemeNumber.js from this directory to your Web
-or JavaScript directory.
+or JavaScript directory.  Load biginteger.js first, then
+schemeNumber.js.
 
 
 USAGE
