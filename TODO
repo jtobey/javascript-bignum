@@ -5,11 +5,13 @@ TODO:
 * Support explicit mantissa width
   (http://www.mail-archive.com/r6rs-discuss@lists.r6rs.org/msg01764.html).
 
+* Add hooks to support correct exception semantics.
+
 * Provide the option not to tamper with Number.prototype.
 
 * Automate the test suite (test/gen-test.pl).
 
-* Offer SchemeNumber to HOP.  http://hop.inria.fr/
+* Announce on comp.lang.scheme.
 
 * ECMA Number.prototype methods: toLocaleString, toFixed,
   toExponential, toPrecision.  Implement for exact numbers.
