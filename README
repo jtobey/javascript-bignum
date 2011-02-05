@@ -34,10 +34,7 @@ Not yet implemented cases:
 * string->number ignores mantissa width.
 
 We have not implemented the R6RS condition system or ensured that the
-numeric functions raise the condition types specified in the standard.
-
-The atan function is split into "atan" and "atan2" according to
-whether it has one or two arguments.
+numeric functions raise the specified condition types.
 
 The complex number support, while believed complete, is unoptimized.
 
