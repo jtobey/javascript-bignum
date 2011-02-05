@@ -1,29 +1,20 @@
 TODO:
 
-* SchemeNumber: Reimplement using multiple dispatch: Foo.prototype.add
-  = function(z) { return z.addFoo(this); };
+* Add missing functions: div0-and-mod0, div0, mod0, rationalize.
 
-* SchemeNumber: Make extension of Number.prototype the normal, default
-  flonum implementation.
+* Support explicit mantissa width
+  (http://www.mail-archive.com/r6rs-discuss@lists.r6rs.org/msg01764.html).
 
-* Finish Scheme tower implementation: mantissa width, div0-and-mod0,
-  rationalize.
+* Provide the option not to tamper with Number.prototype.
 
-* Document SchemeNumber.
-
-* Port the BigRational tests to SchemeNumber.
-
-* Look for a Scheme (R6RS) numeric test suite to hook up.
-
-* Write more tests.  Set up input and output files like those for
-  BigInteger.
+* Automate the test suite (test/gen-test.pl).
 
 * Discontinue development of BigRational.
 
 * Offer SchemeNumber to HOP.  http://hop.inria.fr/
 
-* New methods as per the ECMA spec for Number.prototype:
-  toLocaleString, toFixed, toExponential, toPrecision.
+* ECMA Number.prototype methods: toLocaleString, toFixed,
+  toExponential, toPrecision.  Implement for exact numbers.
 
 * BigInteger: Consider having pow() reject non-integer arguments.
 
@@ -33,4 +24,4 @@ TODO:
 * Consider exposing the library version like SchemeNumber.VERSION ===
   BigInteger.VERSION === "1.0"
 
-* Consider a BigDecimal class akin to Java's BigDecimal.
+* Consider a BigDecimal class like Java's BigDecimal.

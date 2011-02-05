@@ -1,6 +1,4 @@
-// Mostly complete, poorly documented support for the Scheme numerical
-// tower in JavaScript.
-
+// Scheme numerical tower in JavaScript.  Described in README.
 // Copyright (c) 2011 by John Tobey <John.Tobey@gmail.com>
 
 // Grab the BigInteger library.
@@ -10,7 +8,7 @@ if (typeof require !== "undefined")
 else
     BigInteger = this.BigInteger;
 
-if (typeof BigInteger === "undefined") {
+if (!BigInteger) {
     if (typeof load !== "undefined")
         load("biginteger.js");
     else if (this.readFile)
@@ -19,270 +17,216 @@ if (typeof BigInteger === "undefined") {
         throw new Error("BigInteger is not defined.");
 }
 
-var SchemeNumber;
+var SchemeNumber = (function(SN_IS_NUMBER) {
 
-(function() {
+if (SN_IS_NUMBER === undefined)
+    SN_IS_NUMBER = true;  // Modify Number.prototype by default.
 
-var DEBUG = true;
+var call     = Function.prototype.call;
+var apply    = Function.prototype.apply;
+var floor    = Math.floor;
+var ceil     = Math.ceil;
+var round    = Math.round;
+var pow      = Math.pow;
+var sqrt     = Math.sqrt;
+var atan2    = Math.atan2;
+var log      = Math.log;
+var exp      = Math.exp;
+var isFinite = this.isFinite;
+var isNaN    = this.isNaN;
 
-function retFalse() { return false; }
-function retTrue()  { return true;  }
-function retFalse1(x) { return false; }
-function retTrue1(x)  { return true;  }
-function retThis()  { return this; }
-
-// SN: public interface, exported as SchemeNumber.
-// Abstract base class of all numbers.
-
-function SN(x) {
-    if (!(this instanceof SN)) {
-        if (arguments.length === 1)
-            return toSN(x);
-        throw new TypeError("Usage: SchemeNumber(x)");
-    }
-    if (arguments.length !== 0)
-        throw new Error('Use "SchemeNumber(x)", not "new SchemeNumber(x)"');
-}
-
-function toSN(x) {
-    if (x instanceof SN)
-        return x;
-    if (typeof x === "number")
-        return toFlonum(x);
-    if (x instanceof Number)
-        return toFlonum(Number(x));
-    return parseNumber(x);
-}
-
-function toReal(x) {
-    x = toSN(x);
-    if (x.isReal())
-        return x;
-    throw new TypeError("Not a real number: " + x);
-}
-
-function toInteger(n) {
-    n = toSN(n);
-    if (n.isInteger())
-        return n;
-    throw new TypeError("Not an integer: " + n);
-}
+function retFalse()   { return false; }
+function retTrue()    { return true;  }
+function retFirst(a)  { return a; }
+function retThis()    { return this; }
+function retZero()    { return ZERO; }
+function retOne()     { return ONE; }
 
 function divisionByExactZero() {
-    return new RangeError("Division by exact zero");
+    throw new RangeError("Division by exact zero");
+}
+function unimpl() {
+    throw new Error("Unimplemented");
+}
+function pureVirtual() {
+    throw new Error("BUG: Pure virtual function not overridden");
 }
 
-SN.prototype = new Number();
+/* Internal class hierarchy:
 
-// Override methods of Number, which won't work if inherited.
+   SN  <----  C  <----  Rectangular
+                   |
+                   `--  R  <----  Flonum[1]
+                             |
+                             `--  ER  <---  EQ  <----  EQFraction
+                                                  |
+                                                  `--  EI  <----  EINative
+                                                             |
+                                                             `--  EIBig
 
-SN.prototype.toString = function(radix) {
-    return "[generic SchemeNumber]";
-};
-SN.prototype.toLocaleString = function() {
-    return this.toString();
-};
-SN.prototype.valueOf = function() {
-    throw new RangeError("Not a real number");
-};
-SN.prototype.toFixed = function(fractionDigits) {
-    return this.toString();
-};
-SN.prototype.toExponential = function(fractionDigits) {
-    return this.toString();
-};
-SN.prototype.toPrecision = function(precision) {
-    return this.toString();
-};
+   [1] The Flonum class actually equals SN for reasons of efficiency
+   and interoperability with native numbers.  Logically, Flonum should
+   be a direct subclass of R.  Code at the bottom of this file
+   populates missing slots in Flonum.prototype as if that were the
+   case.
 
-// Default method implementations.
+   The concrete classes are:
 
-SN.prototype.isComplex  = retFalse;
-SN.prototype.isReal     = retFalse;
-SN.prototype.isRational = retFalse;
-SN.prototype.isInteger  = retFalse;
-SN.prototype.isFlonum   = retFalse;
-SN.prototype.isFixnum   = retFalse;
-SN.prototype.isExact    = retFalse;
+   Flonum      - inexact real as a native number, possibly NaN or infinite.
+   Rectangular - complex number as real and imaginary parts of same exactness.
+   EQFraction  - exact rational as numerator and denominator in lowest terms.
+   EINative    - exact integer as (wrapped) native number.
+   EIBig       - exact integer as BigInteger.
 
-SN.prototype.isInexact = function() {
-    return !this.isExact();
-};
+   The abstract C, R, ER, EQ, and EI classes hold information about
+   the respective number types (complex, real, exact real, exact
+   rational, and exact integer) and stimulate thought about new
+   concrete classes.
 
-SN.prototype.ne = function(z) {
-    return !this.eq(z);
-};
+   Possible future classes:
+   C <-- Polar - possibly exact complex number in polar coordinates;
+   EQ <-- EQNative - exact rational as native number (power-of-2 denominator);
+   EQ <-- EQDecimal - exact rational as BigInteger times a power of 10;
+   R <-- BigFloat - inexact real of non-standard precision.
+ */
 
-SN.prototype.eqv = function(o) {
-    return o instanceof SN && o.isExact() === this.isExact() && this.eq(o);
-};
 
-SN.prototype.square = function() {
-    return this.multiply(this);
-};
+// Abstract over whether the user lets us add to the standard
+// Number.prototype.  XXX This doesn't work yet, you have to let me
+// add methods to Number.prototype.
 
-SN.prototype.divide = function(z) {
-    return this.multiply(toSN(z).reciprocal());
-};
+var SN;            // private alias for the public SchemeNumber constructor.
+var toSN;          // returns its argument if already an SN, else converts it.
+var toFlonum;      // converts its argument to number and returns inexact real.
+var isNumber;      // returns true if its argument is a Scheme number.
+var INEXACT_ZERO;  // Flonum zero.
+var floPow;        // Math.pow, with result converted to Flonum.
+var floLog;        // Math.log, with result converted to Flonum.
 
-if (DEBUG) SN.prototype.debug = function() { return "SchemeNumber"; };
+if (SN_IS_NUMBER) {
 
-SN.isComplex  = function(x) { return (x instanceof SN) && x.isComplex();  };
-SN.isReal     = function(x) { return (x instanceof SN) && x.isReal();     };
-SN.isRational = function(x) { return (x instanceof SN) && x.isRational(); };
-SN.isInteger  = function(x) { return (x instanceof SN) && x.isInteger();  };
-SN.isFlonum   = function(x) { return (x instanceof SN) && x.isFlonum();   };
-SN.isFixnum   = function(x) { return (x instanceof SN) && x.isFixnum();   };
+    SN = Number;
 
-SN.isRealValued = function(x) {
-    return SN.isComplex(x) && x.imagPart().isZero();
-};
-SN.isRationalValued = function(x) {
-    return SN.isRealValued(x) && x.realPart().isRational();
-};
-SN.isIntegerValued = function(x) {
-    return SN.isRealValued(x) && x.realPart().isInteger();
-};
+    toSN = function(obj) {
+        if (obj instanceof SN || typeof obj === "number")
+            return obj;
+        if (obj && obj.toSchemeNumber)
+            return obj.toSchemeNumber();
+        return parseNumber(obj);
+    };
+    String.prototype.toSchemeNumber = function() {
+        return parseNumber(this);
+    };
 
-function makeRectangular(x, y) {
-    if (x.isExact() && y.isExact())
-        return exactRectangular(x, y);
-    return inexactRectangular(x.toInexact(), y.toInexact());
+    isNumber = function(x) {
+        return x instanceof SN || typeof x === "number";
+    };
+
+    toFlonum = Number;
+
+    INEXACT_ZERO = 0;
+
+    floPow = pow;
+    floLog = log;
 }
+else {
 
-SN.makeRectangular = function(x, y) {
-    if (arguments.length !== 2)
-        throw new TypeError("Usage: makeRectangular(x, y)");
-    return makeRectangular(toReal(x), toReal(y));
-};
-
-function makePolar(r, th) {
-    return inexactRectangular(r.multiply(th.cos()), r.multiply(th.sin()));
-};
-
-SN.makePolar = makePolar;
-
-SN.parse = parseNumber;
-
-SN.exact = function(x) {
-    if (arguments.length !== 1)
-        throw new TypeError("Usage: SchemeNumber.exact(x)");
-    if (x instanceof SN)
-        return x.toExact();
-    if (x instanceof Number)
-        x = Number(x);
-    if (typeof x === "number")
-        return numberToER(x);
-    return parseNumber(x, true);
-};
-
-function maxMin(cmp, a, arguments) {
-    var len = arguments.length;
-    if (len === 0)
-        throw new TypeError("SchemeNumber.max needs at least one argument");
-
-    var ret = toReal(a);
-    var exact = ret.isExact();
-
-    for (var i = 1; i < len; i++) {
-        var x = toReal(arguments[i]);
-        if (exact) {
-            exact = x.isExact();
-            if (!exact)
-                ret = ret.toInexact();
-        }
-        if (x[cmp](ret))
-            ret = x;
-    }
-    return exact ? ret : ret.toInexact();
-}
-
-SN.max = function(a) {
-    return maxMin("gt", a, arguments);
-};
-
-SN.min = function(a) {
-    return maxMin("lt", a, arguments);
-};
-
-SN.gcd = function() {
-    var ret = ZERO;
-    var len = arguments.length;
-    var exact = true;
-    for (var i = 0; i < len; i++) {
-        var arg = toInteger(arguments[i]);
-        exact = exact && arg.isExact();
-        ret = gcd(ret, arg.abs());
-    }
-    return (exact ? ret : ret.toInexact());
-};
-
-SN.lcm = function() {
-    var ret = ONE;
-    var len = arguments.length;
-    var exact = true;
-    for (var i = 0; i < len; i++) {
-        var arg = toInteger(arguments[i]);
-        exact = exact && arg.isExact();
-        ret = ret.multiply(arg).divide(gcd(ret, arg.abs()));
-    }
-    return (exact ? ret : ret.toInexact());
-};
-
-["add", "subtract", "multiply", "divide", "ne", "compare",
- "pow", "divAndMod", "div", "mod", "atan2", "expt"]
-    .forEach(function(fn) {
-            SN[fn] = function(a, b) { return toSN(a)[fn](b); };
-        });
-
-["eq", "gt", "lt", "ge", "le"]
-    .forEach(function(fn) {
-            SN[fn] = function(a, b) {
-                var len = arguments.length;
-                b = toReal(b);
-                if (!toReal(a)[fn](b))
-                    return false;
-                for (var i = 2; i < len; i++) {
-                    var c = toReal(arguments[i]);
-                    if (!b[fn](c))
-                        return false;
-                    b = c;
-                }
-                return true;
+    function wrapUnderscoreMethod(f) {
+        switch (f.length) {
+        case 0: return function() {
+                return call.call(f, this._);
             };
-        });
+        case 1: return function(a) {
+                return call.call(f, this._, a);
+            };
+        case 2: return function(a, b) {
+                return call.call(f, this._, a, b);
+            };
+        default: return function() {
+                var len = arguments.length;
+                var args = Array(len);
+                while (len--)
+                    args[len] = arguments[len];
+                return apply.call(f, this._, args);
+            };
+        }
+    }
 
-["toJSValue", "reciprocal", "magnitude",
- "sqrt", "square", "isFinite", "isInfinite", "isNaN",
- "isZero", "isUnit", "isPositive", "isNegative", "negate", "abs",
- "toExact", "toInexact", "isExact",
- "floor", "ceiling", "truncate", "round",
- "realPart", "imagPart",
- "abs", "acos", "asin", "atan", "ceil", "cos", "exp", "floor",
- "round", "sin", "tan", "numerator", "denominator",
- "isEven", "isOdd", "exactIntegerSqrt"]
-    .forEach(function(fn) {
-            SN[fn] = function(a) { return toSN(a)[fn](); };
-        });
+    // Make SN imitate the standard Number object for most purposes.
 
-SN.log = function(z, base) {
-    var ret = toSN(z).log();
-    if (typeof base !== "undefined")
-        ret = ret.divide(toSN(base).log());
-    return ret;
+    SN = function(x) {
+        if (arguments.length === 0)
+            x = 0;
+        if (!(this instanceof SN))
+            return Number(x);
+        this._ = Number(x);
+    };
+    SN.prototype = new Number();
+    SN.prototype.constructor = SN;
+    SN.prototype.valueOf = function() { return this._; };
+    ["toString", "toLocaleString", "toFixed", "toExponential", "toPrecision"]
+        .forEach(function(name) {
+                SN.prototype[name]
+                    = wrapUnderscoreMethod(Number.prototype[name]);
+            });
+    ["MAX_VALUE", "MIN_VALUE", "NaN", "NEGATIVE_INFINITY", "POSITIVE_INFINITY"]
+        .forEach(function(name) {
+                SN[name] = new SN(Number[name]);
+            });
+
+    toSN = function(obj) {
+        if (obj instanceof SN)
+            return obj;
+        if (typeof obj === "number")
+            return toFlonum(obj);
+        if (obj instanceof Number)
+            return toFlonum(Number(obj));
+        if (obj && obj.toSchemeNumber)
+            return obj.toSchemeNumber();
+        return parseNumber(obj);
+    };
+
+    isNumber = function(x) {
+        return x instanceof SN;
+    };
+
+    toFlonum = function(x) {
+        x = Number(x);
+        if (x === 0)
+            return INEXACT_ZERO;
+        return new SN(x);
+    };
+
+    INEXACT_ZERO = new SN(0);
+
+    floPow = function(x, y) { return toFlonum(pow(x, y)); };
+    floLog = function(x)    { return toFlonum(log(x)); };
+}
+
+var Flonum = SN;
+
+var HIERARCHY = {
+    C: ["Rectangular", "R"],
+    R: ["Flonum", "ER"],
+    ER: ["EQ"],
+    EQ: ["EQFraction", "EI"],
+    EI: ["EINative", "EIBig"],
 };
 
-// Configurable maximum integer magnitude.
-var MAX_LOG = 1e8 * Math.LN10;  // 100 million digits.
-
-SN.getMaxIntegerDigits = function() {
-    return MAX_LOG / Math.LN10;
-};
-SN.setMaxIntegerDigits = function(max) {
-    MAX_LOG = max * Math.LN10;
+var CLASSES = {
+    C:C, R:R, ER:ER, EQ:EQ, EI:EI,
+    Rectangular:Rectangular, Flonum:Flonum,
+    EQFraction:EQFraction, EINative:EINative, EIBig:EIBig,
 };
 
-// C: Complex abstract base class.
+var DISP = {};
+for (var className in CLASSES) {
+    DISP[className] = {};  // Contents will go into class prototype.
+}
+
+//
+// Input functions.
+//
 
 // How to split a rectangular literal into real and imaginary components:
 var decimalComplex = /^(.*[^a-zA-Z]|)([-+].*)i$/;
@@ -297,24 +241,26 @@ var uintegerPattern = {
     2: /^[01]+$/, 8: /^[0-7]+$/, 10: /^[0-9]+$/, 16: /^[0-9a-fA-F]+$/
 };
 
+var PARSE_ERROR = new Object();
+
 // Scheme number syntaxes, e.g. #e1.1@-2d19, 2/3
-function parseNumber(s, exact, radix) {
+function stringToNumber(s, radix, exact) {
     var i = 0;
 
-    function barf() {
-        throw new SyntaxError("Invalid number: " + s);
+    function lose() {
+        throw PARSE_ERROR;
     }
     function setExact(value) {
-        if (exact !== undefined) barf();
+        if (exact !== undefined) lose();
         exact = value; i += 2;
     }
     function setRadix(value) {
-        if (radix) barf();
+        if (radix) lose();
         radix = value; i += 2;
     }
     function parseUinteger(s, sign) {
         if (!uintegerPattern[radix].test(s))
-            barf();
+            lose();
 
         var n = parseInt(s, radix);
 
@@ -322,14 +268,17 @@ function parseNumber(s, exact, radix) {
             return toFlonum(sign * n);
 
         if (n < 9007199254740992)
-            return toEI_Native(sign * n);
+            return toEINative(sign * n);
 
-        return toEI_Big(BigInteger.parse(s, radix));
+        n = BigInteger.parse(s, radix);
+        if (sign < 0)
+            n = n.negate();
+        return new EIBig(n);
     }
     function parseReal(s) {
         if (nanInfPattern.test(s)) {
             if (exact)
-                throw new RangeError("No exact representation for " + s);
+                lose();
             switch (s) {
             case "+inf.0": return INFINITY;
             case "-inf.0": return M_INFINITY;
@@ -349,7 +298,7 @@ function parseNumber(s, exact, radix) {
                 .divide(parseUinteger(s.substring(slash + 1), 1));
 
         if (radix !== 10)
-            barf();
+            lose();
 
         // We have only one floating point width.
         s = s.replace(mantissaWidthPattern, '')
@@ -361,7 +310,7 @@ function parseNumber(s, exact, radix) {
             return parseUinteger(s, sign);
 
         if (!decimal10Pattern.test(s))
-            barf();
+            lose();
 
         if (!exact)
             return toFlonum(sign * parseFloat(s));
@@ -397,13 +346,27 @@ function parseNumber(s, exact, radix) {
                 return inexactRectangular(INEXACT_ZERO, toFlonum(1));
             return I;
         }
+        if (s === "-i") {
+            if (exact === false)
+                return inexactRectangular(INEXACT_ZERO, toFlonum(-1));
+            return M_I;
+        }
 
         var match = (radix === 10 ? decimalComplex : radixComplex).exec(s);
-        if (!match)
-            barf();
+        var x, y;
+        if (match) {
+            x = match[1];
+            y = match[2];
+            x = (x ? parseReal(x) : (exact === false ? INEXACT_ZERO : ZERO));
+            y = (y === "+" ? ONE : (y === "-" ? M_ONE : parseReal(y)));
+        }
+        else {
+            // Could be "3i" for example.
+            x = (exact === false ? INEXACT_ZERO : ZERO);
+            y = parseReal(s.substring(0, s.length - 1));
+        }
 
-        return makeRectangular(parseReal(match[1] || '0'),
-                               parseReal(match[2] || '1'));
+        return makeRectangular(x, y);
     }
 
     while (s[i] === "#") {
@@ -414,71 +377,855 @@ function parseNumber(s, exact, radix) {
         case 'o': case 'O': setRadix( 8); break;
         case 'd': case 'D': setRadix(10); break;
         case 'x': case 'X': setRadix(16); break;
-        default: barf();
+        default: return false;
         }
     }
 
     radix = radix || 10;
-    return parseComplex(s.substring(i));
+    try {
+        return parseComplex(s.toString().substring(i));
+    }
+    catch (e) {
+        if (e === PARSE_ERROR)
+            return false;
+        throw e;
+    }
 }
+
+function parseNumber(s, exact, radix) {
+    var ret = stringToNumber(s, radix, exact);
+    if (ret === false)
+        throw new SyntaxError("Not a number: " + s);
+    return ret;
+}
+
+function makeRectangular(x, y) {
+    if (x.isExact() && y.isExact())
+        return exactRectangular(x, y);
+    return inexactRectangular(x.toInexact(), y.toInexact());
+}
+
+function makePolar(r, theta) {
+    return inexactRectangular(r.multiply(theta.cos()), r.multiply(theta.sin()));
+}
+
+function toReal(x) {
+    x = toSN(x);
+    if (!x.isReal())
+        throw new TypeError("Not a real number: " + x);
+    return x;
+}
+
+function toInteger(n) {
+    n = toSN(n);
+    if (!n.isInteger())
+        throw new TypeError("Not an integer: " + n);
+    return n;
+}
+
+// Configurable maximum integer magnitude.
+var MAX_LOG = 1e8 * Math.LN10;  // 100 million digits.
+
+SN.getMaxIntegerDigits = function() {
+    return MAX_LOG / Math.LN10;
+};
+SN.setMaxIntegerDigits = function(max) {
+    MAX_LOG = max * Math.LN10;
+};
+
+//
+// Scheme functions.
+//
+
+SN.fn = {
+
+    "eqv?" : function(a, b) {
+        if (a === b)
+            return true;
+        a = toSN(a);
+        b = toSN(b);
+        return (a.isExact() === b.isExact() && a.eq(b));
+    },
+
+    "number?"   : isNumber,
+    "complex?"  : isComplex,
+    "real?"     : function(x) { return isNumber(x) && x.isReal();     },
+    "rational?" : function(x) { return isNumber(x) && x.isRational(); },
+    "integer?"  : function(x) { return isNumber(x) && x.isInteger();  },
+
+    "real-valued?" : isRealValued,
+
+    "rational-valued?" : function(x) {
+        return isRealValued(x) && x.realPart().isRational();
+    },
+
+    "integer-valued?" : function(x) {
+        return isRealValued(x) && x.realPart().isInteger();
+    },
+
+    "exact?"   : makeUnary("isExact"),
+    "inexact?" : makeUnary("isInexact"),
+
+    inexact : function(z) {
+        if (typeof z === "number")
+            return toFlonum(z);
+        if (z instanceof SN)
+            return z.toInexact();
+        if (z instanceof Number)
+            return toFlonum(Number(z));
+        return parseNumber(z, false);
+    },
+
+    exact : function(z) {
+        if (typeof z === "number")
+            return nativeToExact(z);
+        if (z instanceof SN)
+            return z.toExact();
+        if (z instanceof Number)
+            return nativeToExact(Number(z));
+        return parseNumber(z, true);
+    },
+
+    "=" : function(a, b) {
+        var len = arguments.length;
+        a = toSN(a);
+        for (var i = 1; i < len; i++) {
+            if (!a.eq(arguments[i]))
+                return false;
+        }
+        return true;
+    },
+
+    "<"  : makeComparator("lt"),
+    ">"  : makeComparator("gt"),
+    "<=" : makeComparator("le"),
+    ">=" : makeComparator("ge"),
+
+    "zero?"     : makeUnary("isZero"),
+    "positive?" : makeUnary("isPositive"),
+    "negative?" : makeUnary("isNegative"),
+    "odd?"      : makeUnary("isOdd"),
+    "even?"     : makeUnary("isEven"),
+    "finite?"   : makeUnary("isFinite"),
+    "infinite?" : makeUnary("isInfinite"),
+    "nan?"      : makeUnary("isNaN"),
+
+    max : makeMaxMin("gt"),
+    min : makeMaxMin("lt"),
+
+    "+" : function() {
+        var ret = ZERO;
+        var i = arguments.length;
+        while (i--)
+            ret = ret.add(toSN(arguments[i]));
+        return ret;
+    },
+
+    "*" : function() {
+        var ret = ONE;
+        var i = arguments.length;
+        while (i--)
+            ret = ret.multiply(toSN(arguments[i]));
+        return ret;
+    },
+
+    "-" : function(a) {
+        var ret = toSN(a);
+        var i = arguments.length;
+        if (i < 2)
+            return ret.negate();
+        while (i > 1)
+            ret = ret.subtract(toSN(arguments[--i]));
+        return ret;
+    },
+
+    "/" : function(a) {
+        var first = toSN(a);
+        var i = arguments.length;
+        if (i < 2)
+            return first.reciprocal();
+        if (i === 2)
+            return first.divide(arguments[1]);
+        var product = ONE;
+        while (i > 1)
+            product = product.multiply(toSN(arguments[--i]));
+        return first.divide(product);
+    },
+
+    abs             : makeUnary("abs"),
+    "div-and-mod"   : makeBinary("divAndMod"),
+    div             : makeBinary("div"),
+    mod             : makeBinary("mod"),
+    "div0-and-mod0" : unimpl,
+    div0            : unimpl,
+    mod0            : unimpl,
+
+    gcd : function() {
+        var ret = ZERO;
+        var len = arguments.length;
+        var exact = true;
+        for (var i = 0; i < len; i++) {
+            var arg = toInteger(arguments[i]);
+            exact = exact && arg.isExact();
+            ret = gcd(ret, arg.abs().toExact());
+        }
+        ret = ret.abs();
+        return (exact ? ret : ret.toInexact());
+    },
+
+    lcm : function() {
+        var ret = ONE;
+        var len = arguments.length;
+        var exact = true;
+        for (var i = 0; i < len; i++) {
+            var arg = toInteger(arguments[i]);
+            exact = exact && arg.isExact();
+            arg = arg.toExact();
+            ret = ret.multiply(arg).divide(gcd(ret, arg.abs()));
+        }
+        ret = ret.abs();
+        return (exact ? ret : ret.toInexact());
+    },
+
+    numerator   : makeUnary("numerator"),
+    denominator : makeUnary("denominator"),
+    floor       : makeUnary("floor"),
+    ceiling     : makeUnary("ceiling"),
+    truncate    : makeUnary("truncate"),
+    round       : makeUnary("round"),
+    rationalize : unimpl,
+    exp         : makeUnary("exp"),
+
+    log : function(z, base) {
+        var ret = toSN(z).log();
+        if (typeof base !== "undefined")
+            ret = ret.divide(toSN(base).log());
+        return ret;
+    },
+
+    sin  : makeUnary("sin"),
+    cos  : makeUnary("cos"),
+    tan  : makeUnary("tan"),
+    asin : makeUnary("asin"),
+    acos : makeUnary("acos"),
+
+    atan : function(y, x) {
+        switch (arguments.length) {
+        case 1: return toSN(y).atan();
+        case 2: return toSN(y).atan2(x);
+        default: throw new TypeError("atan expects 1 to 2 arguments, given "
+                                     + arguments.length);
+        }
+    },
+
+    sqrt : makeUnary("sqrt"),
+    "exact-integer-sqrt" : makeUnary("exactIntegerSqrt"),
+    expt : makeBinary("expt"),
+
+    "make-rectangular" : function(x, y) {
+        return makeRectangular(toReal(x), toReal(y));
+    },
+
+    "make-polar" : function(r, theta) {
+        return makePolar(toReal(r), toReal(theta));
+    },
+
+    "real-part" : makeUnary("realPart"),
+    "imag-part" : makeUnary("imagPart"),
+    magnitude   : makeUnary("magnitude"),
+    angle       : makeUnary("angle"),
+
+    "number->string" : function(z, radix, precision) {
+        return toSN(z).numberToString(radix, precision);
+    },
+
+    "string->number" : stringToNumber
+};
+
+// Scheme function helpers.
+
+function isComplex(x) {
+    return isNumber(x) && x.isComplex();
+}
+function isRealValued(x) {
+    return isComplex(x) && x.imagPart().isZero();
+}
+
+function makeUnary(methodName) {
+    return function(a) {
+        return toSN(a)[methodName]();
+    };
+}
+function makeBinary(methodName) {
+    return function(a, b) {
+        return toSN(a)[methodName](b);
+    };
+}
+
+function makeComparator(cmp) {
+    return function(a, b) {
+        var len = arguments.length;
+        b = toReal(b);
+        if (!toReal(a)[cmp](b))
+            return false;
+        for (var i = 2; i < len; i++) {
+            var c = toReal(arguments[i]);
+            if (!b[cmp](c))
+                return false;
+            b = c;
+        }
+        return true;
+    };
+}
+
+function makeMaxMin(cmp) {
+    return function(a) {
+        var len = arguments.length;
+        if (len === 0)
+            throw new TypeError("max/min needs at least one argument");
+
+        var ret = toReal(a);
+        var exact = ret.isExact();
+
+        for (var i = 1; i < len; i++) {
+            var x = toReal(arguments[i]);
+            if (x.isNaN())
+                return x;
+            if (exact) {
+                exact = x.isExact();
+                if (!exact)
+                    ret = ret.toInexact();  // XXX Avoid expensive comparisons?
+            }
+            if (x[cmp](ret) !== false) {
+                ret = x;
+            }
+        }
+        return exact ? ret : ret.toInexact();
+    };
+}
+
+//
+// Flonum: Inexact real as a native number, wrapped if configured with
+// SchemeNumber_is_Number=false.
+//
+
+DISP.Flonum.toJSValue = SN.prototype.valueOf;
+
+DISP.Flonum.isExact    = retFalse;
+DISP.Flonum.isInexact  = retTrue;
+DISP.Flonum.isComplex  = retTrue;
+DISP.Flonum.isReal     = retTrue;
+
+DISP.Flonum.debug = function() {
+    return "Flonum(" + this.numberToString() + ")";
+};
+
+function nativeDenominator(x) {
+    // Get the "denominator" of a floating point value.
+    // The result will be a power of 2.
+    // This works by calling Number.prototype.toString with a radix of 2
+    // and assuming the result will be a sequence of "0" and "1" characters,
+    // possibly including a "." and possibly a leading "-".
+    // Specification ECMA-262 Edition 5 (December 2009) does not strongly
+    // support this assumption.  As an alternative, should this assumption
+    // prove non-portable (i.e., if it doesn't work in IE), we could try
+    // for (var d = 1; x !== floor(x); d *= 2) { x *= 2; } return d;
+
+    //assert(isFinite(x));
+    var s = x.toString(2);
+    var i = s.indexOf(".");
+    if (i === -1)
+        return 1;
+    return pow(2, s.length - i - 1);
+}
+
+function exactNativeIntegerToString(n, radix) {
+    if (n > -9007199254740992 && n < 9007199254740992)
+        return n.toString(radix);
+    return numberToBigInteger(n).toString(radix);
+}
+
+function nativeToRationalString(q, radix) {
+    //assert(isFinite(q));
+    var d = nativeDenominator(q);
+    var ns = exactNativeIntegerToString(q * d, radix);
+    if (d === 1)
+        return ns;
+    return (ns + "/" +
+            exactNativeIntegerToString(d, radix));
+}
+
+DISP.Flonum.numberToString = function(radix, precision) {
+    // XXX Handle precision?
+    if (radix && radix != 10 && isFinite(this))
+        return "#i" + nativeToRationalString(this, radix);
+
+    if (!isFinite(this)) {
+        if (isNaN(this))
+            return("+nan.0");
+        return (this > 0 ? "+inf.0" : "-inf.0");
+    }
+
+    // XXX ECMAScript starts substituting zeroes for final digits before
+    // it goes to exponential notation (11111111111111111111 .toString()
+    // is "11111111111111110000") and I am not sure this is allowed in
+    // Scheme.
+    var s = this.toString();
+
+    if (s.indexOf('.') === -1) {
+        // Force the result to contain a decimal point as per R6RS.
+        var e = s.indexOf('e');
+        if (e === -1)
+            return s + ".0"; // Could use "." but ".0" diffs better for testing.
+        return s.substring(0, e) + "." + s.substring(e);
+    }
+    return s;
+};
+
+DISP.Flonum.realPart = retThis;
+
+DISP.Flonum.imagPart = function() {
+    return 0;
+};
+
+DISP.Flonum.denominator = function() {
+    if (isFinite(this))
+        return nativeDenominator(this);
+    throw new TypeError("Can't coerce " + this + " to rational");
+};
+
+DISP.Flonum.numerator = function() {
+    if (isFinite(this))
+        return this * nativeDenominator(this);
+    throw new TypeError("Can't coerce " + this + " to rational");
+};
+
+DISP.Flonum.isInteger = function() {
+    return isFinite(this) && this == floor(this);
+};
+
+DISP.Flonum.isFinite = function() {
+    return isFinite(this);
+};
+DISP.Flonum.isRational = DISP.Flonum.isFinite;
+
+DISP.Flonum.isZero = function() {
+    return this == 0;
+};
+
+DISP.Flonum.isPositive = function() {
+    return this > 0;
+};
+
+DISP.Flonum.isNegative = function() {
+    return this < 0;
+};
+
+DISP.Flonum.sign = function() {
+    return (this == 0 ? 0 : (this > 0 ? 1 : -1));
+};
+
+DISP.Flonum.isUnit = function() {
+    return this == 1 || this == -1;
+};
+
+DISP.Flonum.isInfinite = function() {
+    return !isFinite(this) && !isNaN(this);
+};
+
+DISP.Flonum.isNaN = function() {
+    return isNaN(this);
+};
+
+function nativeToExact(x) {
+    if (!isFinite(x))
+        throw new RangeError("No exact representation for " + x);
+    var d = nativeDenominator(x);
+    if (d === 1)
+        return toEINative(x);
+    var n = x * d;
+    if (!isFinite(n))
+        throw new RangeError("No exact representation for " + x);
+    return canonicalEQ(n, d);
+}
+
+DISP.Flonum.toExact = function() {
+    return nativeToExact(this);
+};
+
+DISP.Flonum.toInexact = retThis;
+
+DISP.Flonum.negate = function() {
+    return -this;
+};
+
+DISP.Flonum.abs = function() {
+    return (this < 0 ? -this : this);
+};
+
+DISP.Flonum.reciprocal = function() {
+    return 1 / this;
+};
+
+function div_Flonum_R(x, y) {
+    if (y > 0)
+        return floor(x / y);
+    if (y < 0)
+        return ceil(x / y);
+    if (y == 0)
+        throw new RangeError("div/mod by zero");
+    return NaN;
+}
+DISP.Flonum.divAndMod = function(x) {
+    x = Number(toReal(x));
+    var div = div_Flonum_R(this, x);
+    return [toFlonum(div), toFlonum(this - (x * div))];
+};
+DISP.Flonum.div = function(x) {
+    return div_Flonum_R(this, toReal(x));
+};
+DISP.Flonum.mod = function(x) {
+    return this - x * div_Flonum_R(this, toReal(x));
+};
+
+DISP.Flonum.square = function() {
+    return this * this;
+};
+
+DISP.Flonum.eq = function(z) { return toSN(z)._eq_Flonum(this); };
+DISP.Flonum.ne = function(z) { return toSN(z)._ne_Flonum(this); };
+DISP.Flonum.gt = function(x) { return toReal(x)._gt_Flonum(this); };
+DISP.Flonum.lt = function(x) { return toReal(x)._lt_Flonum(this); };
+DISP.Flonum.ge = function(x) { return toReal(x)._ge_Flonum(this); };
+DISP.Flonum.le = function(x) { return toReal(x)._le_Flonum(this); };
+
+// Note operand order!
+DISP.Flonum._gt_R = function(x) { return x > this; };
+DISP.Flonum._lt_R = function(x) { return x < this; };
+DISP.Flonum._ge_R = function(x) { return x >= this; };
+DISP.Flonum._le_R = function(x) { return x <= this; };
+
+DISP.Flonum.compare = function(x) {
+    return toReal(x)._compare_Flonum(this);
+};
+
+DISP.Flonum.isEven = function() {
+    //assert(this == floor(this));
+    return (this & 1) === 0;
+};
+
+DISP.Flonum.isOdd = function() {
+    //assert(this == floor(this));
+    return (this & 1) === 1;
+};
+
+DISP.Flonum.round = function() {
+    var ret = floor(this);
+    var diff = this - ret;
+    if (diff < 0.5) return ret;
+    if (diff > 0.5) return ret + 1;
+    return 2 * round(this / 2);
+};
+
+DISP.Flonum.truncate = function() {
+    return (this < 0 ? ceil(this) : floor(this));
+};
+
+DISP.Flonum.ceiling = function() {
+    return ceil(this);
+};
+
+["abs", "atan", "cos", "exp", "floor", "sin", "tan"]
+    .forEach(function(name) {
+            var fn = Math[name];
+            DISP.Flonum[name] = function() {
+                return fn(this);
+            };
+        });
+
+["acos", "asin", "log"]
+    .forEach(function(name) {
+            var math = Math[name];
+            var cplx = {acos:complexAcos, asin:complexAsin, log:complexLog}
+                [name];
+            DISP.Flonum[name] = function() {
+                var ret = math(this);
+                if (isNaN(ret))
+                    return cplx(this);
+                return ret;
+            };
+        });
+
+DISP.Flonum.sqrt = function() {
+    if (this >= 0)
+        return toFlonum(sqrt(this));
+    if (isNaN(this))
+        return this;
+    return inexactRectangular(INEXACT_ZERO, toFlonum(sqrt(-this)));
+};
+
+DISP.Flonum.log = function() {
+    if (this < 0)
+        return complexLog(this);
+    return floLog(this);
+};
+
+DISP.Flonum.atan2 = function(x) {
+    return atan2(this, toReal(x));
+};
+
+DISP.Flonum.expt = function(z) {
+    return toSN(z)._expt_Flonum(this);
+};
+
+["E", "LN10", "LN2", "LOG2E", "LOG10E", "PI", "SQRT1_2", "SQRT2"]
+    .forEach(function(name) {
+            SN[name] = toFlonum(Math[name]);
+        });
+
+var INFINITY     = SN.POSITIVE_INFINITY;
+var M_INFINITY   = SN.NEGATIVE_INFINITY;
+var NAN          = SN.NaN;
+var PI           = SN.PI;
+
+//
+// C: Complex abstract base class.
+//
 
 function C() {}
 
 C.prototype = new SN();
-C.prototype.isComplex = retTrue;
 
-if (DEBUG) C.prototype.debug = function() { return "C"; };
+DISP.C.isReal     = retFalse;
+DISP.C.isRational = retFalse;
+DISP.C.isInteger  = retFalse;
+DISP.C.isZero     = retFalse;
+DISP.C.isUnit     = retFalse;
 
-C.prototype.sqrt = function() {
+DISP.C.isComplex  = retTrue;
+
+DISP.C.toString = function(radix, precision) {
+    return this.numberToString(radix, precision);
+};
+DISP.C.valueOf = DISP.C.toString;
+DISP.C.numberToString = pureVirtual;
+
+DISP.C.debug = function() { return "C"; };
+
+// vvvv You don't need this if you use only real numbers. vvvv
+
+DISP.C.sqrt = function() {
     return makePolar(this.magnitude().sqrt(), this.angle().divide(TWO));
 };
 
 // Complex transcendental functions here for completeness, not optimized.
 
-C.prototype.log = function(base) {
-    var ret = inexactRectangular(this.magnitude().log(), this.angle());
-    if (typeof base === "undefined")
-        return ret;
-    return ret.divide(toSN(base).log());
+function complexLog(z) {
+    return makeRectangular(z.magnitude().log(), z.angle());
 };
 
-C.prototype.asin = function() {
-    return M_I.multiply(I.multiply(this)
-                        .add(ONE.subtract(this.square()).sqrt()).log());
-};
+function complexAsin(z) {
+    return M_I.multiply(I.multiply(z)
+                        .add(ONE.subtract(z.square()).sqrt()).log());
+}
 
-C.prototype.acos = function() {
-    return SN.PI.divide(TWO).subtract(this.asin());
-};
+function complexAcos(z) {
+    return PI.divide(TWO).subtract(complexAsin(z));
+}
 
-C.prototype.atan = function() {
-    var iz = I.multiply(this);
+function complexAtan(z) {
+    var iz = I.multiply(z);
     return ONE.add(iz).log().subtract(ONE.subtract(iz).log()).divide(TWO)
         .divide(I);
-};
+}
 
-C.prototype.sin = function() {
-    print(I);
+DISP.C.log  = function() { return complexLog (this); };
+DISP.C.asin = function() { return complexAsin(this); };
+DISP.C.acos = function() { return complexAcos(this); };
+DISP.C.atan = function() { return complexAtan(this); };
+
+DISP.C.sin = function() {
     var iz = I.multiply(this);
     return iz.exp().subtract(iz.negate().exp()).divide(TWO).divide(I);
 };
 
-C.prototype.cos = function() {
+DISP.C.cos = function() {
     var iz = I.multiply(this);
     return iz.exp().add(iz.negate().exp()).divide(TWO);
 };
 
-C.prototype.tan = function() {
+DISP.C.tan = function() {
     return this.sin().divide(this.cos());
 };
 
-C.prototype.expt = function(z) {
-    return this.log().multiply(z).exp();
+// ^^^^ You don't need this if you use only real numbers. ^^^^
+
+//
+// R: Real abstract base class.
+//
+
+function R() {}
+
+R.prototype = new C();
+DISP.R.isReal = retTrue;
+
+DISP.R.debug = function() { return "R"; };
+
+DISP.R.realPart = retThis;
+
+DISP.R.toJSValue = function() {
+    return Number(this);
 };
 
+// Methods implemented generically using more basic operations.
+
+DISP.R.isPositive = function() {
+    return this.sign() > 0;
+};
+DISP.R.isNegative = function() {
+    return this.sign() < 0;
+};
+DISP.R.sign = function() {
+    return this.compare(ZERO);
+};
+
+DISP.R.magnitude = function() {
+    return this.abs();
+};
+
+DISP.R.angle = function() {
+    return this.isNegative() ? PI : ZERO;
+};
+
+// Dispatches.
+
+DISP.R._eq_Flonum = function(x) { return +x == this; };
+DISP.R._ne_Flonum = function(x) { return +x != this; };
+DISP.Flonum._eq_R = DISP.R._eq_Flonum;
+DISP.Flonum._ne_R = DISP.R._ne_Flonum;
+
+DISP.R._eq_Rectangular = function(z) {
+    return z._y.isZero() && z._x.eq(this);
+};
+DISP.R._ne_Rectangular = function(z) {
+    return !z._y.isZero() || z._x.ne(this);
+};
+
+// Note operand order!
+DISP.R._gt_Flonum = DISP.Flonum._gt_R;
+DISP.R._lt_Flonum = DISP.Flonum._lt_R;
+DISP.R._ge_Flonum = DISP.Flonum._ge_R;
+DISP.R._le_Flonum = DISP.Flonum._le_R;
+
+DISP.R._compare_Flonum = function(x) {
+    if (x == this) return 0;
+    if (x < this) return -1;
+    if (x > this) return 1;
+    return NaN;
+};
+
+DISP.R.gt = function(x) { return toReal(x)._gt_R(this); };
+DISP.R.lt = function(x) { return toReal(x)._lt_R(this); };
+DISP.R.ge = function(x) { return toReal(x)._ge_R(this); };
+DISP.R.le = function(x) { return toReal(x)._le_R(this); };
+
+DISP.R.add = function(z) {
+    return toSN(z)._add_R(this);
+};
+DISP.Flonum._add_R = function(x) {
+    return x + this;
+};
+
+DISP.R.subtract = function(z) {
+    return toSN(z)._subtract_R(this);
+};
+DISP.Flonum._subtract_R = function(x) {
+    return x - this;
+};
+
+DISP.R.multiply = function(z) {
+    return toSN(z)._multiply_R(this);
+};
+DISP.Flonum._multiply_R = function(x) {
+    return x * this;
+};
+
+DISP.R.divide = function(z) {
+    return toSN(z)._divide_R(this);
+};
+DISP.Flonum._divide_R = function(x) {
+    return x / this;
+};
+
+function complexExpt(b, p) {
+    return b.log().multiply(p).exp();
+}
+
+DISP.R._expt_R = function(x) {
+    // Return x to the power of this number.
+    if (x.isNegative())
+        return complexExpt(x, this);
+    return floPow(x, this);
+};
+
+DISP.R._expt_EI = DISP.R._expt_R;
+
+DISP.R._expt_EQ = function(q) {
+    // Return q to the power of this number.
+    if (q.isNegative())
+        return complexExpt(q, this);
+    var num = q.numerator().expt(this);
+    var den = q.denominator().expt(this);
+    if (num.isExact() && num.isInteger() && den.isExact() && den.isInteger())
+        return new EQFraction(num, den);  // Known to be in lowest terms.
+    return num.divide(den);
+};
+
+function divAndMod_R_R(x, y) {
+    var div = div_R_R(x, y);
+    return [div, x.subtract(div.multiply(y))];
+}
+function div_R_R(x, y) {
+    return (y.isNegative() ? x.divide(y).ceiling() : x.divide(y).floor());
+}
+function mod_R_R(x, y) {
+    return x.subtract(div_R_R(x, y).multiply(y));
+}
+
+DISP.R.divAndMod = function(x) {
+    return divAndMod_R_R(this, toReal(x));
+};
+DISP.R.div = function(x) {
+    return div_R_R(this, toReal(x));
+};
+DISP.R.mod = function(x) {
+    return mod_R_R(this, toReal(x));
+};
+
+DISP.R._divAndMod_R = function(x) {
+    return divAndMod_R_R(x, this);
+};
+DISP.R._div_R = function(x) {
+    return div_R_R(x, this);
+};
+DISP.R._mod_R = function(x) {
+    return mod_R_R(x, this);
+};
+
+// These functions are always allowed to return inexact.  We, however,
+// override a few of these in ZERO and ONE.
+["sqrt", "exp", "log", "sin", "cos", "tan", "asin", "acos", "atan", "atan2"]
+.forEach(function(name) { DISP.R[name] = DISP.Flonum[name]; });
+
+// vvvv You don't need this if you use only real numbers. vvvv
+
+//
 // Rectangular: Complex numbers as xy-coordinate pairs.
+//
 
 function exactRectangular(x, y) {
+    //assert(x.isExact());
+    //assert(y.isExact());
     if (y.isZero())
         return x;
     if (x.isZero() && y.isUnit())
@@ -487,11 +1234,14 @@ function exactRectangular(x, y) {
 }
 
 function inexactRectangular(x, y) {
+    //assert(x.isInexact());
+    //assert(y.isInexact());
     return new Rectangular(x, y);
 }
 
 function toRectangular(x, y) {
-    if (x.isExact())  //assert(y.isExact())
+    //assert(x.isExact() === y.isExact())
+    if (x.isExact())
         return exactRectangular(x, y);
     return new Rectangular(x, y);
 }
@@ -509,52 +1259,49 @@ function xyToString(xString, yString) {
     return xString + "+" + yString + "i";
 }
 
-Rectangular.prototype.toString = function(radix) {
+DISP.Rectangular.numberToString = function(radix, precision) {
+    return xyToString(this._x.numberToString(radix, precision),
+                      this._y.numberToString(radix, precision));
+};
+
+DISP.Rectangular.toString = function(radix) {
+    radix = radix || 10;
     return xyToString(this._x.toString(radix), this._y.toString(radix));
 };
 
-if (DEBUG)
-    Rectangular.prototype.debug = function() {
-        return "Rectangular(" + this._x.debug() + ", " + this._y.debug() + ")";
-    };
+DISP.Rectangular.debug = function() {
+    return "Rectangular(" + this._x.debug() + ", " + this._y.debug() + ")";
+};
 
-Rectangular.prototype.toFixed = function(dig) {
+DISP.Rectangular.toFixed = function(dig) {
     return xyToString(this._x.toFixed(dig), this._y.toFixed(dig));
 };
-Rectangular.prototype.toExponential = function(dig) {
+DISP.Rectangular.toExponential = function(dig) {
     return xyToString(this._x.toExponential(dig), this._y.toExponential(dig));
 };
-Rectangular.prototype.toPrecision = function(prec) {
+DISP.Rectangular.toPrecision = function(prec) {
     return xyToString(this._x.toPrecision(prec), this._y.toPrecision(prec));
 };
 
-Rectangular.prototype.realPart = function() { return this._x; };
-Rectangular.prototype.imagPart = function() { return this._y; };
+DISP.Rectangular.realPart = function() { return this._x; };
+DISP.Rectangular.imagPart = function() { return this._y; };
 
-Rectangular.prototype.isExact = function() {
-    return this._x.isExact();
-};
+DISP.Rectangular.isExact   = function() { return this._x.isExact(); };
+DISP.Rectangular.isInexact = function() { return this._x.isInexact(); };
 
-Rectangular.prototype.toInexact = function() {
-    if (!this.isExact())
+DISP.Rectangular.toInexact = function() {
+    if (this._x.isInexact())
         return this;
-    return inexactRectangular(this.realPart().toInexact(),
-                              this.imagPart().toInexact());
+    return inexactRectangular(this._x.toInexact(), this._y.toInexact());
 };
 
-Rectangular.prototype.toExact = function() {
-    if (this.isExact())
+DISP.Rectangular.toExact = function() {
+    if (this._x.isExact())
         return this;
     return exactRectangular(this._x.toExact(), this._y.toExact());
 };
 
-Rectangular.prototype._upgrade = function(z) {
-    if (z.isReal())
-        return new Rectangular(z, z.isExact() ? ZERO : INEXACT_ZERO);
-    throw new TypeError("Can't coerce to Rectangular: " + z);
-};
-
-Rectangular.prototype.isZero = function() {
+DISP.Rectangular.isZero = function() {
     return this._x.isZero() && this._y.isZero();
 };
 
@@ -562,790 +1309,873 @@ function rectMagnitude2(z) {
     return z._x.square().add(z._y.square());
 }
 
-Rectangular.prototype.isUnit = function() {
+DISP.Rectangular.isUnit = function() {
     return rectMagnitude2(this).eq(ONE);
 };
 
-Rectangular.prototype.magnitude = function() {
+DISP.Rectangular.magnitude = function() {
     if (this._x.isZero())
         return this._y.abs();
     return rectMagnitude2(this).sqrt();
 };
 
-Rectangular.prototype.angle = function() {
+DISP.Rectangular.angle = function() {
     return this._y.atan2(this._x);
 };
 
-Rectangular.prototype.eq = function(z) {
-    z = toSN(z);
-    if (z === this)
-        return true;
-    if (!(z instanceof C))
-        return z.eq(this);
-    return (this._x.eq(z.realPart()) && this._y.eq(z.imagPart()));
+DISP.C._eq_Rectangular = pureVirtual;
+DISP.Rectangular.eq = function(z) {
+    return toSN(z)._eq_Rectangular(this);
+};
+DISP.Rectangular._eq_Rectangular = function(z) {
+    return z._x.eq(this._x) && z._y.eq(this._y);
+};
+DISP.Rectangular._eq_R = function(x) {
+    return this._y.isZero() && x.eq(this._x);
 };
 
-Rectangular.prototype.add = function(z) {
-    z = toSN(z);
-    if (!(z instanceof C))
-        return z.add(this);
-    if (z.isZero() && (z.isExact() || !this.isExact()))
-        return this;
-    return toRectangular(this._x.add(z.realPart()),
-                         this._y.add(z.imagPart()));
+DISP.C._ne_Rectangular = pureVirtual;
+DISP.Rectangular.ne = function(z) {
+    return toSN(z)._ne_Rectangular(this);
+};
+DISP.Rectangular._ne_Rectangular = function(z) {
+    return z._x.ne(this._x) || z._y.ne(this._y);
+};
+DISP.Rectangular._ne_R = function(x) {
+    return !this._y.isZero() || x.ne(this._x);
 };
 
-Rectangular.prototype.negate = function() {
+// Arithmetic where the left operand is Rectangular and the right is
+// this Flonum.
+
+DISP.Flonum._add_Rectangular = function(z) {
+    return inexactRectangular(toFlonum(z._x + this), z._y.toInexact());
+};
+DISP.Flonum._subtract_Rectangular = function(z) {
+    return inexactRectangular(toFlonum(z._x - this), z._y.toInexact());
+};
+DISP.Flonum._multiply_Rectangular = function(z) {
+    return inexactRectangular(toFlonum(z._x * this), toFlonum(z._y * this));
+};
+DISP.Flonum._divide_Rectangular = function(z) {
+    return inexactRectangular(toFlonum(z._x / this), toFlonum(z._y / this));
+};
+DISP.Flonum._expt_Rectangular = function(z) {
+    // XXX Is this any cheaper than complexExpt??
+    return makePolar(floPow(rectMagnitude2(z), this / 2),
+                     toFlonum(atan2(z._y, z._x) * this));
+};
+
+// Mitigate the effects of inheriting from Flonum.
+for (var methodName in DISP.Flonum) {
+    if (methodName.indexOf("_Rectangular") !== -1 && !DISP.C[methodName])
+        DISP.C[methodName] = unimpl;
+}
+
+// Arithmetic where the left operand is Rectangular and the right is
+// this real number.
+
+DISP.R._add_Rectangular = function(z) {
+    return makeRectangular(z._x.add(this), z._y);
+};
+
+DISP.R._subtract_Rectangular = function(z) {
+    return makeRectangular(z._x.subtract(this), z._y);
+};
+
+DISP.R._multiply_Rectangular = function(z) {
+    return toRectangular(z._x.multiply(this), z._y.multiply(this));
+};
+
+DISP.R._divide_Rectangular = function(z) {
+    return toRectangular(z._x.divide(this), z._y.divide(this));
+};
+
+DISP.C._add_Rectangular = pureVirtual;
+DISP.Rectangular.add = function(z) {
+    return toSN(z)._add_Rectangular(this);
+};
+DISP.Rectangular._add_R = function(x) {
+    return makeRectangular(x.add(this._x), this._y);
+};
+DISP.Rectangular._add_Rectangular = function(z) {
+    var x = z._x.add(this._x);
+    var y = z._y.add(this._y);
+    return (x.isExact() ? exactRectangular : inexactRectangular)(x, y);
+};
+
+DISP.Rectangular.negate = function() {
     return toRectangular(this._x.negate(), this._y.negate());
 };
 
-Rectangular.prototype.subtract = function(z) {
-    z = toSN(z);
-    if (!(z instanceof C))
-        return z._upgrade(this).subtract(z);
-    if (z.isZero() && (z.isExact() || !this.isExact()))
-        return this;
-    return toRectangular(this._x.subtract(z.realPart()),
-                         this._y.subtract(z.imagPart()));
+DISP.C._subtract_Rectangular = pureVirtual;
+DISP.Rectangular.subtract = function(z) {
+    return toSN(z)._subtract_Rectangular(this);
+};
+DISP.Rectangular._subtract_R = function(x) {
+    return makeRectangular(x.subtract(this._x), this._y.negate());
+};
+DISP.Rectangular._subtract_Rectangular = function(z) {
+    var x = z._x.subtract(this._x);
+    var y = z._y.subtract(this._y);
+    return (x.isExact() ? exactRectangular : inexactRectangular)(x, y);
 };
 
-Rectangular.prototype.multiply = function(z) {
-    z = toSN(z);
-    if (!(z instanceof C))
-        return z._upgrade(this).multiply(z);
-    if (z.isZero())
-        return z;
-    if (z.isReal() && z.isUnit() && (z.isExact() || !this.isExact()))
-        return z.isPositive() ? this : this.negate();
-    var zx = z.realPart();
-    var zy = z.imagPart();
-    return toRectangular(this._x.multiply(zx).subtract(this._y.multiply(zy)),
-                         this._x.multiply(zy).add(this._y.multiply(zx)));
+DISP.C._multiply_Rectangular = pureVirtual;
+DISP.Rectangular.multiply = function(z) {
+    return toSN(z)._multiply_Rectangular(this);
+};
+DISP.Rectangular._multiply_R = function(x) {
+    return toRectangular(x.multiply(this._x), x.multiply(this._y));
+};
+function complexMultiply(ax, ay, bx, by) {
+    return toRectangular(ax.multiply(bx).subtract(ay.multiply(by)),
+                         ax.multiply(by).add(ay.multiply(bx)));
+}
+DISP.Rectangular._multiply_Rectangular = function(z) {
+    return complexMultiply(z._x, z._y, this._x, this._y);
 };
 
-Rectangular.prototype.square = function() {
+DISP.Rectangular.square = function() {
     return toRectangular(this._x.square().subtract(this._y.square()),
                          this._x.multiply(this._y).multiply(TWO));
 };
 
-Rectangular.prototype.reciprocal = function() {
+DISP.Rectangular.reciprocal = function() {
     var m2 = rectMagnitude2(this);
     return toRectangular(this._x.divide(m2), this._y.divide(m2).negate());
 };
 
-Rectangular.prototype.exp = function() {
+DISP.C._divide_Rectangular = pureVirtual;
+DISP.Rectangular.divide = function(z) {
+    return toSN(z)._divide_Rectangular(this);
+};
+function complexDivide(x, y, z) {  // returns (x + iy) / z
+    var m2 = rectMagnitude2(z);
+    return complexMultiply(x, y, z._x.divide(m2), z._y.divide(m2).negate());
+}
+DISP.Rectangular._divide_R = function(x) {
+    return complexDivide(x, x.isExact() ? ZERO : INEXACT_ZERO, this);
+};
+DISP.Rectangular._divide_Rectangular = function(z) {
+    return complexDivide(z._x, z._y, this);
+};
+
+DISP.Rectangular.expt = function(z) {
+    return toSN(z)._expt_Rectangular(this);
+};
+DISP.Rectangular._expt_C = function(z) {
+    return complexExpt(z, this);
+};
+DISP.C._expt_Rectangular = DISP.Rectangular._expt_C;
+
+DISP.Rectangular.exp = function() {
     return makePolar(this._x.exp(), this._y);
 };
 
-// R: Real abstract base class.
+// ^^^^ You don't need this if you use only real numbers. ^^^^
 
-function R() {}
+//
+// ER: Exact real abstract base class.
+//
 
-R.prototype = new C();
-R.prototype.isReal = retTrue;
+function ER() {}
 
-if (DEBUG) R.prototype.debug = function() { return "R"; };
+ER.prototype = new R();
+DISP.ER.isExact    = retTrue;
+DISP.ER.isInexact  = retFalse;
 
-R.prototype.realPart = retThis;
-R.prototype.imagPart = function() { return ZERO; };
+DISP.ER.toExact    = retThis;
+DISP.ER.toInexact  = function() { return toFlonum(this); };
 
-R.prototype.toFixed = function(dig) {
-    return this.toJSValue().toFixed(dig);
+DISP.ER.isNaN      = retFalse;
+DISP.ER.isFinite   = retTrue;
+DISP.ER.isInfinite = retFalse;
+
+DISP.ER.imagPart   = retZero;
+
+//
+// EQ: Exact rational abstract base class.
+//
+
+function EQ() {}
+
+EQ.prototype = new ER();
+DISP.EQ.isRational = retTrue;
+
+DISP.EQ.eq = function(z) {
+    return toSN(z)._eq_EQ(this);
 };
-R.prototype.toExponential = function(dig) {
-    return this.toJSValue().toExponential(dig);
-};
-R.prototype.toPrecision = function(prec) {
-    return this.toJSValue().toPrecision(prec);
-};
+DISP.EQ._eq_EQ = pureVirtual;
 
-// Method implementations appropriate for subclasses other than Flonum.
-
-R.prototype.isNaN      = retFalse;
-R.prototype.isFinite   = retTrue;
-R.prototype.isInfinite = retFalse;
-
-// Methods implemented using simpler operations.
-
-R.prototype.toString = function(radix) {
-    return this._toString(radix);
+DISP.EQ.ne = function(z) {
+    return toSN(z)._ne_EQ(this);
 };
-R.prototype.numberToString = function(radix, precision) {
-    // XXX handle precision?  Anyone need it?
-    return this._toString(radix);
-};
+DISP.EQ._ne_EQ = pureVirtual;
 
-R.prototype.valueOf = function() {
-    return this.toJSValue();
+DISP.EQ.compare = function(z) {
+    return toReal(z)._compare_EQ(this);
 };
+DISP.EQ._compare_EQ = pureVirtual;
 
-R.prototype.isPositive = function() {
-    return this.sign() > 0;
+DISP.EQ.add = function(z) {
+    return toSN(z)._add_EQ(this);
 };
-R.prototype.isNegative = function() {
-    return this.sign() < 0;
-};
-R.prototype.isZero = function() {
-    return this.sign() === 0;
-};
-R.prototype.sign = function() {
-    return this.compare(ZERO);
-};
+DISP.EQ._add_EQ = pureVirtual;
 
-R.prototype.magnitude = function() {
-    return this.abs();
+DISP.EQ.subtract = function(z) {
+    return toSN(z)._subtract_EQ(this);
 };
+DISP.EQ._subtract_EQ = pureVirtual;
 
-R.prototype.angle = function() {
-    return this.isNegative() ? SN.PI : ZERO;
+DISP.EQ.multiply = function(z) {
+    return toSN(z)._multiply_EQ(this);
 };
+DISP.EQ._multiply_EQ = pureVirtual;
 
-R.prototype.eq = function(z) {
-    z = toSN(z);
-    if (!z.isReal())
-        return false;
-    return this.compare(z) === 0;
+DISP.EQ.divide = function(z) {
+    return toSN(z)._divide_EQ(this);
 };
+DISP.EQ._divide_EQ = pureVirtual;
 
-R.prototype.gt = function(x) { return this.compare(toReal(x)) > 0; };
-R.prototype.lt = function(x) { return this.compare(toReal(x)) < 0; };
-R.prototype.ge = function(x) { return this.compare(toReal(x)) >= 0; };
-R.prototype.le = function(x) { return this.compare(toReal(x)) <= 0; };
-
-R.prototype.div = function(x) {
-    //if (!this.divAndMod) alert("no divAndMod: " + this.debug());
-    return this.divAndMod(x)[0];
+DISP.EQ.expt = function(z) {
+    return toSN(z)._expt_EQ(this);
 };
 
-R.prototype.mod = function(x) {
-    return this.divAndMod(x)[1];
-};
+function reduceEQ(n, d) {
+    if (d.isZero())
+        divisionByExactZero();
 
-R.prototype.rationalize = function(delta) {
-    throw new Error("Unimplemented broken-by-design function: rationalize");
-};
+    var g = gcd(n.abs(), d.abs());
 
-function toFlonum(x) {
-    if (x === 0)
-        return INEXACT_ZERO;
-    return new Flonum(x);
+    n = n.div(g);
+    d = d.div(g);
+
+    if (d.isNegative())
+        return canonicalEQ(n.negate(), d.negate());
+    return canonicalEQ(n, d);
 }
 
-function Flonum(x) {
+function canonicalEQ(n, d) {
+    return (d === ONE ? n : new EQFraction(n, d));
+}
+
+//
+// EQFraction: Exact rational as numerator and positive denominator
+// with no factors in common.
+//
+
+function EQFraction(n, d) {
+    //assert(d.gt(ONE));
+    //assert(gcd(n.abs(), d).eq(ONE));
+    this._n = n;
+    this._d = d;
+}
+
+EQFraction.prototype = new EQ();
+
+DISP.EQFraction.numberToString = function(radix, precision) {
+    return (this._n.numberToString(radix) +
+            "/" + this._d.numberToString(radix));
+};
+
+DISP.EQFraction.valueOf = function() {
+    var n = this._n;
+    var d = this._d;
+    var ret = n / d;
+    if (!isNaN(ret))
+        return ret;
+    if (n.isNegative())
+        return -exp(n.negate().log() - d.log());
+    return exp(n.log() - d.log());
+};
+
+DISP.EQFraction.debug = function() {
+    return "EQFraction(" + this._n.debug() + " / " + this._d.debug() + ")";
+};
+
+DISP.EQFraction.numerator = function () {
+    return this._n;
+};
+
+DISP.EQFraction.denominator = function() {
+    return this._d;
+};
+
+DISP.EQFraction.isPositive = function() {
+    return this._n.isPositive();
+};
+
+DISP.EQFraction.isNegative = function() {
+    return this._n.isNegative();
+};
+
+DISP.EQFraction._eq_EQ = function(q) {
+    return (q.numerator().eq(this._n) && q.denominator().eq(this._d));
+};
+
+DISP.EQFraction._ne_EQ = function(q) {
+    return (q.numerator().ne(this._n) || q.denominator().ne(this._d));
+};
+
+DISP.EQFraction._compare_EQ = function(q) {
+    var qn = q.numerator();
+    var signDiff = q.sign() - this._n.sign();
+    if (signDiff !== 0)
+        return (signDiff > 0 ? 1 : -1);
+    var qd = q.denominator();
+    if (qd === this._d)
+        return qn.compare(this._n);
+    return qn.multiply(this._d).compare(qd.multiply(this._n));
+};
+
+DISP.EQFraction.negate = function() {
+    return new EQFraction(this._n.negate(), this._d);
+};
+
+DISP.EQFraction.square = function() {
+    return new EQFraction(this._n.square(), this._d.square());
+};
+
+DISP.EQFraction.reciprocal = function() {
+    switch (this._n.sign()) {
+    case -1: return canonicalEQ(this._d.negate(), this._n.negate());
+    case 1: return canonicalEQ(this._d, this._n);
+    case 0: default: divisionByExactZero();
+    }
+};
+
+DISP.EQFraction.floor = function() {
+    return this._n.div(this._d);
+};
+
+DISP.EQFraction.ceiling = function() {
+    //assert(this._d.gt(ONE));
+    return this._n.div(this._d).add(ONE);
+};
+
+DISP.EQFraction.round = function() {
+    if (this._d.eq(TWO)) {
+        var ret = this._n.div(TWO);
+        return ret.isEven() ? ret : ret.add(ONE);
+    }
+    var dm = this._n.divAndMod(this._d);
+    var mod = dm[1];
+    if (mod.add(mod).lt(this._d))
+        return dm[0];
+    return dm[0].add(ONE);
+};
+
+DISP.EQFraction.truncate = function() {
+    if (this._n.isPositive())
+        return this._n.div(this._d);
+    return this._d.isUnit() ? this._n : this._n.div(this._d).add(ONE);
+};
+
+DISP.EQFraction.sign = function() {
+    return this._n.sign();
+};
+
+DISP.EQFraction.abs = function() {
+    if (this._n.sign() >= 0)
+        return this;
+    return this.negate();
+};
+
+DISP.EQFraction._add_EQ = function(q) {
+    var n1 = q.numerator();
+    var d1 = q.denominator();
+    var n2 = this._n;
+    var d2 = this._d;
+    return reduceEQ(n1.multiply(d2).add(n2.multiply(d1)), d1.multiply(d2));
+};
+
+DISP.EQFraction._subtract_EQ = function(q) {
+    var n1 = q.numerator();
+    var d1 = q.denominator();
+    var n2 = this._n;
+    var d2 = this._d;
+    return reduceEQ(n1.multiply(d2).subtract(n2.multiply(d1)), d1.multiply(d2));
+};
+
+DISP.EQFraction._multiply_EQ = function(q) {
+    return reduceEQ(q.numerator().multiply(this._n),
+                    q.denominator().multiply(this._d));
+};
+
+DISP.EQFraction._divide_EQ = function(q) {
+    return reduceEQ(q.numerator().multiply(this._d),
+                    q.denominator().multiply(this._n));
+};
+
+DISP.EQFraction._add_EI = function(n) {
+    return canonicalEQ(n.multiply(this._d).add(this._n), this._d);
+};
+
+DISP.EQFraction._subtract_EI = function(n) {
+    return canonicalEQ(n.multiply(this._d).subtract(this._n), this._d);
+};
+
+DISP.EQFraction._multiply_EI = function(n) {
+    return reduceEQ(n.multiply(this._n), this._d);
+};
+
+DISP.EQFraction._divide_EI = function(n) {
+    return reduceEQ(n.multiply(this._d), this._n);
+};
+
+DISP.EQFraction.sqrt = function() {
+    // This EQ may be too big for toValue(), but its square root may not be.
+    return this._n.sqrt().divide(this._d.sqrt());
+};
+
+//
+// EI: Exact integer abstract base class.
+//
+
+function EI() {}
+
+EI.prototype = new EQ();
+DISP.EI.isInteger = retTrue;
+
+DISP.EI.debug = function() { return "EI"; };
+
+DISP.EI.numerator   = retThis;
+DISP.EI.denominator = function() { return ONE; };
+DISP.EI.floor       = retThis;
+DISP.EI.ceiling     = retThis;
+DISP.EI.round       = retThis;
+DISP.EI.truncate    = retThis;
+
+DISP.EI._toBigInteger = pureVirtual;
+
+DISP.EI.eq = function(x) {
+    return x._eq_EI(this);
+};
+DISP.EI._eq_EI = function(n) {
+    return n._toBigInteger().compare(this._toBigInteger()) === 0;
+};
+DISP.EI._eq_EQ = function(q) {
+    return q.numerator().eq(this) && q.denominator().eq(ONE);
+};
+
+DISP.EI.ne = function(x) {
+    return x._ne_EI(this);
+};
+DISP.EI._ne_EI = function(n) {
+    return n._toBigInteger().compare(this._toBigInteger()) !== 0;
+};
+DISP.EI._ne_EQ = function(q) {
+    return q.numerator().ne(this) || q.denominator().ne(ONE);
+};
+
+DISP.EI._compare_EQ = function(q) {
+    return q.numerator().compare(q.denominator().multiply(this));
+};
+
+DISP.EI.add = function(z) {
+    return toSN(z)._add_EI(this);
+};
+DISP.EI.subtract = function(z) {
+    return toSN(z)._subtract_EI(this);
+};
+DISP.EI.multiply = function(z) {
+    return toSN(z)._multiply_EI(this);
+};
+//DISP.EI.divide = function(z) {
+//    return toSN(z)._divide_EI(this);
+//};
+
+DISP.EI.reciprocal = function() {
+    if (this.isNegative())
+        return canonicalEQ(M_ONE, this.negate());
+    return canonicalEQ(ONE, this);
+};
+
+DISP.EI.divAndMod = function(x) {
+    return toReal(x)._divAndMod_EI(this);
+};
+DISP.EI.div = function(x) {
+    return toReal(x)._div_EI(this);
+};
+DISP.EI.mod = function(x) {
+    return toReal(x)._mod_EI(this);
+};
+
+DISP.EI._add_EI = function(n) {
+    return reduceBigInteger(n._toBigInteger().add(this._toBigInteger()));
+};
+DISP.EI._subtract_EI = function(n) {
+    return reduceBigInteger(n._toBigInteger().subtract(this._toBigInteger()));
+};
+DISP.EI._multiply_EI = function(n) {
+    return reduceBigInteger(n._toBigInteger().multiply(this._toBigInteger()));
+};
+DISP.EI._divAndMod_EI = function(n) {
+    var t = this._toBigInteger();
+    var dm = n._toBigInteger().divRem(t);
+    var div = dm[0];
+    var mod = dm[1];
+
+    if (mod.isNegative()) {
+        mod = mod.add(t);
+        div = div.prev();
+    }
+    return [reduceBigInteger(div), reduceBigInteger(mod)];
+};
+DISP.EI._div_EI = function(n) {
+    return this._divAndMod_EI(n)[0];
+};
+DISP.EI._mod_EI = function(n) {
+    return this._divAndMod_EI(n)[1];
+};
+
+DISP.EI._add_EQ = function(q) {
+    var d = q.denominator();
+    return canonicalEQ(q.numerator().add(d.multiply(this)), d);
+};
+
+DISP.EI._subtract_EQ = function(q) {
+    var d = q.denominator();
+    return canonicalEQ(q.numerator().subtract(d.multiply(this)), d);
+};
+
+DISP.EI._multiply_EQ = function(q) {
+    return reduceEQ(q.numerator().multiply(this), q.denominator());
+};
+
+DISP.EI._divide_EQ = function(q) {
+    return reduceEQ(q.numerator(), q.denominator().multiply(this));
+};
+
+function positiveIntegerExpt(b, p) {
+    //assert(p > 0); assert(p == Math.round(p));
+    var result = pow(b, p);
+    if (result > -9007199254740992 && result < 9007199254740992)
+        return toEINative(result);
+    if (b.log() * p > MAX_LOG)
+        throw new Error("expt: integer exceeds limit of " +
+                        (MAX_LOG / Math.LN10) + " digits; adjust with " +
+                        "SchemeNumber.setMaxIntegerDigits(...)");
+    return new EIBig(b._toBigInteger().pow(p));
+}
+
+DISP.EI.expt = function(z) {
+    return toSN(z)._expt_EI(this);
+};
+
+DISP.EI._expt_EI = function(n) {
+    // Return n to the power of this integer.
+    var s = this.sign();
+    // Any inexactness is beyond the range that will fit in memory, we
+    // assume.
+    //assert(this.abs().gt(ONE));
+    var a = positiveIntegerExpt(n, this.abs().valueOf());
+    return (s > 0 ? a : a.reciprocal());
+};
+
+function expt_E_EI(z, n) {
+    // Return z raised to the power of this integer.
+    // We don't get here if either z or this is 0, 1, or -1.
+    var bits = n.abs();
+    var squarer = z;
+    var ret = ONE;
+    while (bits.isPositive()) {
+        if (bits.isOdd())
+            ret = ret.multiply(squarer);
+        squarer = squarer.square();
+        bits = bits.div(TWO);
+    }
+    return (n.isNegative() ? ret.reciprocal() : ret);
+}
+
+DISP.EI._expt_ER = function(x) {
+    return expt_E_EI(x, this);
+};
+
+DISP.EI._expt_C = function(z) {
+    if (z.isExact())
+        return expt_E_EI(z, this);
+    return complexExpt(z, this);
+};
+
+//
+// EINative: Exact integers as native numbers.
+//
+
+function EINative(x) {
+    //assert(x === floor(x));
     this._ = x;
 }
 
-Flonum.prototype = new R();
-Flonum.prototype.isFlonum = retTrue;
+EINative.prototype = new EI();
 
-Flonum.prototype.toJSValue = function() {
-    return this._;
-};
-Flonum.prototype.valueOf = Flonum.prototype.toJSValue;
+var ZERO  = SN.ZERO  = new EINative(0);
+var ONE   = SN.ONE   = new EINative(1);
+var M_ONE = SN.M_ONE = new EINative(-1);
+var TWO   = SN.TWO   = new EINative(2);
 
-function nativeDenominator(x) {
-    // Get the "denominator" of a floating point value.
-    // The result will be a power of 2.
-    // This works by calling Number.prototype.toString with a radix of 2
-    // and assuming the result will be a sequence of "0" and "1" characters,
-    // possibly including a "." and possibly a leading "-".
-    // Specification ECMA-262 Edition 5 (December 2009) does not strongly
-    // support this assumption.  As an alternative, should this assumption
-    // prove non-portable (i.e., if it doesn't work in IE), we could try
-    // multiplying by 2 until x === Math.floor(x).
-    var s = x.toString(2);
-    var i = s.indexOf(".");
-    if (i == -1)
-        return 1;
-    return Math.pow(2, s.length - i - 1);
+var EINativeSmall = { 0:ZERO, 1:ONE, "-1":M_ONE, 2:TWO };
+
+var I     = SN.I   = new Rectangular(ZERO, ONE);
+var M_I   = SN.M_I = new Rectangular(ZERO, M_ONE);
+
+function toEINative(n) {
+    //assert(floor(n) === n);
+    return EINativeSmall[n] || new EINative(n);
 }
 
-function exactNativeIntegerToString(n, radix) {
-    if (n > -9007199254740992 && n < 9007199254740992)
-        return n.toString(radix);
-    return numberToBigInteger(n).toString(radix);
-}
+ZERO.isZero     = retTrue;
+ZERO.isPositive = retFalse;
+ZERO.isNegative = retFalse;
 
-function nativeToRationalString(n, radix) {
-    var d = nativeDenominator(n);
-    return (exactNativeIntegerToString(n * d, radix) +
-            "/" +
-            exactNativeIntegerToString(d, radix));
-}
-
-function flonumToString(x, radix) {
-    if (!isFinite(x)) {
-        if (isNaN(x))
-            return("+nan.0");
-        return (x > 0 ? "+inf.0" : "-inf.0");
-    }
-
-    var s = (radix ? x.toString(radix) : x.toString());
-
-    if (!radix && s.indexOf('.') === -1) {
-        // Force the result to contain a decimal point as per R6RS.
-        var e = s.indexOf('e');
-        if (e === -1)
-            return s + ".";
-        return s.substring(0, e) + "." + s.substring(e);
-    }
-    return s;
-}
-
-// Flonum toString.  XXX I'd like to make this more like Scheme's
-// number->string.
-Flonum.prototype._toString = function(radix) {
-    return flonumToString(this._, radix);
+ZERO.compare = function(x) {
+    return -x.sign();
 };
 
-Flonum.prototype.numberToString = function(radix, precision) {
-    if (!radix || radix === 10 || !isFinite(this._))
-        // XXX Handle precision?
-        return flonumToString(this._, radix);
-    return "#i" + nativeToRationalString(this._, radix);
+ZERO.add        = toSN;
+ZERO.negate     = retThis;
+ZERO.abs        = retThis;
+ZERO.multiply   = retThis;  // Should validate argument?  XXX
+ZERO.square     = retThis;
+ZERO.reciprocal = divisionByExactZero;
+
+ZERO.subtract = function(z) {
+    return toSN(z).negate();
 };
 
-if (DEBUG)
-    Flonum.prototype.debug = function() {
-        return "Flonum(" + this._ + ")";
-    };
-
-Flonum.prototype.imagPart = function() {
-    return INEXACT_ZERO;
-};
-
-Flonum.prototype.denominator = function() {
-    if (!this.isRational())
-        throw new TypeError("Can't coerce to rational: " + this);
-    return toFlonum(nativeDenominator(this._));
-};
-
-Flonum.prototype.numerator = function() {
-    return toFlonum(this._ * nativeDenominator(this._));
-};
-
-Flonum.prototype.isInteger = function() {
-    return this._ === Math.floor(this._);
-};
-
-Flonum.prototype.isFinite = function() {
-    return isFinite(this._);
-};
-Flonum.prototype.isRational = Flonum.prototype.isFinite;
-
-Flonum.prototype.isZero = function() {
-    return this._ === 0;
-};
-
-Flonum.prototype.isPositive = function() {
-    return this._ > 0;
-};
-
-Flonum.prototype.isNegative = function() {
-    return this._ < 0;
-};
-
-Flonum.prototype.sign = function() {
-    if (this._ === 0)
-        return 0;
-    return (this._ > 0 ? 1 : -1);
-};
-
-Flonum.prototype.isUnit = function() {
-    return this._ === 1 || this._ === -1;
-};
-
-Flonum.prototype.isInfinite = function() {
-    return !isFinite(this._) && !isNaN(this._);
-};
-
-Flonum.prototype.isNaN = function() {
-    return isNaN(this._);
-};
-
-Flonum.prototype._upgrade = function(x) {
-    if (!(x instanceof Flonum))
-        throw new TypeError("Can't coerce to Flonum: " + x);
-    return toFlonum(x._);
-};
-
-Flonum.prototype.toExact = function() {
-    if (!isFinite(this._))
-        throw new RangeError("No exact representation for " + this);
-    return numberToER(this._);
-};
-
-Flonum.prototype.toInexact = retThis;
-
-Flonum.prototype.add = function(z) {
-    if (typeof z === "number")
-        return toFlonum(this._ + z);
-    z = toSN(z);
-    if (z instanceof Flonum)
-        return toFlonum(this._ + z._);
-    return z.add(this);
-};
-
-Flonum.prototype.negate = function() {
-    return toFlonum(-this._);
-};
-
-Flonum.prototype.abs = function() {
-    return (this._ < 0 ? toFlonum(-this._) : this);
-};
-
-Flonum.prototype.subtract = function(z) {
-    if (typeof z === "number")
-        return toFlonum(this._ - z);
-    z = toSN(z);
-    if (z instanceof Flonum)
-        return toFlonum(this._ - z._);
-    return z._upgrade(this).subtract(z);
-};
-
-Flonum.prototype.multiply = function(z) {
-    if (typeof z === "number")
-        return toFlonum(this._ * z);
-    z = toSN(z);
-    if (z instanceof Flonum)
-        return toFlonum(this._ * z._);
-    return z.multiply(this);
-};
-
-Flonum.prototype.reciprocal = function() {
-    return toFlonum(1 / this._);
-};
-
-Flonum.prototype.divide = function(z) {
-    if (typeof z === "number")
-        return toFlonum(this._ / z);
+ZERO.divide   = function(z) {
     z = toSN(z);
     if (z.isZero() && z.isExact())
-        throw divisionByExactZero();
-    if (z instanceof Flonum)
-        return toFlonum(this._ / z._);
-    return z._upgrade(this).divide(z);
+        divisionByExactZero();
+    return this;
 };
 
-Flonum.prototype.divAndMod = function(x) {
-    if (typeof x !== "number")
-        x = toReal(x).toJSValue();
-    if (x === 0)
-        throw new RangeError("div/mod by zero");
-
-    var t = this._;
-    var div = Math.floor(t / x);
-    return [div, t - (x * div)];
-};
-
-Flonum.prototype.square = function() {
-    return toFlonum(this._ * this._);
-};
-
-Flonum.prototype.eq = function(z) {
-    if (typeof z === "number")
-        return this._ === z;
-    z = toSN(z);
-    if (z instanceof Flonum)
-        return this._ === z._;
-    return z.eq(this);
-};
-
-Flonum.prototype.gt = function(x) {
-    if (typeof x === "number")
-        return this._ > x;
-    x = toReal(x);
-    if (x instanceof Flonum)
-        return this._ > x._;
-    return x.lt(this);
-};
-
-Flonum.prototype.lt = function(x) {
-    if (typeof x === "number")
-        return this._ < x;
-    x = toReal(x);
-    if (x instanceof Flonum)
-        return this._ < x._;
-    return x.gt(this);
-};
-
-Flonum.prototype.ge = function(x) {
-    if (typeof x === "number")
-        return this._ >= x;
-    x = toReal(x);
-    if (x instanceof Flonum)
-        return this._ >= x._;
-    return x.le(this);
-};
-
-Flonum.prototype.le = function(x) {
-    if (typeof x === "number")
-        return this._ <= x;
-    x = toReal(x);
-    if (x instanceof Flonum)
-        return this._ <= x._;
-    return x.ge(this);
-};
-
-Flonum.prototype.ne = function(z) {
-    if (typeof x === "number")
-        return this._ !== z;
-    z = toSN(z);
-    if (z instanceof Flonum)
-        return this._ !== z._;
-    return z.ne(this);
-};
-
-Flonum.prototype.compare = function(x) {
-    if (x instanceof Flonum)
-        x = x._;
-    if (typeof x === "number") {
-        var t = this._;
-        if (t === x) return 0;
-        if (t  <  x) return -1;
-        if (t  >  x) return 1;
-        return NaN;
+ZERO.expt = function(z) {
+    switch (toSN(z).realPart().sign()) {
+    case 1: return this;
+    case 0: return ONE;
+    case -1: default: divisionByExactZero();
     }
-    return -toReal(x).compare(this);
 };
 
-Flonum.prototype.isEven = function() {
-    return (this._ & 1) === 0;
-};
+ZERO.sqrt = retThis;
+ZERO.exp = retOne;
+ZERO.sin = retThis;
+ZERO.cos = retOne;
+ZERO.tan = retThis;
+ZERO.asin = retThis;
+ZERO.atan = retThis;
 
-Flonum.prototype.isOdd = function() {
-    return (this._ & 1) === 1;
-};
+ONE.isUnit     = retTrue;
+ONE.abs        = retThis;
+ONE.multiply   = toSN;
+ONE.reciprocal = retThis;
+ONE.square     = retThis;
+ONE.expt       = retThis;  // Should validate argument?  XXX
+ONE.sqrt       = retThis;
+ONE.log        = retZero;
+ONE.acos       = retZero;
 
-function round(x) {
-    return (x < 0 ? -Math.round(-x) : Math.round(x));
+M_ONE.isUnit     = retTrue;
+M_ONE.abs        = retOne;
+M_ONE.multiply   = ZERO.subtract;
+M_ONE.reciprocal = retThis;
+M_ONE.square     = retOne;
+M_ONE.sqrt       = function() { return I; };
+
+M_ONE.expt = function(z) {
+    z = toSN(z);
+    if (!z.isInteger())
+        return complexExpt(this, z);
+    var ret = (z.isEven() ? ONE : M_ONE);
+    if (z.isExact())
+        return ret;
+    return ret.toInexact();
 }
 
-function truncate(x) {
-    return (x < 0 ? Math.ceil(x) : Math.floor(x));
-};
-
-Flonum.prototype.round = function() {
-    return toFlonum(round(this._));
-};
-
-Flonum.prototype.truncate = function() {
-    return toFlonum(truncate(this._));
-};
-
-Flonum.prototype.ceiling = function() {
-    return toFlonum(Math.ceil(this._));
-};
-
-Flonum.prototype.sqrt = function() {
-    if (this._ >= 0)
-        return toFlonum(Math.sqrt(this._));
-    return inexactRectangular(INEXACT_ZERO, toFlonum(Math.sqrt(-this._)));
-};
-
-['abs', 'acos', 'asin', 'atan', 'cos', 'exp', 'floor', 'log', 'sin', 'tan']
-    .forEach(function(fn) {
-            var mathFn = Math[fn];
-            Flonum.prototype[fn] = function() {
-                return toFlonum(mathFn(this._));
-            };
-        });
-
-Flonum.prototype.atan2 = function(x) {
-    return toFlonum(Math.atan2(this._, toReal(x).toJSValue()));
-};
-
-Flonum.prototype.expt = function(z) {
-    if (typeof z === "string")
-        z = parseNumber(z);
-    if (z instanceof SN && !z.isReal())
-        return z._upgrade(this).expt(z);
-    if (typeof z !== "number")
-        z = toSN(z).toJSValue();
-    return toFlonum(Math.pow(this._, z));
-};
-
-['E', 'LN10', 'LN2', 'LOG2E', 'LOG10E', 'PI', 'SQRT1_2', 'SQRT2']
-    .forEach(function(name) {
-            SN[name] = new Flonum(Math[name]);
-        });
-
-var INEXACT_ZERO                   = new Flonum(0);
-var INFINITY     = SN.INFINITY     = new Flonum(Infinity);
-var M_INFINITY   = SN.M_INFINITY   = new Flonum(-Infinity);
-var NAN          = SN.NAN          = new Flonum(NaN);
-
-// ER_Native: Exact rational represented as a native number.
-
-function ER_Native(x) {
-    //assert(typeof x === "number");
-    this._ = x;
+function negate(z) {
+    return z.negate();
+}
+function reciprocal(z) {
+    return z.reciprocal();
 }
 
-ER_Native.prototype = new Flonum(0);
-ER_Native.prototype.isExact = retTrue;
-ER_Native.prototype.isRational = retTrue;
-ER_Native.prototype.isFlonum = retFalse;
-
-ER_Native.prototype._toString = function(radix) {
-    return nativeToRationalString(this._, radix);
-};
-
-ER_Native.prototype.numberToString = function(radix, precision) {
-    // Can ignore precision, it applies only to inexact numbers.
-    return this._toString(radix);
-};
-
-if (DEBUG)
-    ER_Native.prototype.debug = function() {
-        return "ER_Native(" + this._ + ")";
-    };
-
-ER_Native.prototype.toExact = retThis;
-
-ER_Native.prototype.toInexact = function() {
-    return toFlonum(this._);
-};
-
-ER_Native.prototype.denominator = function() {
-    return numberToEI(nativeDenominator(this._));
-};
-
-ER_Native.prototype.numerator = function() {
-    return numberToEI(this._ * nativeDenominator(this._));
-};
-
-ER_Native.prototype.add = function(z) {
-    z = toSN(z);
-    if (!(z instanceof ER_Native))
-        return z.add(this);
-    if (z._ === 0)
-        return this;
-    return upgradeER(this).add(z);
-};
-
-ER_Native.prototype.negate = function() {
-    return new ER_Native(-this._);
-};
-
-ER_Native.prototype.abs = function() {
-    return (this._ < 0 ? new ER_Native(-this._) : this);
-};
-
-ER_Native.prototype.subtract = function(z) {
-    z = toSN(z);
-    if (!(z instanceof ER_Native))
-        return z._upgrade(this).subtract(z);
-    if (z._ === 0)
-        return this;
-    return upgradeER(this).subtract(z);
-};
-
-ER_Native.prototype.multiply = function(z) {
-    z = toSN(z);
-    if (!(z instanceof ER_Native))
-        return z.multiply(this);
-    if (z._ === 0)
-        return ZERO;
-    if (z._ === 1)
-        return this;
-    if (z._ === -1)
-        return new ER_Native(-this._);
-    return upgradeER(this).multiply(z);
-};
-
-ER_Native.prototype.square = function() {
-    return upgradeER(this).square();
-};
-
-ER_Native.prototype.reciprocal = function() {
-    return upgradeER(this).reciprocal();
-};
-
-ER_Native.prototype.divide = function(z) {
-    z = toSN(z);
-    if (!(z instanceof ER_Native))
-        return z._upgrade(this).divide(z);
-    if (z._ === 0)
-        throw divisionByExactZero();
-    if (z._ === 1)
-        return this;
-    if (z._ === -1)
-        return new ER_Native(-this._);
-    return upgradeER(this).divide(z);
-};
-
-ER_Native.prototype.divAndMod = function(x) {
-    return upgradeER(this).divAndMod(x);
-};
-
-ER_Native.prototype.floor = function() {
-    return numberToEI(Math.floor(this._));
-};
-
-ER_Native.prototype.ceiling = function() {
-    return numberToEI(Math.ceil(this._));
-};
-
-ER_Native.prototype.round = function() {
-    return numberToEI(round(this._));
-};
-
-ER_Native.prototype.truncate = function() {
-    return numberToEI(truncate(this._));
-};
-
-ER_Native.prototype.expt = function(z) {
-    return upgradeER(this).expt(z);
-};
-
-// EI_Native: Exact integers as native numbers.
-
-function toEI_Native(x) {
-    switch (x) {
-    case -1: return M_ONE;
-    case 0: return ZERO;
-    case 1: return ONE;
-    case 2: return TWO;
-    default: return new EI_Native(x);
-    }
+for (className in CLASSES) {
+    ZERO["_add_"      + className] = retFirst;
+    ZERO["_subtract_" + className] = retFirst;
+    ZERO["_multiply_" + className] = retThis;
+    ZERO["_divide_"   + className] = divisionByExactZero;
+    ZERO["_expt_"     + className] = retOne;
+    ONE["_multiply_" + className] = retFirst;
+    ONE["_divide_"   + className] = retFirst;
+    ONE["_expt_"     + className] = retFirst;
+    M_ONE["_multiply_" + className] = negate;
+    M_ONE["_divide_"   + className] = negate;
+    M_ONE["_expt_"     + className] = reciprocal;
 }
 
-function EI_Native(x) {
-    this._ = x;
-}
+DISP.EINative.valueOf = function() {
+    return this._;
+};
 
-EI_Native.prototype = new ER_Native(0);
-EI_Native.prototype.isInteger = retTrue;
-EI_Native.prototype.isFixnum = retTrue;
-
-EI_Native.prototype._toString = function(radix) {
+DISP.EINative.numberToString = function(radix, precision) {
     return this._.toString(radix || 10);
 };
 
-if (DEBUG)
-    EI_Native.prototype.debug = function() {
-        return "EI_Native(" + this._ + ")";
-    };
+DISP.EINative.toFixed = function(dig) {
+    return this._.toFixed(dig);
+};
+DISP.EINative.toExponential = function(dig) {
+    return this._.toExponential(dig);
+};
+DISP.EINative.toPrecision = function(prec) {
+    return this._.toPrecision(prec);
+};
 
-EI_Native.prototype.add = function(z) {
-    z = toSN(z);
-    if (!(z instanceof EI_Native))
-        return z.add(this);
-    var ret = this._ + z._;
+DISP.EINative.debug = function() {
+    return "EINative(" + this._ + ")";
+};
+
+DISP.EINative._toBigInteger = function() {
+    return BigInteger(this._);
+};
+
+DISP.EINative.isPositive = function() {
+    return this._ > 0;
+};
+
+DISP.EINative.isNegative = function() {
+    return this._ < 0;
+};
+
+DISP.EINative.eq = function(z) {
+    return toSN(z)._eq_EINative(this);
+};
+DISP.EINative._eq_EINative = function(n) {
+    return n._ === this._;
+};
+
+DISP.EINative.ne = function(z) {
+    return toSN(z)._ne_EINative(this);
+};
+DISP.EINative._ne_EINative = function(n) {
+    return n._ !== this._;
+};
+
+DISP.EINative.compare = function(x) {
+    return toReal(x)._compare_EINative(this);
+};
+DISP.EINative._compare_EINative = function(n) {
+    return (n._ === this._ ? 0 : (n._ > this._ ? 1 : -1));
+};
+
+function add_EINative_EINative(a, b) {
+    var ret = a + b;
     if (ret > -9007199254740992 && ret < 9007199254740992)
-        return toEI_Native(ret);
-    return toEI_Big(this._).add(z);
+        return toEINative(ret);
+    return new EIBig(BigInteger.add(a, b));
+}
+
+DISP.EINative.add = function(z) {
+    return toSN(z)._add_EINative(this);
+};
+DISP.EINative._add_EINative = function(n) {
+    return add_EINative_EINative(n._, this._);
 };
 
-EI_Native.prototype.negate = function() {
-    return toEI_Native(-this._);
+DISP.EINative.negate = function() {
+    return toEINative(-this._);
 };
 
-EI_Native.prototype.abs = function() {
-    return (this._ < 0 ? toEI_Native(-this._) : this);
+DISP.EINative.abs = function() {
+    return (this._ < 0 ? toEINative(-this._) : this);
 };
 
-EI_Native.prototype.subtract = function(z) {
-    z = toSN(z);
-    if (!(z instanceof EI_Native)) {
-        return z._upgrade(this).subtract(z);
-    }
-    var ret = this._ - z._;
+DISP.EINative.subtract = function(z) {
+    return toSN(z)._subtract_EINative(this);
+};
+DISP.EINative._subtract_EINative = function(n) {
+    return add_EINative_EINative(n._, -this._);
+};
+
+DISP.EINative.multiply = function(z) {
+    return toSN(z)._multiply_EINative(this);
+};
+DISP.EINative._multiply_EINative = function(n) {
+    var ret = n._ * this._;
     if (ret > -9007199254740992 && ret < 9007199254740992)
-        return toEI_Native(ret);
-    return toEI_Big(this._).subtract(z);
+        return toEINative(ret);
+    return new EIBig(BigInteger(n._).multiply(this._));
 };
 
-EI_Native.prototype.multiply = function(z) {
-    z = toSN(z);
-    if (!(z instanceof EI_Native))
-        return z.multiply(this);
-    var ret = this._ * z._;
-    if (ret > -9007199254740992 && ret < 9007199254740992)
-        return toEI_Native(ret);
-    return toEI_Big(this._).multiply(z);
+DISP.EINative.square = function() {
+    var ret = this._ * this._;
+    if (ret < 9007199254740992)
+        return toEINative(ret);
+    return new EIBig(BigInteger(this._).square());
 };
 
-EI_Native.prototype.square = function() {
-    var s = this._ * this._;
-    if (s < 9007199254740992)
-        return toEI_Native(s);
-    return new EI_Big(BigInteger(this._).square());
-};
-
-EI_Native.prototype.reciprocal = function() {
+DISP.EINative.reciprocal = function() {
     var x = this._;
-    if (x === 0)
+    /*
+    if (x === 0)  // XXX Could remove this check, since ZERO overrides.
         throw divisionByExactZero();
-    if (x === 1 || x === -1)
+    if (x === 1 || x === -1)  // Could remove this too, same reason.
         return this;
+    */
     if (x < 0)
-        return canonicalER(M_ONE, toEI_Native(-x));
-    return canonicalER(ONE, this);
+        return canonicalEQ(M_ONE, toEINative(-x));
+    return canonicalEQ(ONE, this);
 };
 
-EI_Native.prototype.divide = function(z) {
-    z = toSN(z);
-    if (!z.isExact())
-        return this.toInexact().divide(z);
-    if (!z.isInteger())
-        return z._upgrade(this).divide(z);
-    return reduceER(this, z);
-};
-
-function divAndModEI_Native(t, x, which) {
+function divAndMod_EINative(t, x, which) {
     if (x === 0)
         throw divisionByExactZero();
 
-    var div = Math.floor(t / x);
+    var div = (x > 0 ? floor(t / x) : ceil(t / x));
     if (which === 0)
-        return toEI_Native(div);
+        return toEINative(div);
 
     var tmp = x * div;
     var mod;
 
     if (tmp > -9007199254740992)
         mod = t - tmp;
-    // Oooh, I'd like a nice test suite for this.
+    // XXX I'd like a nice test suite for this.
     else if (div > 0)
         mod = (t - x) - (x * (div - 1));
     else
         mod = (t + x) - (x * (div + 1));
-    mod = toEI_Native(mod);
+    mod = toEINative(mod);
 
     if (which === 1)
         return mod;
-    return [toEI_Native(div), mod];
+    return [toEINative(div), mod];
 };
 
-EI_Native.prototype.div = function(x) {
-    x = toReal(x);
-    if (!(x instanceof EI_Native))
-        return x._upgrade(this).div(x);
-    return divAndModEI_Native(this._, x._, 0);
+DISP.EINative.div = function(x) {
+    return toReal(x)._div_EINative(this);
+};
+DISP.EINative._div_EINative = function(n) {
+    return divAndMod_EINative(n._, this._, 0);
 };
 
-EI_Native.prototype.mod = function(x) {
-    x = toReal(x);
-    if (!(x instanceof EI_Native))
-        return x._upgrade(this).mod(x);
-    return divAndModEI_Native(this._, x._, 1);
+DISP.EINative.mod = function(x) {
+    return toReal(x)._mod_EINative(this);
+};
+DISP.EINative._mod_EINative = function(n) {
+    return divAndMod_EINative(n._, this._, 1);
 };
 
-EI_Native.prototype.divAndMod = function(x) {
-    x = toReal(x);
-    if (!(x instanceof EI_Native))
-        return x._upgrade(this).divAndMod(x);
-    return divAndModEI_Native(this._, x._, 2);
+DISP.EINative.divAndMod = function(x) {
+    return toReal(x)._divAndMod_EINative(this);
+};
+DISP.EINative._divAndMod_EINative = function(n) {
+    return divAndMod_EINative(n._, this._, 2);
 };
 
-EI_Native.prototype.floor    = retThis;
-EI_Native.prototype.ceiling  = retThis;
-EI_Native.prototype.round    = retThis;
-EI_Native.prototype.truncate = retThis;
-
-EI_Native.prototype._exp10 = function(n) {
+DISP.EINative._exp10 = function(n) {
     if (this._ === 0 || n === 0)
         return this;
 
@@ -1358,9 +2188,9 @@ EI_Native.prototype._exp10 = function(n) {
                 n += 1;
                 i -= 1;
             }
-            num = toEI_Native(Number(num.substring(0, i + 1)));
+            num = toEINative(Number(num.substring(0, i + 1)));
             if (n === 0)
-                return num
+                return num;
         }
         else {
             num = this;
@@ -1368,389 +2198,29 @@ EI_Native.prototype._exp10 = function(n) {
 
         var den;
         if (n < -15)
-            den = toEI_Big(BigInteger.ONE.exp10(-n));
+            den = new EIBig(BigInteger.ONE.exp10(-n));
         else
-            den = toEI_Native(Number("1000000000000000".substring(0, 1 - n)));
-        return reduceER(num, den);
+            // Could make this an array lookup.
+            den = toEINative(Number("1000000000000000".substring(0, 1 - n)));
+        return reduceEQ(num, den);
     }
     if (n < 16) {
+        // Could make substring+parseInt an array lookup.
         var result = parseInt("1000000000000000".substring(0, n + 1)) * this._;
         if (result > -9007199254740992 && result < 9007199254740992)
-            return toEI_Native(result);
+            return toEINative(result);
     }
-    return toEI_Big(this._)._exp10(n);
+    return new EIBig(BigInteger(this._).exp10(n));
 };
 
-function positiveIntegerExpt(b, p) {
-    //assert(p > 0); assert(p == Math.round(p));
-    var result = Math.pow(b, p);
-    if (result > -9007199254740992 && result < 9007199254740992)
-        return toEI_Native(result);
-    if (Math.log(b) * p > MAX_LOG)
-        throw new Error("expt: integer exceeds limit of " +
-                        (MAX_LOG / Math.LN10) + " digits; adjust with " +
-                        "SchemeNumber.setMaxIntegerDigits(...)");
-    return new EI_Big(BigInteger(b).pow(p));
-}
-
-EI_Native.prototype.expt = function(p) {
-    p = toSN(p);
-
-    if (!p.isReal())
-        return p._upgrade(this).expt(p);
-
-    if (!p.isExact())
-        return toFlonum(Math.pow(this._, p.toJSValue()));
-
-    if (p.isZero())
-        return ONE;
-
-    if (this._ === 1)
-        return this;
-
-    if (this._ === 0) {
-        if (p.isPositive())
-            return this;
-        if (p.isZero())
-            return ONE;
-        throw divisionByExactZero();
-    }
-
-    if (this._ === -1 && p.isInteger())
-        return p.isEven() ? ONE : this;
-
-    if (p.isInteger()) {
-        var s = p.sign();
-        // Any inexactness is beyond the range that will fit in
-        // memory, we hope.
-        var a = positiveIntegerExpt(this._, p.abs().toJSValue());
-        return (s > 0 ? a : a.reciprocal());
-    }
-
-    if (this._ > 0)
-        return toFlonum(Math.pow(this._, p.toJSValue()));
-
-    return new Rectangular(this, ZERO).expt(p);
-};
-
-EI_Native.prototype.exactIntegerSqrt = function() {
+DISP.EINative.exactIntegerSqrt = function() {
     if (this._ < 0)
         throw new RangeError("exactIntegerSqrt requires a positive argument");
     var n = Math.floor(Math.sqrt(this._));
-    return [toEI_Native(n), toEI_Native(this._ - n * n)];
+    return [toEINative(n), toEINative(this._ - n * n)];
 };
 
-var ZERO  = SN.ZERO  = new EI_Native(0);
-var ONE   = SN.ONE   = new EI_Native(1);
-var M_ONE = SN.M_ONE = new EI_Native(-1);
-var TWO   = SN.TWO   = new EI_Native(2);
-
-var I     = SN.I   = new Rectangular(ZERO, ONE);
-var M_I   = SN.M_I = new Rectangular(ZERO, M_ONE);
-
-// ER: Exact rational abstract base class.
-
-function numberToER(x) {
-    if (x === Math.floor(x))
-        return numberToEI(x);
-    return new ER_Native(x);
-}
-
-function ER() {}
-
-ER.prototype = new R();
-ER.prototype.isRational = retTrue;
-ER.prototype.isExact = retTrue;
-
-if (DEBUG) ER.prototype.debug = function() { return "ER"; };
-
-ER.prototype.toExact = retThis;
-
-ER.prototype.toInexact = function() {
-    return toFlonum(this.toJSValue());
-};
-
-ER.prototype.divAndMod = function(x) {
-    x = toReal(x);
-    if (!x.isExact())
-        return this.toInexact().divAndMod(x);
-    if (!x.isRational())
-        return x._upgrade(this).divAndMod(x);
-    var q = this.divide(x);
-    var div = q.floor();
-    return [div, q.subtract(div)];
-};
-
-function gcdNative(a, b) {
-    //assert(a >= 0 && b >= 0)
-    var c;
-    while (a !== 0) {
-        c = a;
-        a = b % a;
-        b = c;
-    }
-    return toEI_Native(b);
-}
-
-function gcdBig(a, b) {
-    var c;
-    while (!a.isZero()) {
-        c = a;
-        a = b.remainder(a);
-        b = c;
-    }
-    return reduceBigInteger(b);
-}
-
-function numberToBigInteger(n) {
-    return BigInteger.parse(n.toString(16), 16);
-}
-
-function toBigInteger(n) {
-    return (n instanceof EI_Big ? n._ : numberToBigInteger(n._));
-}
-
-// a and b must be nonnegative, either EI_Big or EI_Native.
-function gcd(a, b) {
-    if (a instanceof EI_Big)
-        return gcdBig(a._, toBigInteger(b));
-    if (b instanceof EI_Big)
-        return gcdBig(numberToBigInteger(a._), b._);
-    return gcdNative(a._, b._);
-}
-
-function reduceER(n, d) {
-    if (d.isZero())
-        throw divisionByExactZero();
-
-    var g = gcd(n.abs(), d.abs());
-
-    n = n.div(g);
-    d = d.div(g);
-
-    if (d.isNegative())
-        return canonicalER(n.negate(), d.negate());
-    return canonicalER(n, d);
-}
-
-function canonicalER(n, d) {
-    if (d.isUnit())
-        return n;
-    return new ER_General(n, d);
-}
-
-function upgradeER(x) {
-    return new ER_General(x.numerator(), x.denominator());
-}
-
-// ER_General: Exact rational as two exact integers in lowest terms,
-// positive denominator.
-
-function ER_General(n, d) {
-    this._n = n;
-    this._d = d;
-}
-
-ER_General.prototype = new ER();
-
-ER_General.prototype._toString = function(radix) {
-    return (this._n._toString(radix) + "/" + this._d._toString(radix));
-};
-
-ER_General.prototype.toJSValue = function() {
-    var n = this._n;
-    var d = this._d;
-    if (n.isZero())
-        return ZERO;
-    if (!n.toJSValue)
-        alert("No toJSValue: " + this.debug());
-    var ret = n.toJSValue() / d.toJSValue();
-    if (!isNaN(ret))
-        return ret;
-    var s = 1;
-    if (n.isNegative()) {
-        s = -1;
-        n = n.negate();
-    }
-    return s * Math.exp(n.log() - d.log());
-};
-
-if (DEBUG)
-    ER_General.prototype.debug = function() {
-        return "ER_General(" + this._n.debug() + " / " + this._d.debug() + ")";
-    };
-
-ER_General.prototype.numerator = function () {
-    return this._n;
-};
-
-ER_General.prototype.denominator = function() {
-    return this._d;
-};
-
-ER_General.prototype._upgrade = upgradeER;
-
-ER_General.prototype.add = function(z) {
-    z = toSN(z);
-    if (!z.isExact())
-        return this.toInexact().add(z);
-    if (!z.isRational())
-        return z._upgrade(this).add(z);
-    var n = z.numerator();
-    var d = z.denominator();
-    return reduceER(this._n.multiply(d).add(this._d.multiply(n)),
-                    this._d.multiply(d));
-};
-
-ER_General.prototype.negate = function() {
-    return new ER_General(this._n.negate(), this._d);
-};
-
-ER_General.prototype.isZero = function() {
-    return this._n.isZero();
-};
-
-ER_General.prototype.isPositive = function() {
-    return this._n.isPositive();
-};
-
-ER_General.prototype.isNegative = function() {
-    return this._n.isNegative();
-};
-
-ER_General.prototype.subtract = function(z) {
-    z = toSN(z);
-    if (!z.isExact())
-        return this.toInexact().subtract(z);
-    if (!z.isRational())
-        return z._upgrade(this).subtract(z);
-    var n = z.numerator();
-    var d = z.denominator();
-    return reduceER(this._n.multiply(d).subtract(this._d.multiply(n)),
-                    this._d.multiply(d));
-};
-
-ER_General.prototype.multiply = function(z) {
-    z = toSN(z);
-    if (!z.isExact())
-        return this.toInexact().multiply(z);
-    if (!z.isRational())
-        return z._upgrade(this).multiply(z);
-    return reduceER(this._n.multiply(z.numerator()),
-                    this._d.multiply(z.denominator()));
-};
-
-ER_General.prototype.square = function() {
-    return new ER_General(this._n.square(), this._d.square());
-};
-
-ER_General.prototype.reciprocal = function() {
-    if (this._n.isNegative())
-        return canonicalER(this._d.negate(), this._n.negate());
-    return canonicalER(this._d, this._n);
-};
-
-ER_General.prototype.divide = function(z) {
-    z = toSN(z);
-    if (!z.isExact())
-        return this.toInexact().divide(z);
-    if (!z.isRational())
-        return z._upgrade(this).divide(z);
-    return reduceER(this._n.multiply(z.denominator()),
-                    this._d.multiply(z.numerator()));
-};
-
-ER_General.prototype.floor = function() {
-    return this._n.div(this._d);
-};
-
-ER_General.prototype.ceiling = function() {
-    return this._d.isUnit() ? this._n : this._n.div(this._d).add(ONE);
-};
-
-ER_General.prototype.round = function() {
-    if (this._d.eq(TWO)) {
-        var ret = this._n.div(this._d);
-        return ret.isEven() ? ret : ret.add(ONE);
-    }
-    var dm = this._n.divAndMod(this._d);
-    var mod = dm[1];
-    if (mod.add(mod).lt(this._d))
-        return dm[0];
-    return dm[0].add(ONE);
-};
-
-ER_General.prototype.truncate = function() {
-    if (this._n.isPositive())
-        return this._n.div(this._d);
-    return this._d.isUnit() ? this._n : this._n.div(this._d).add(ONE);
-};
-
-ER_General.prototype.sign = function() {
-    return this._n.sign();
-};
-
-ER_General.prototype.abs = function() {
-    if (this._n.sign() >= 0)
-        return this;
-    return this.negate();
-};
-
-ER_General.prototype.compare = function(x) {
-    x = toReal(x);
-    var s = x.sign();
-    var this_s = this._n.sign();
-    if (s === 0)
-        return this_s;
-    if (s !== this_s)
-        return -s;
-    if (x instanceof Flonum)
-        return this._n.compare(this._d.multiply(x));
-    if (!x.isRational())
-        return -x.compare(this);
-    return this._n.multiply(x.denominator())
-        .compare(this._d.multiply(x.numerator()));
-};
-
-ER_General.prototype.eq = function(z) {
-    if (z === this)
-        return true;
-    z = toSN(z);
-    return (z.isRational() &&
-            this._n.eq(z.numerator()) &&
-            this._d.eq(z.denominator()));
-};
-
-ER_General.prototype.ne = function(z) {
-    if (z === this)
-        return false;
-    z = toSN(z);
-    return (!z.isRational() ||
-            this._n.ne(z.numerator()) &&
-            this._d.ne(z.denominator()));
-};
-
-ER_General.prototype.expt = function(z) {
-    z = toSN(z);
-    if (!z.isReal())
-        return z._upgrade(this).expt(z);
-    if (z.isZero())
-        return ONE;
-    if (z.eqv(ONE))
-        return this;
-    var num = this._n.expt(z);
-    var den = this._d.expt(z);
-    if (num.isExact() && num.isInteger() && den.isExact() && den.isInteger())
-        return new ER_General(num, den);
-    return num.divide(den);
-};
-
-ER_General.prototype.sqrt = function() {
-    return this._n.sqrt().divide(this._d.sqrt());
-};
-
-// EI: Exact integer abstract base class.
-
+/*
 function numberToEI(n) {
     if (n < 9007199254740992 && n > -9007199254740992)
         return toEI_Native(n);
@@ -1772,205 +2242,101 @@ function parseEI(s) {
         return toEI_Native(Number(s));
     return parseEI_Big(s);
 }
+*/
 
-function EI() {}
-
-EI.prototype = new ER();
-EI.prototype.isInteger = retTrue;
-
-if (DEBUG) EI.prototype.debug = function() { return "EI"; };
-
-EI.prototype.numerator = retThis;
-EI.prototype.denominator = function() { return ONE; };
-EI.prototype.floor    = retThis;
-EI.prototype.ceiling  = retThis;
-EI.prototype.round    = retThis;
-EI.prototype.truncate = retThis;
-
-EI.prototype.reciprocal = function() {
-    if (this.isNegative())
-        return canonicalER(M_ONE, this.negate());
-    return canonicalER(ONE, this);
-};
-
-EI.prototype.divide = EI_Native.prototype.divide;
-
-// EI_Big: Exact integer as a BigInteger.
+//
+// EIBig: Exact integer as a BigInteger.
+//
 
 var FIRST_BIG_INTEGER = BigInteger(9007199254740992);
 
-function toEI_Big(n) {
-    return new EI_Big(BigInteger(n));
-}
-
 function reduceBigInteger(n) {
     if (n.compareAbs(FIRST_BIG_INTEGER) >= 0)
-        return new EI_Big(n);
-    return toEI_Native(n.toJSValue());
+        return new EIBig(n);
+    return toEINative(n.toJSValue());
 }
 
-function EI_Big(n) {
+function EIBig(n) {
     this._ = n;
 }
 
-function parseEI_Big(s) {
-    return new EI_Big(BigInteger.parse(s));
-}
+EIBig.prototype = new EI();
 
-EI_Big.prototype = new EI();
-
-EI_Big.prototype._toString = function(radix) {
+DISP.EIBig.numberToString = function(radix) {
     return this._.toString(radix);
 };
 
-["toJSValue", "isZero", "isEven", "isOdd", "sign", "isUnit"]
+["toJSValue", "isZero", "isEven", "isOdd", "sign", "isUnit",
+ "isPositive", "isNegative"]
     .forEach(function(fn) {
-            EI_Big.prototype[fn] = function() {
+            DISP.EIBig[fn] = function() {
                 return this._[fn]();
             };
         });
 
-EI_Big.prototype.valueOf = EI_Big.prototype.toJSValue;
-
-if (DEBUG)
-    EI_Big.prototype.debug = function() {
-        return "EI_Big(" + this._.toString() + ")";
-    };
-
-EI_Big.prototype._upgrade = function(z) {
-    return new EI_Big(toBigInteger(z));
+DISP.EIBig.log = function() {
+    var x = this._.abs().log();
+    return this._.isPositive() ? x : makeRectangular(x, PI);
 };
 
-EI_Big.prototype.add = function(z) {
-    z = toSN(z);
-    if (!z.isExact())
-        return this.toInexact().add(z);
-    if (z.isZero())
+DISP.EIBig.valueOf = DISP.EIBig.toJSValue;
+
+DISP.EIBig.debug = function() {
+    return "EIBig(" + this._.toString() + ")";
+};
+
+DISP.EIBig._toBigInteger = function() {
+    return this._;
+};
+
+DISP.EIBig.add = function(z) {
+    return toSN(z)._add_EIBig(this);
+};
+
+DISP.EIBig.negate = function() {
+    return new EIBig(this._.negate());
+};
+
+DISP.EIBig.abs = function() {
+    return new EIBig(this._.abs());
+};
+
+DISP.EIBig.subtract = function(z) {
+    return toSN(z)._subtract_EIBig(this);
+};
+
+DISP.EIBig.multiply = function(z) {
+    return toSN(z)._multiply_EIBig(this);
+};
+
+DISP.EIBig.square = function() {
+    return new EIBig(this._.square());
+};
+
+DISP.EIBig._compare_EI = function(n) {
+    return n._.compare(this._);
+};
+
+DISP.EIBig._exp10 = function(n) {
+    //assert(n === floor(n));
+    if (n === 0)
         return this;
-    if (z instanceof EI_Big || z instanceof EI_Native)
-        return reduceBigInteger(this._.add(z._));
-    if (z instanceof ER_Native)
-        return upgradeER(z).add(this);
-    return z.add(this);
+    if (n > 0)
+        return new EIBig(this._.exp10(n));
+    return reduceEQ(this, ONE._exp10(-n));
 };
 
-EI_Big.prototype.negate = function() {
-    return new EI_Big(this._.negate());
-};
-
-EI_Big.prototype.abs = function() {
-    return new EI_Big(this._.abs());
-};
-
-EI_Big.prototype.subtract = function(z) {
-    z = toSN(z);
-    if (!z.isExact())
-        return this.toInexact().subtract(z);
-    if (z.isZero())
-        return this;
-    if (z instanceof EI_Big || z instanceof EI_Native)
-        return reduceBigInteger(this._.subtract(z._));
-    if (z instanceof ER_Native)
-        z = upgradeER(z);
-    return z._upgrade(this).subtract(z);
-};
-
-EI_Big.prototype.multiply = function(z) {
-    z = toSN(z);
-    if (!z.isExact())
-        return this.toInexact().multiply(z);
-    if (z.isZero())
-        return z;
-    if (z.eq(ONE))
-        return this;
-    if (z instanceof EI_Big || z instanceof EI_Native)
-        return new EI_Big(this._.multiply(z._));
-    if (z instanceof ER_Native)
-        return upgradeER(z).multiply(this);
-    return z.multiply(this);
-};
-
-EI_Big.prototype.square = function() {
-    return new EI_Big(this._.square());
-};
-
-EI_Big.prototype.divAndMod = function(z) {
-    z = toSN(z);
-    if (!z.isInteger())
-        return z._upgrade(this).divAndMod(z);
-
-    z = toBigInteger(z);
-    var dm = this._.divRem(z);
-    var div = dm[0];
-    var mod = dm[1];
-
-    if (mod.isNegative()) {
-        mod = mod.add(z);
-        div = div.prev();
-    }
-    return [reduceBigInteger(div), reduceBigInteger(mod)]
-};
-
-EI_Big.prototype.compare = function(x) {
-    x = toReal(x);
-    if (x instanceof EI_Big)
-        return this._.compare(x._);
-    if (!(x instanceof Flonum))
-        return -x.compare(this);
-
-    var bi = this._;
-    var s = bi.sign();
-    if (s === 0)
-        return -x.compare(ZERO);
-    if ((s === 1) !== (x._ > 0))
-        return s;
-
-    var n = Math.floor(x._);
-    switch (bi.compareAbs(n)) {
-    case -1: return -s;
-    case 1: return s;
-    default: return (x._ === n ? 0 : -s);
-    }
-};
-
-EI_Big.prototype.log = function(base) {
-    switch (arguments.length) {
-    case 0: return toFlonum(this._.log());
-    case 1: return toFlonum(this._.log()).divide(toSN(base).log());
-    default: throw new TypeError("Usage: n.log([base])");
-    }
-};
-
-EI_Big.prototype.expt = function(z) {
-    z = SN(z);
-    if (!z.isReal())
-        return z._upgrade(this).expt(z);
-    if (!z.isExact() || !z.isInteger())
-        return toFlonum(Math.pow(this._.toJSValue(), z.toJSValue()));
-    if (z.isZero())
-        return ONE;
-    if (z.isUnit() && z.isPositive())
-        return this;
-    var a = this._.pow(toBigInteger(z.abs()));
-    return new EI_Big(z.isPositive() ? a : a.reciprocal());
-};
-
-EI_Big.prototype._exp10 = function(n) {
-    return toEI_Big(this._.exp10(n));
-};
-
-EI_Big.prototype.sqrt = function() {
+DISP.EIBig.sqrt = function() {
     return toFlonum(Math.exp(this._.log() / 2));
 };
 
-EI_Big.prototype.exactIntegerSqrt = function() {
+DISP.EIBig.exactIntegerSqrt = function() {
 
     // I know of no use cases for this.  Be stupid.  Be correct.
 
+    //assert(this._.compareAbs(FIRST_BIG_INTEGER) >= 0);
     if (this._.isNegative())
         throw new RangeError("exactIntegerSqrt requires a positive argument");
-    if (this._.compareAbs(FIRST_BIG_INTEGER) < 0)
-        return toFlonum(this.toJSValue()).exactIntegerSqrt();
 
     function doit(n, a) {
         while (true) {
@@ -2000,54 +2366,125 @@ EI_Big.prototype.exactIntegerSqrt = function() {
     return doit(this._, a).map(reduceBigInteger);
 };
 
-EI_Big.prototype.atan2 = function(x) {
-    return toFlonum(Math.atan2(this._.toJSValue(), toReal(x).toJSValue()));
-};
+function gcdNative(a, b) {
+    //assert(a >= 0 && b >= 0)
+    var c;
+    while (a !== 0) {
+        c = a;
+        a = b % a;
+        b = c;
+    }
+    return toEINative(b);
+}
 
-["exp", "sin", "cos", "tan", "asin", "acos", "atan"]
-    .forEach(function(fn) {
-            EI_Big.prototype[fn] = function() {
-                return toFlonum(Math[fn](this._.toJSValue()));
-            };
-        });
+function gcdBig(a, b) {
+    var c;
+    while (!a.isZero()) {
+        c = a;
+        a = b.remainder(a);
+        b = c;
+    }
+    return reduceBigInteger(b);
+}
 
-SN.enhanceNumber = function(number) {
-    if (!number)
-        number = Number;
-    var seen = {  // Don't override these built-in Number methods.
-        "toString": true,
-        "valueOf": true,
-        "toFixed": true,
-        "toExponential": true,
-        "toPrecision": true
-    };
-    function doClass(cl) {
-        function make(fname) {
-            switch (cl.prototype[fname].length) {
-            case 0: return function() {
-                    return toFlonum(Number(this))[fname]();
-                };
-            case 1: return function(a) {
-                    return toFlonum(Number(this))[fname](a);
-                };
-            case 2: return function(a, b) {
-                    return toFlonum(Number(this))[fname](a, b);
-                };
-            default:
-                wow();
+function numberToBigInteger(n) {
+    return BigInteger.parse(n.toString(16), 16);
+}
+
+// a and b must be nonnegative, either EIBig or EINative.
+function gcd(a, b) {
+    //assert(!a.isNegative());
+    //assert(!b.isNegative());
+    //assert(a instanceof EIBig || a instanceof EINative);
+    //assert(b instanceof EIBig || b instanceof EINative);
+    if (a instanceof EIBig)
+        return gcdBig(a._, b._toBigInteger());
+    if (b instanceof EIBig)
+        return gcdBig(numberToBigInteger(a._), b._);
+    return gcdNative(a._, b._);
+}
+
+function showMethodClasses() {
+    var map = {};
+    for (var className in DISP)
+        for (var methName in DISP[className])
+            (map[methName] = map[methName] || {})[className] = DISP[className][methName];
+    for (var methName in map)
+        for (var className in map[methName])
+            print(className + "." + methName + (map[methName][className] === pureVirtual ? " =0" : ""));
+}
+//showMethodClasses();
+
+// Workarounds for Number/SN not inheriting from C and R.
+for (var methodName in DISP.R) {
+    if (!DISP.Flonum[methodName]) {
+        DISP.Flonum[methodName] = DISP.R[methodName];
+        if (!DISP.C[methodName])
+            DISP.C[methodName] = undefined;
+    }
+}
+for (var methodName in DISP.C) {
+    if (!DISP.Flonum[methodName])
+        DISP.Flonum[methodName] = DISP.C[methodName];
+}
+
+function resolveOverload() {
+    for (var className in CLASSES) {
+        //print(className);
+        var proto = DISP[className];
+        var newMethods = {};
+        function resolve(subclasses, prefix, method) {
+            if (!subclasses)
+                return;
+            function resolveSub(subclass) {
+                if (proto[prefix + subclass])
+                    return;
+                //print(className + "." + prefix + subclass + " -> " + oldName);
+                newMethods[prefix + subclass] = method;
+                resolve(HIERARCHY[subclass], prefix, method);
             }
+            subclasses.forEach(resolveSub);
         }
-        for (var fname in cl.prototype) {
-            if (fname[0] !== '_' && !seen[fname]) {
-                seen[fname] = true;
-                number.prototype[fname] = make(fname);
+        for (var oldName in proto) {
+            var underscore = oldName.lastIndexOf("_");
+            if (underscore === -1)
+                continue;
+            var oldMethod = proto[oldName];
+            if (!oldMethod) {
+                //print("Bogus " + className + ".prototype." + oldName);
+                continue;
             }
+            var oldClass = oldName.substring(underscore + 1);
+            resolve(HIERARCHY[oldClass],
+                    oldName.substring(0, underscore + 1),
+                    oldMethod);
+        }
+        for (var methodName in newMethods) {
+            proto[methodName] = newMethods[methodName];
+        }
+        for (var methodName in proto) {
+            CLASSES[className].prototype[methodName] = proto[methodName];
         }
     }
-    [SN, C, R, Flonum].forEach(doClass);
-};
+}
+resolveOverload();
 
-SN.enhanceString = function(string) {
+function checkPureVirtual() {
+    for (var className in CLASSES) {
+        if (!/[a-z]/.test(className)) {
+            //print(className + " does not look like a concrete class.");
+            continue;
+        }
+        var proto = CLASSES[className].prototype;
+        for (methodName in proto) {
+            if (proto[methodName] === pureVirtual)
+                print("Pure virtual: " + className + "." + methodName);
+        }
+    }
+}
+checkPureVirtual();
+
+modifyString = function(string) {
     if (!string)
         string = String;
     var seen = {  // Don't override these built-in String methods.
@@ -2079,19 +2516,24 @@ SN.enhanceString = function(string) {
             }
         }
     }
-    [SN, C, Rectangular, R, Flonum, ER_Native, EI_Native,
-     ER, ER_General, EI, EI_Big]
+    [SN, C, Rectangular, R, EQ, EQFraction, EI, EINative, EIBig]
     .forEach(doClass);
 };
 
-SN._ = function() {
-    SN.enhanceNumber();
-    SN.enhanceString();
-}
+SN._ = {};
+SN._.modifyString = modifyString;
 
-SchemeNumber = SN;
+return SN;
+
+// Set this.SchemeNumber_is_Number = false if you do *not* want this
+// library to add methods to Number.prototype and create
+// String.prototype.toSchemeNumber.
+// XXX This doesn't work yet, you must leave this.SchemeNumber_is_Number
+// undefined or set it true.
+})(this.SchemeNumber_is_Number);
+
 if (typeof exports !== "undefined") {
-    exports.SchemeNumber = SN;
-    exports._ = SN._;
+    exports._ = SchemeNumber._;
+    for (var name in SchemeNumber.fn)
+        exports[name] = SchemeNumber.fn[name];
 }
-})();

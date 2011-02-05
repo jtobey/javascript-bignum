@@ -1,19 +1,11 @@
-Scheme arithmetic library for JavaScript.
+Scheme arithmetic library for JavaScript,
+https://github.com/jtobey/javascript-bignum.
 Copyright (c) 2010,2011 John Tobey <John.Tobey@gmail.com>
 Copyright (c) 2009 Matthew Crumley <email@matthewcrumley.com>
 Licensed under the MIT license, file LICENSE.
-https://github.com/jtobey/javascript-bignum
-Big integer implementation based on javascript-biginteger
-https://github.com/silentmatt/javascript-biginteger
+Big integer implementation based on javascript-biginteger,
+https://github.com/silentmatt/javascript-biginteger.
 
-*** WARNING ***
-
-THIS IS SPARSELY DOCUMENTED, BUGGY CODE WHOSE INTERFACES ARE SUBJECT
-TO CHANGE WITHOUT NOTICE.  See the file LICENSE regarding your lack of
-any warranty.
-
-This is INTENTIONALLY underdocumented PRECISELY BECAUSE the interfaces
-are changing.  See the file TODO for a list of likely future changes.
 
 WHAT IT IS
 
@@ -29,10 +21,7 @@ exactly 1, not 1.0000000000000007 as in JavaScript.  Raising 2 to the
 1024th power returns a 308-digit integer with complete precision, not
 Infinity as in ECMAScript.
 
-This implementation follows the R6RS Scheme specification, Section
-11.7 (Base library, Arithmetic).  See http://www.r6rs.org/ (I
-recommend the PDF, not the HTML version.
-http://www.r6rs.org/final/r6rs.pdf)
+This implementation follows the R6RS[1] Scheme specification.
 
 Not yet implemented functions:
 * rationalize
@@ -41,41 +30,113 @@ Not yet implemented functions:
 * div0-and-mod0
 
 Not yet implemented cases:
-* numberToString (Scheme's number->string) ignores precision argument.
-* parse (Scheme's string->number) ignores mantissa width.
+* number->string ignores precision argument.
+* string->number ignores mantissa width.
+
+We have not implemented the R6RS condition system or ensured that the
+numeric functions raise the condition types specified in the standard.
 
 The atan function is split into "atan" and "atan2" according to
 whether it has one or two arguments.
 
 The complex number support, while believed complete, is unoptimized.
 
+
 IMPLEMENTATION DETAILS
+
+The schemeNumber.js library adds methods to the standard
+Number.prototype object.  We plan to provide an option to export the
+library's functionality without affecting any standard objects, but
+this is not yet fully implemented.
 
 Inexact real numbers are represented as native numbers.
 
-Exact integers of absolute value less than 2 to the 53rd are
+Exact integers of absolute value less than 2 to the 53rd power are
 represented as native numbers.  Outside this range, exact integers are
 represented as BigInteger objects.
 
-Exact rationals may be represented as native numbers but are usually
-promoted to pairs of exact integers [numerator, denominator] in lowest
-terms.
+Exact rationals are represented as pairs of exact integers (numerator,
+denominator) in lowest terms.
+
+Non-real complex numbers are represented in rectangular coordinates,
+either both exact or both inexact.
+
 
 INSTALLATION
 
 Copy biginteger.js and schemeNumber.js from this directory to your Web
 or JavaScript directory.
 
-Browse Matt's famous BigInteger documentation at
-<http://silentmatt.com/biginteger/> or create it by installing
-NaturalDocs and running the build-docs script found in
-javascript-biginteger.
-
-Suffer the missing SchemeNumber documentation by making what sense you
-can of schemeNumber.js in this distribution.  Accept my apologies if
-this situation has persisted over a month since today.
-
 The BigRational library, bigrational.js, is deprecated in favor of
-SchemeNumber.
+schemeNumber.js.
 
-January 24, 2011
+
+USAGE
+
+The schemeNumber.js file exports an object "SchemeNumber".  It
+contains a property "fn", which in turn contains the functions
+implementing the numeric tower.  These functions are stored in "fn"
+under their Scheme names, so quotation is needed where the names
+contain characters that are incompatible with JavaScript dot notation.
+
+The Scheme number "constructor" is simply
+SchemeNumber.fn["string->number"].  Typically, you would extract this
+function and "fn" into conveniently named variables, such as "sf" and
+"sn", as follows:
+
+    var sf = SchemeNumber.fn;
+    var sn = sf["string->number"];
+
+The functions accept a string or JavaScript number wherever a Scheme
+number is required; they convert strings as if by string->number and
+treat native numbers as inexact reals.  So for example, "2" (string)
+would be exact (parsed as Scheme) but 2 (equal to 2.0) would be
+inexact, as demonstrated:
+
+    a1 = sf["exact?"]("2");   // a1 === true
+    a2 = sf["exact?"](2);     // a2 === false
+
+Here, then, is 2 to the 1,024th power, as a decimal string:
+
+    a3 = sf["number->string"](sf.expt("2", "1024"));
+
+Fractional arithmetic:
+
+    a4 = sf["+"]("1/3", "4/5");  // 17/15
+
+Numerator and denominator of a floating-point value, hexadecimal:
+
+    ns = sf["number->string"];
+    a5 = ns(sf.numerator(1/3), 16);    // "#i15555555555555"
+    a6 = ns(sf.denominator(1/3), 16);  // "#i40000000000000"
+
+The "#i" prefix denotes an inexact number, as detailed in R6RS[1].
+Since 1/3 is a native JavaScript number, the library regards it as
+inexact, and operations such as numerator yield inexact integer
+results.  If we used "1/3" (quoted) instead of 1/3, the numerator and
+denominator would be the mathematically correct 1 and 3.
+
+
+CAVEATS
+
+The library exhibits other visible behaviors besides the functions in
+SchemeNumber.fn.  However, they are not part of its public API and may
+change significantly in future releases.
+
+In particular, Scheme numbers' "toString" property sometimes produces
+output that is incorrect in the Scheme sense.  (This stems from my
+willingness to add methods to Number.prototype but my unwillingness to
+replace the standard Number.prototype.toString.)  To serialize numbers
+as Scheme would, use SchemeNumber.fn["number->string"].
+
+To test a Scheme number for equality with another Scheme number or a
+native value, use SchemeNumber.fn["="].  Likewise for ">" etc.  Refer
+to R6RS[1] for the full list of functions, and note the unimplemented
+list above.
+
+John Tobey
+February 5, 2011
+
+[1] R6RS Scheme specification.  See http://www.r6rs.org/ (I recommend
+the PDF, not the HTML version.  http://www.r6rs.org/final/r6rs.pdf),
+Section 11.7 (Base library, Arithmetic).
