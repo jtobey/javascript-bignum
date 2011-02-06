@@ -52,6 +52,11 @@ denominator) in lowest terms.
 Non-real complex numbers are represented in rectangular coordinates,
 either both exact or both inexact.
 
+To avoid using up all system memory, exact results of a call to "expt"
+are capped at 100 million (1e8) digits.  To query or change this
+value, use SchemeNumber.getMaxIntegerDigits() or
+SchemeNumber.setMaxIntegerDigits(newMax).
+
 
 INSTALLATION
 
@@ -124,9 +129,7 @@ calls the function SchemeNumber.raise with two or more arguments:
   * zero or more irritants (erroneous data).
 
 The default SchemeNumber.raise function simply throws an Error.
-Programs may assign a custom function to SchemeNumber.raise.  Such a
-function must never return to its caller; it must abort the
-computation, such as by executing a throw statement.
+Programs may assign a custom function to SchemeNumber.raise.
 
 
 CAVEATS

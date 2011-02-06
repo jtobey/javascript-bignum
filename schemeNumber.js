@@ -19,8 +19,6 @@ if (!BigInteger) {
 
 var SchemeNumber = (function() {
 
-var call     = Function.prototype.call;
-var apply    = Function.prototype.apply;
 var abs      = Math.abs;
 var floor    = Math.floor;
 var ceil     = Math.ceil;
@@ -49,7 +47,7 @@ function unimpl() {
     throw new Error("BUG: unimplemented");
 }
 function pureVirtual() {
-    throw new Error("BUG: Pure virtual function not overridden");
+    throw new Error("BUG: Abstract method not overridden");
 }
 
 /* Internal class hierarchy:
@@ -93,30 +91,28 @@ function pureVirtual() {
 // These variables are abstracted in case we implement a version not
 // based on Number.prototype.
 
-var toSN;          // returns its argument if already an SN, else converts it.
+//var toSN;          // returns its argument if already an SN, else converts it.
+//var isNumber;      // returns true if its argument is a Scheme number.
 var toFlonum;      // converts its argument to number and returns inexact real.
-var isNumber;      // returns true if its argument is a Scheme number.
-var INEXACT_ZERO;  // Flonum zero.
 var floPow;        // Math.pow, with result converted to Flonum.
 var floLog;        // Math.log, with result converted to Flonum.
 
-toSN = function(obj) {
+function toSN(obj) {
     if (obj instanceof C || obj instanceof Number || typeof obj === "number")
         return obj;
     return parseNumber(String(obj));
 };
 
-isNumber = function(x) {
+function isNumber(x) {
     return x instanceof C || x instanceof Number || typeof x === "number";
 };
 
 toFlonum = Number;
-INEXACT_ZERO = 0;
 floPow = pow;
 floLog = log;
 
 
-var SN = {};     // Private alias for the public SchemeNumber object.
+var SN = {};     // SN: private alias for the public SchemeNumber object.
 
 function defaultRaise(conditionType, message, irritant) {
     var msg = "SchemeNumber: " + conditionType + ": " + message;
@@ -1120,6 +1116,10 @@ DISP.Flonum.SN_expt = function(z) {
     return toSN(z).SN__expt_Flonum(this);
 };
 
+// Some famous flonums:
+
+var INEXACT_ZERO = toFlonum(0);
+
 var INFINITY     = toFlonum(Number.POSITIVE_INFINITY);
 var M_INFINITY   = toFlonum(Number.NEGATIVE_INFINITY);
 var NAN          = toFlonum(Number.NaN);
@@ -1142,15 +1142,15 @@ DISP.C.SN_isUnit     = retFalse;
 
 DISP.C.SN_isComplex  = retTrue;
 
-DISP.C.toString = function(radix, precision) {
+DISP.C.toString = function(radix, precision) {  // XXX is this used?
     return this.SN_numberToString(radix, precision);
 };
-DISP.C.valueOf = DISP.C.toString;
+DISP.C.valueOf = DISP.C.toString;  // XXX is this used?
 DISP.C.SN_numberToString = pureVirtual;
 
 DISP.C.SN_debug = function() { return "C"; };
 
-// vvvv You don't need this if you use only real numbers. vvvv
+// vvvv You shouldn't need this if you use only real numbers. vvvv
 
 DISP.C.SN_sqrt = function() {
     return makePolar(this.SN_magnitude().SN_sqrt(),
@@ -1199,7 +1199,7 @@ DISP.C.SN_tan = function() {
     return this.SN_sin().SN_divide(this.SN_cos());
 };
 
-// ^^^^ You don't need this if you use only real numbers. ^^^^
+// ^^^^ You shouldn't need this if you use only real numbers. ^^^^
 
 //
 // R: Real abstract base class.
@@ -1216,16 +1216,6 @@ DISP.R.SN_realPart = retThis;
 
 // Methods implemented generically using more basic operations.
 
-DISP.R.SN_isPositive = function() {
-    return this.SN_sign() > 0;
-};
-DISP.R.SN_isNegative = function() {
-    return this.SN_sign() < 0;
-};
-DISP.R.SN_sign = function() {
-    return this.SN_compare(ZERO);
-};
-
 DISP.R.SN_magnitude = function() {
     return this.SN_abs();
 };
@@ -1233,6 +1223,17 @@ DISP.R.SN_magnitude = function() {
 DISP.R.SN_angle = function() {
     return this.SN_isNegative() ? PI : ZERO;
 };
+
+// Commented because they are always overridden.
+// DISP.R.SN_isPositive = function() {
+//     return this.SN_sign() > 0;
+// };
+// DISP.R.SN_isNegative = function() {
+//     return this.SN_sign() < 0;
+// };
+// DISP.R.SN_sign = function() {
+//     return this.SN_compare(ZERO);
+// };
 
 // Dispatches.
 
@@ -1255,7 +1256,7 @@ DISP.R.SN__ge_Flonum = DISP.Flonum.SN__ge_R;
 DISP.R.SN__le_Flonum = DISP.Flonum.SN__le_R;
 
 DISP.R.SN__compare_Flonum = function(x) {
-    if (x == this) return 0;
+    if (+x == this) return 0;
     if (x < this) return -1;
     if (x > this) return 1;
     return NaN;
@@ -1366,7 +1367,7 @@ DISP.R.SN__mod_R = function(x) {
 ["sqrt", "exp", "log", "sin", "cos", "tan", "asin", "acos", "atan", "atan2"]
 .forEach(function(name) { DISP.R["SN_" + name] = DISP.Flonum["SN_" + name]; });
 
-// vvvv You don't need this if you use only real numbers. vvvv
+// vvvv You shouldn't need this if you use only real numbers. vvvv
 
 //
 // Rectangular: Complex numbers as xy-coordinate pairs.
@@ -1631,7 +1632,7 @@ DISP.Rectangular.SN_exp = function() {
     return makePolar(this._x.SN_exp(), this._y);
 };
 
-// ^^^^ You don't need this if you use only real numbers. ^^^^
+// ^^^^ You shouldn't need this if you use only real numbers. ^^^^
 
 //
 // ER: Exact real abstract base class.
@@ -1719,8 +1720,8 @@ function canonicalEQ(n, d) {
 }
 
 //
-// EQFraction: Exact rational as numerator and positive denominator
-// with no factors in common.
+// EQFraction: Exact rational as numerator (exact integer) and
+// denominator (exact positive integer) with no factors in common.
 //
 
 function EQFraction(n, d) {
@@ -2088,14 +2089,14 @@ var ONE   = SN.ONE   = new EINative(1);
 var M_ONE = SN.M_ONE = new EINative(-1);
 var TWO   = SN.TWO   = new EINative(2);
 
-var EINativeSmall = { 0:ZERO, 1:ONE, "-1":M_ONE, 2:TWO };
+var EINativeSmall    = [ ZERO, ONE, TWO ];
 
 var I     = SN.I   = new Rectangular(ZERO, ONE);
 var M_I   = SN.M_I = new Rectangular(ZERO, M_ONE);
 
 function toEINative(n) {
     //assert(floor(n) === n);
-    return EINativeSmall[n] || new EINative(n);
+    return EINativeSmall[n] || (n == -1 ? M_ONE : new EINative(n));
 }
 
 ZERO.SN_isZero     = retTrue;
@@ -2222,6 +2223,10 @@ DISP.EINative.SN_isNegative = function() {
     return this._ < 0;
 };
 
+DISP.EINative.SN_sign = function() {
+    return (this._ > 0 ? 1 : (this._ == 0 ? 0 : -1));
+};
+
 DISP.EINative.SN_eq = function(z) {
     return toSN(z).SN__eq_EINative(this);
 };
@@ -2294,7 +2299,7 @@ DISP.EINative.SN_reciprocal = function() {
     /*
     if (x === 0)  // Removed this check, since ZERO overrides.
         throw divisionByExactZero();
-    if (x === 1 || x === -1)  // Removed this too, same reason.
+    if (x === 1 || x === -1)  // Removed this optimization, similar reason.
         return this;
     */
     if (x < 0)
@@ -2395,6 +2400,8 @@ DISP.EINative.SN_exactIntegerSqrt = function() {
 // EIBig: Exact integer as a BigInteger.
 //
 
+// 2 to the power 53, top of the range of consecutive integers
+// representable exactly as native numbers.
 var FIRST_BIG_INTEGER = BigInteger(9007199254740992);
 
 function reduceBigInteger(n) {

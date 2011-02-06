@@ -4,8 +4,14 @@ TODO:
 
 * Announce on comp.lang.scheme.
 
+* Test divAndMod_EINative corner cases.
+
+* Move documentation from README to its own file.  HTML?
+
 * ECMA Number.prototype methods: toLocaleString, toFixed,
-  toExponential, toPrecision.  Implement for exact numbers.
+  toExponential, toPrecision.  Implement for fractions and big ints.
+
+* Run the test suite with assertions uncommented.
 
 * Consider providing the option not to tamper with Number.prototype.
 
