@@ -113,13 +113,13 @@ if (SN_IS_NUMBER) {
     toSN = function(obj) {
         if (obj instanceof SN || typeof obj === "number")
             return obj;
-        if (obj && obj.toSchemeNumber)
-            return obj.toSchemeNumber();
-        return parseNumber(obj);
+        //if (obj && obj.toSchemeNumber)
+        //    return obj.toSchemeNumber();
+        return parseNumber(String(obj));
     };
-    String.prototype.toSchemeNumber = function() {
-        return parseNumber(this);
-    };
+    //String.prototype.toSchemeNumber = function() {
+    //    return parseNumber(this);
+    //};
 
     isNumber = function(x) {
         return x instanceof SN || typeof x === "number";
@@ -879,15 +879,20 @@ function numberToBinary(x) {
     return x.toString(2);
 }
 
+function nativeDenominatorLog2(x) {
+    //assert(isFinite(x));
+    var s = numberToBinary(abs(x));
+    var i = s.indexOf(".");
+    if (i === -1)
+        return 1;
+    return s.length - i - 1;
+}
+
 function nativeDenominator(x) {
     // Get the "denominator" of a floating point value.
     // The result will be a power of 2.
     //assert(isFinite(x));
-    var s = numberToBinary(x);
-    var i = s.indexOf(".");
-    if (i === -1)
-        return 1;
-    return pow(2, s.length - i - 1);
+    return pow(2, nativeDenominatorLog2(x));
 }
 
 function exactNativeIntegerToString(n, radix) {
@@ -896,19 +901,9 @@ function exactNativeIntegerToString(n, radix) {
     return numberToBigInteger(n).toString(radix);
 }
 
-function nativeToRationalString(q, radix) {
-    //assert(isFinite(q));
-    var d = nativeDenominator(q);
-    var ns = exactNativeIntegerToString(q * d, radix);
-    if (d === 1)
-        return ns;
-    return (ns + "/" +
-            exactNativeIntegerToString(d, radix));
-}
-
 DISP.Flonum.numberToString = function(radix, precision) {
     if (radix && radix != 10 && isFinite(this))
-        return "#i" + nativeToRationalString(this, radix);
+        return "#i" + this.toExact().numberToString(radix);
 
     if (!isFinite(this)) {
         if (isNaN(this))
@@ -954,13 +949,13 @@ DISP.Flonum.imagPart = function() {
 DISP.Flonum.denominator = function() {
     if (isFinite(this))
         return nativeDenominator(this);
-    throw new TypeError("Can't coerce " + this + " to rational");
+    throw new TypeError("Not a rational number: " + this);
 };
 
 DISP.Flonum.numerator = function() {
     if (isFinite(this))
         return this * nativeDenominator(this);
-    throw new TypeError("Can't coerce " + this + " to rational");
+    throw new TypeError("Not a rational number: " + this);
 };
 
 DISP.Flonum.isInteger = function() {
@@ -1009,13 +1004,26 @@ function numberToEI(n) {
 function nativeToExact(x) {
     if (!isFinite(x))
         throw new RangeError("No exact representation for " + x);
+
     var d = nativeDenominator(x);
+    var n;
+
     if (d === 1)
-        return toEINative(x);
-    var n = x * d;
-    if (!isFinite(n))
-        throw new RangeError("No exact representation for " + x);
-    return canonicalEQ(numberToEI(n), numberToEI(d));
+        return numberToEI(x);
+
+    if (isFinite(d)) {
+        n = x * d;
+        d = numberToEI(d);
+    }
+    else {
+        // Denormal x.
+        var dl2 = nativeDenominatorLog2(x);
+        n = x * 9007199254740992;
+        n *= pow(2, dl2 - 53);
+        d = positiveIntegerExpt(TWO, dl2);
+    }
+    //assert(isFinite(n));
+    return canonicalEQ(numberToEI(n), d);
 }
 
 DISP.Flonum.toExact = function() {
@@ -2022,7 +2030,7 @@ DISP.EI._divide_EQ = function(q) {
 };
 
 function positiveIntegerExpt(b, p) {
-    //assert(p > 0); assert(p == Math.round(p));
+    //assert(p > 0); assert(p == round(p));
     var result = pow(b, p);
     if (result > -9007199254740992 && result < 9007199254740992)
         return toEINative(result);
@@ -2389,7 +2397,7 @@ DISP.EINative._exp10 = function(n) {
 DISP.EINative.exactIntegerSqrt = function() {
     if (this._ < 0)
         throw new RangeError("exactIntegerSqrt requires a positive argument");
-    var n = Math.floor(Math.sqrt(this._));
+    var n = floor(sqrt(this._));
     return [toEINative(n), toEINative(this._ - n * n)];
 };
 
@@ -2476,7 +2484,7 @@ DISP.EIBig._exp10 = function(n) {
 };
 
 DISP.EIBig.sqrt = function() {
-    return toFlonum(Math.exp(this._.log() / 2));
+    return toFlonum(exp(this._.log() / 2));
 };
 
 DISP.EIBig.exactIntegerSqrt = function() {
@@ -2510,8 +2518,8 @@ DISP.EIBig.exactIntegerSqrt = function() {
     }
 
     var l = this._.log() / 2 / LN10;
-    var a = BigInteger(Math.pow(10, l - Math.floor(l)).toString()
-                       + "e" + Math.floor(l));
+    var a = BigInteger(pow(10, l - floor(l)).toString()
+                       + "e" + floor(l));
     return doit(this._, a).map(reduceBigInteger);
 };
 
