@@ -37,10 +37,8 @@ transcendental functions, while believed complete, are unoptimized.
 
 IMPLEMENTATION DETAILS
 
-The schemeNumber.js library adds methods to the standard
-Number.prototype object.  We might someday provide an option to export
-the library's functionality without affecting any standard objects,
-but this is not yet implemented.
+The schemeNumber.js library adds properties to the standard
+Number.prototype object using names prefixed by "SN_".
 
 Inexact real numbers are represented as native numbers.
 

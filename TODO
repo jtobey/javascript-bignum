@@ -1,8 +1,6 @@
 TODO:
 
-* Prefix new Number.prototype methods with "SN_" or similar.
-
-* Rerun the test suite.
+* Review all of schemeNumber.js.
 
 * Announce on comp.lang.scheme.
 
