@@ -369,25 +369,26 @@ function stringToNumber(s, radix, exact) {
         return makeRectangular(x, y);
     }
 
-    while (s[i] === "#") {
-        switch (s[i+1]) {
-        case 'i': case 'I': setExact(false); break;
-        case 'e': case 'E': setExact(true ); break;
-        case 'b': case 'B': setRadix( 2); break;
-        case 'o': case 'O': setRadix( 8); break;
-        case 'd': case 'D': setRadix(10); break;
-        case 'x': case 'X': setRadix(16); break;
-        default: return false;
-        }
-    }
-
     radix = radix || 10;
     try {
+        while (s[i] === "#") {
+            switch (s[i+1]) {
+            case 'i': case 'I': setExact(false); break;
+            case 'e': case 'E': setExact(true ); break;
+            case 'b': case 'B': setRadix( 2); break;
+            case 'o': case 'O': setRadix( 8); break;
+            case 'd': case 'D': setRadix(10); break;
+            case 'x': case 'X': setRadix(16); break;
+            default: return false;
+            }
+        }
         return parseComplex(s.toString().substring(i));
     }
     catch (e) {
         if (e === PARSE_ERROR)
             return false;
+        if (s == undefined)
+            throw new TypeError("Missing argument");
         throw e;
     }
 }
@@ -556,9 +557,9 @@ SN.fn = {
     "div-and-mod"   : makeBinary("divAndMod"),
     div             : makeBinary("div"),
     mod             : makeBinary("mod"),
-    "div0-and-mod0" : unimpl,
-    div0            : unimpl,
-    mod0            : unimpl,
+    "div0-and-mod0" : function(x, y) { return div0AndOrMod0(x, y, 2); },
+    div0            : function(x, y) { return div0AndOrMod0(x, y, 0); },
+    mod0            : function(x, y) { return div0AndOrMod0(x, y, 1); },
 
     gcd : function() {
         var ret = ZERO;
@@ -593,7 +594,7 @@ SN.fn = {
     ceiling     : makeUnary("ceiling"),
     truncate    : makeUnary("truncate"),
     round       : makeUnary("round"),
-    rationalize : unimpl,
+    rationalize : rationalize,
     exp         : makeUnary("exp"),
 
     log : function(z, base) {
@@ -702,6 +703,86 @@ function makeMaxMin(cmp) {
         }
         return exact ? ret : ret.toInexact();
     };
+}
+
+function div0AndOrMod0(x, y, which) {
+    x = toReal(x);
+    y = toReal(y);
+    var dm = x.divAndMod(y);
+    var m = dm[1];
+    var yabs = y.abs();
+
+    if (m.add(m).ge(yabs)) {
+        switch (which) {
+        case 0: return dm[0].add(y.isNegative() ? M_ONE : ONE);
+        case 1: return m.subtract(yabs);
+        case 2: default: return [dm[0].add(y.isNegative() ? M_ONE : ONE),
+                                 m.subtract(yabs)];
+        }
+    }
+    switch (which) {
+    case 0: return dm[0];
+    case 1: return m;
+    case 2: default: return dm;
+    }
+}
+
+function rationalize(x, delta) {
+    x = toSN(x);
+    delta = toSN(delta);
+
+    // Handle weird cases first.
+    if (!x.isFinite() || !delta.isFinite()) {
+        toReal(x);
+        toReal(delta);
+        if (delta.isInfinite())
+            return (x.isFinite() ? INEXACT_ZERO : NAN);
+        if (delta.isNaN())
+            return delta;
+        return x;
+    }
+
+    delta = delta.abs();  // It's what PLT and Mosh seem to do.
+
+    var x0 = x.subtract(delta);
+    var x1 = x.add(delta);
+    var a = x0.floor();
+    var b = x1.floor();
+
+    if (a.ne(b)) {
+        var negative = a.isNegative();
+        if (b.isNegative() != negative)
+            return (a.isExact() ? ZERO : INEXACT_ZERO);
+        return (negative ? b : x0.ceiling());
+    }
+    var cf = [];  // Continued fraction, b implied.
+
+    while (true) {
+        x0 = x0.subtract(a);
+        if (x0.isZero())
+            break;
+        x1 = x1.subtract(a);
+        if (x1.isZero())
+            break;
+
+        x0 = x0.reciprocal();
+        x1 = x1.reciprocal();
+        a = x0.floor();
+
+        switch (a.compare(x1.floor())) {
+        case -1: cf.push(x0.ceiling()); break;
+        case  1: cf.push(x1.ceiling()); break;
+        case 0: default:
+            cf.push(a);
+            continue;
+        }
+        break;
+    }
+    var ret = ZERO;
+    var i = cf.length;
+    while (i--)
+        ret = ret.add(cf[i]).reciprocal();
+    return ret.add(b);
 }
 
 //
@@ -837,6 +918,12 @@ DISP.Flonum.isNaN = function() {
     return isNaN(this);
 };
 
+function numberToEI(n) {
+    if (n < 9007199254740992 && n > -9007199254740992)
+        return toEINative(n);
+    return new EIBig(numberToBigInteger(n));
+}
+
 function nativeToExact(x) {
     if (!isFinite(x))
         throw new RangeError("No exact representation for " + x);
@@ -846,7 +933,7 @@ function nativeToExact(x) {
     var n = x * d;
     if (!isFinite(n))
         throw new RangeError("No exact representation for " + x);
-    return canonicalEQ(n, d);
+    return canonicalEQ(numberToEI(n), numberToEI(d));
 }
 
 DISP.Flonum.toExact = function() {
@@ -2219,30 +2306,6 @@ DISP.EINative.exactIntegerSqrt = function() {
     var n = Math.floor(Math.sqrt(this._));
     return [toEINative(n), toEINative(this._ - n * n)];
 };
-
-/*
-function numberToEI(n) {
-    if (n < 9007199254740992 && n > -9007199254740992)
-        return toEI_Native(n);
-    return new EI_Big(numberToBigInteger(n));
-}
-
-function parseEI(s) {
-    var len = s.length;
-    if (len < 16)
-        return toEI_Native(Number(s));
-    var firstNonzero = 0;
-    if (s[0] == '-')
-        firstNonzero++;
-    while (s[firstNonzero] == '0')
-        firstNonzero++;
-    len = len - firstNonzero;
-    if (len < 16 ||
-        (len === 16 && s.substring(firstNonzero) < "9007199254740992"))
-        return toEI_Native(Number(s));
-    return parseEI_Big(s);
-}
-*/
 
 //
 // EIBig: Exact integer as a BigInteger.

@@ -14,20 +14,15 @@ inexact numbers.  Several basic operations, including add, subtract,
 multiply, and divide, when given only exact arguments, must return an
 exact, numerically correct result.  They are allowed to fail due to
 running out of memory, but they are not allowed to return
-approximations the way ECMAScript operators do.
+approximations the way ECMAScript operators may.
 
 For example, adding exact 1/100 to exact 0 one hundred times produces
 exactly 1, not 1.0000000000000007 as in JavaScript.  Raising 2 to the
 1024th power returns a 308-digit integer with complete precision, not
 Infinity as in ECMAScript.
 
-This implementation follows the R6RS[1] Scheme specification.
-
-Not yet implemented functions:
-* rationalize
-* div0
-* mod0
-* div0-and-mod0
+This implementation provides all functions listed in the R6RS[1]
+Scheme specification, Section 11.7, along with "eqv?".
 
 Not yet implemented cases:
 * number->string ignores precision argument.
@@ -57,6 +52,8 @@ denominator) in lowest terms.
 
 Non-real complex numbers are represented in rectangular coordinates,
 either both exact or both inexact.
+
+In the JavaScript tradition, most functions ignore extra arguments.
 
 
 INSTALLATION

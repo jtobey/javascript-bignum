@@ -8,96 +8,96 @@ my $lang = shift || "scheme";
 
 my @SPEC =
     (
-     [qw( number? o )                                   ],
-     [qw( complex? o )                                  ],
-     [qw( real? o )                                     ],
-     [qw( rational? o )                                 ],
-     [qw( integer? o )                                  ],
-     [qw( real-valued? o )                              ],
-     [qw( rational-valued? o )                          ],
-     [qw( integer-valued? o )                           ],
-     [qw( exact? z )                                    ],
-     [qw( inexact? z )                                  ],
-     [qw( = z z )                                       ],
-     [qw( = z z z )                                     ],
-     [qw( < x x )                                       ],
-     [qw( < x x x )                                     ],
-     [qw( > x x )                                       ],
-     [qw( > x x x )                                     ],
-     [qw( <= x x )                                      ],
-     [qw( <= x x x )                                    ],
-     [qw( >= x x )                                      ],
-     [qw( >= x x x )                                    ],
-     [qw( zero? z )                                     ],
-     [qw( positive? x )                                 ],
-     [qw( negative? x )                                 ],
-     [qw( odd? n )                                      ],
-     [qw( even? n )                                     ],
-     [qw( finite? x )                                   ],
-     [qw( infinite? x )                                 ],
-     [qw( nan? x )                                      ],
-     [qw( max x x )                                     ],
-     [qw( max x x x )                                   ],
-     [qw( min x x )                                     ],
-     [qw( min x x x )                                   ],
-     [qw( + )                                           ],
-     [qw( + z )                                         ],
-     [qw( + z z )                                       ],
-     [qw( + z z z )                                     ],
-     [qw( * )                                           ],
-     [qw( * z )                                         ],
-     [qw( * z z )                                       ],
-     [qw( * z z z )                                     ],
-     [qw( - z )                                         ],
-     [qw( - z z )                                       ],
-     [qw( - z z z )                                     ],
-     [qw( / z )                                         ],
-     [qw( / z z )                                       ],
-     [qw( / z z z )                                     ],
-     [qw( abs x )                                       ],
-#     [qw( div-and-mod x x )                             ],
-     [qw( div x x )                                     ],
-     [qw( mod x x )                                     ],
-#     [qw( div0-and-mod0 x x )                           ],
-     [qw( div0 x x )                                    ],
-     [qw( mod0 x x )                                    ],
-     [qw( gcd )                                         ],
-     [qw( gcd n )                                       ],
-     [qw( gcd n n )                                     ],
-     [qw( gcd n n n )                                   ],
-     [qw( lcm )                                         ],
-     [qw( lcm n )                                       ],
-     [qw( lcm n n )                                     ],
-     [qw( lcm n n n )                                   ],
-     [qw( numerator q )                                 ],
-     [qw( denominator q )                               ],
-     [qw( floor x )                                     ],
-     [qw( ceiling x )                                   ],
-     [qw( truncate x )                                  ],
-     [qw( round x )                                     ],
-#     [qw( rationalize x x )                             ],
-     [qw( exp z )                                       ],
-     [qw( log z )                                       ],
-     [qw( log z z )                                     ],
-     [qw( sin z )                                       ],
-     [qw( cos z )                                       ],
-     [qw( tan z )                                       ],
-     [qw( asin z )                                      ],
-     [qw( acos z )                                      ],
-     [qw( atan z )                                      ],
-     [qw( atan x x )                                    ],
-     [qw( sqrt z )                                      ],
-#     [qw( exact-integer-sqrt k )                        ],
-     [qw( expt z zsmall )                               ],
-     [qw( make-rectangular x x )                        ],
-     [qw( make-polar x x )                              ],
-     [qw( real-part z )                                 ],
-     [qw( imag-part z )                                 ],
-     [qw( magnitude z )                                 ],
-     [qw( angle z )                                     ],
-     [qw( number->string z )                            ],
-     [qw( number->string z radix )                      ],
-     [qw( number->string z radix ksmall )               ],
+#      [qw( number? o )                                   ],
+#      [qw( complex? o )                                  ],
+#      [qw( real? o )                                     ],
+#      [qw( rational? o )                                 ],
+#      [qw( integer? o )                                  ],
+#      [qw( real-valued? o )                              ],
+#      [qw( rational-valued? o )                          ],
+#      [qw( integer-valued? o )                           ],
+#      [qw( exact? z )                                    ],
+#      [qw( inexact? z )                                  ],
+#      [qw( = z z )                                       ],
+#      [qw( = z z z )                                     ],
+#      [qw( < x x )                                       ],
+#      [qw( < x x x )                                     ],
+#      [qw( > x x )                                       ],
+#      [qw( > x x x )                                     ],
+#      [qw( <= x x )                                      ],
+#      [qw( <= x x x )                                    ],
+#      [qw( >= x x )                                      ],
+#      [qw( >= x x x )                                    ],
+#      [qw( zero? z )                                     ],
+#      [qw( positive? x )                                 ],
+#      [qw( negative? x )                                 ],
+#      [qw( odd? n )                                      ],
+#      [qw( even? n )                                     ],
+#      [qw( finite? x )                                   ],
+#      [qw( infinite? x )                                 ],
+#      [qw( nan? x )                                      ],
+#      [qw( max x x )                                     ],
+#      [qw( max x x x )                                   ],
+#      [qw( min x x )                                     ],
+#      [qw( min x x x )                                   ],
+#      [qw( + )                                           ],
+#      [qw( + z )                                         ],
+#      [qw( + z z )                                       ],
+#      [qw( + z z z )                                     ],
+#      [qw( * )                                           ],
+#      [qw( * z )                                         ],
+#      [qw( * z z )                                       ],
+#      [qw( * z z z )                                     ],
+#      [qw( - z )                                         ],
+#      [qw( - z z )                                       ],
+#      [qw( - z z z )                                     ],
+#      [qw( / z )                                         ],
+#      [qw( / z z )                                       ],
+#      [qw( / z z z )                                     ],
+#      [qw( abs x )                                       ],
+#      [qw( div-and-mod x x )                             ],
+#      [qw( div x x )                                     ],
+#      [qw( mod x x )                                     ],
+      [qw( div0-and-mod0 x x )                           ],
+      [qw( div0 x x )                                    ],
+      [qw( mod0 x x )                                    ],
+#      [qw( gcd )                                         ],
+#      [qw( gcd n )                                       ],
+#      [qw( gcd n n )                                     ],
+#      [qw( gcd n n n )                                   ],
+#      [qw( lcm )                                         ],
+#      [qw( lcm n )                                       ],
+#      [qw( lcm n n )                                     ],
+#      [qw( lcm n n n )                                   ],
+#      [qw( numerator q )                                 ],
+#      [qw( denominator q )                               ],
+#      [qw( floor x )                                     ],
+#      [qw( ceiling x )                                   ],
+#      [qw( truncate x )                                  ],
+#      [qw( round x )                                     ],
+#      [qw( rationalize xsmall xsmall )                   ],
+#      [qw( exp z )                                       ],
+#      [qw( log z )                                       ],
+#      [qw( log z z )                                     ],
+#      [qw( sin z )                                       ],
+#      [qw( cos z )                                       ],
+#      [qw( tan z )                                       ],
+#      [qw( asin z )                                      ],
+#      [qw( acos z )                                      ],
+#      [qw( atan z )                                      ],
+#      [qw( atan x x )                                    ],
+#      [qw( sqrt z )                                      ],
+#      [qw( exact-integer-sqrt k )                        ],
+#      [qw( expt z zsmall )                               ],
+#      [qw( make-rectangular x x )                        ],
+#      [qw( make-polar x x )                              ],
+#      [qw( real-part z )                                 ],
+#      [qw( imag-part z )                                 ],
+#      [qw( magnitude z )                                 ],
+#      [qw( angle z )                                     ],
+#      [qw( number->string z )                            ],
+#      [qw( number->string z radix )                      ],
+#      [qw( number->string z radix ksmall )               ],
     );
 my %DATA =
     (
@@ -110,7 +110,7 @@ my %DATA =
      zsmall => [qw( 1+2i -2/3+0.i 'xsmall )],
      zlarge => [qw( 'xlarge )],
      xsmall => [qw( 'qsmall )],
-     xlarge => [qw(  +nan.0 +inf.0 -inf.0 'qlarge )],
+     xlarge => [qw( +nan.0 +inf.0 -inf.0 'qlarge )],
      qsmall => [qw( -0.1 5/2 'nsmall )],
      qlarge => [qw( 'nlarge )],
      nsmall => [qw( -3 -1 0.0 'ksmall )],
@@ -137,38 +137,65 @@ for my $code (sort(keys(%DATA))) {
 }
 
 sub prolog_scheme {
-    print(qq{(import (rnrs base)\n});
-    print(qq{        (rnrs io ports)\n});
-    print(qq{        (rnrs io simple)\n});
-    print(qq{        (rnrs exceptions))\n});
-    print(qq{(define (outs s) (put-string (current-output-port) s))\n});
-    print(qq{(define (outd d) (put-datum (current-output-port) d))\n});
-    print(qq{(define (flush) (flush-output-port (current-output-port)))\n});
-    for (@{$DATA{'o'}}, @{$DATA{'radix'}}) {
-        (my $n=$_)=~tr/#/_/;
-        print(qq/    (define-syntax C$n (identifier-syntax $_))\n/);
+    print(<<'END');
+#!r6rs
+(import (rnrs base)
+        (rnrs io ports)
+        (rnrs exceptions))
+(define-syntax test
+  (syntax-rules ()
+    ((_ label body)
+     (begin
+       (put-string (current-output-port) label)
+       (flush-output-port (current-output-port))
+       (call-with-values
+           (lambda ()
+             (guard (e (1 e))
+               body))
+         (lambda (result . more)
+           (put-datum (current-output-port) result)
+           (for-each
+             (lambda (v)
+               (put-string (current-output-port) ",")
+               (put-datum (current-output-port) v))
+             more)
+           (put-string (current-output-port) "\n")
+           (flush-output-port (current-output-port))))))))
+END
+    my %seen;
+    for my $array (values(%DATA)) {
+        for (@$array) {
+            next if $seen{$_}++;
+            (my $n=$_)=~tr/#/_/;
+            print(qq/(define C$n $_)\n/);
+        }
     }
 }
 
 sub gen_scheme {
     my ($fn, @args) = (@_);
-    print(qq{(outs "(@_) ")(flush)});
-    print(qq{(outd (guard (e (#t e)) (});
+    print(qq/(test "(@_) " (/);
     print(join(" ", $fn, map { (my $n=$_)=~tr/#/_/; "C$n" } @args));
-    print(qq{)))(newline)\n});
+    print(qq/))\n/);
 }
 
 sub prolog_js {
-    print(qq(load("schemeNumber.js");\n));
-    print(qq(var sn = SchemeNumber.fn;\n));
-    print(qq(var isNumber = sn["number?"];\n));
-    print(qq(var numberToString = sn["number->string"];\n));
-    print(qq/var nums = {\n/);
+    print(<<'END');
+load("../biginteger.js");
+load("../schemeNumber.js");
+var sf = SchemeNumber.fn;
+var isNumber = sf["number?"];
+var ns = sf["number->string"];
+var nums = {
+END
     for my $num (@{$DATA{'o'}}) {
-        print(qq/    "$num":sn["string->number"]("$num"),\n/);
+        print(qq/    "$num":sf["string->number"]("$num"),\n/);
     }
-    print(qq/};\n/);
-    print(<<END);
+    print(<<'END');
+};
+function myNs(a) {
+    return ns(a);  // Omit extra arguments.
+}
 function test(fname, a, b, c) {
     var line = "(" + fname;
     var len = arguments.length;
@@ -182,15 +209,16 @@ function test(fname, a, b, c) {
     var x;
     try {
         switch(len) {
-        case 1: x = sn[fname]();        break;
-        case 2: x = sn[fname](a);       break;
-        case 3: x = sn[fname](a, b);    break;
-        case 4: x = sn[fname](a, b, c); break;
+        case 1: x = sf[fname]();        break;
+        case 2: x = sf[fname](a);       break;
+        case 3: x = sf[fname](a, b);    break;
+        case 4: x = sf[fname](a, b, c); break;
         default: x = "Error - unhandled case " + len + " arguments";
         }
-        if (x === true) line += "#t";
+        if (isNumber(x)) line += ns(x);
+        else if (x === true) line += "#t";
         else if (x === false) line += "#f";
-        else if (isNumber(x)) line += numberToString(x);
+        else if (x instanceof Array) line += x.map(myNs).join(",");
         else line += '"' + x + '"';
     }
     catch(e) {
@@ -199,8 +227,6 @@ function test(fname, a, b, c) {
     print(line);
 }
 END
-    print(qq(var parse = sn["string->number"];\n));
-    print(qq(var line = "";\n));
 }
 
 sub gen_js {

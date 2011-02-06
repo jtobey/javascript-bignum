@@ -1,15 +1,13 @@
 TODO:
 
-* Add missing functions: div0-and-mod0, div0, mod0, rationalize.
-
 * Support explicit mantissa width
   (http://www.mail-archive.com/r6rs-discuss@lists.r6rs.org/msg01764.html).
 
 * Add hooks to support correct exception semantics.
 
-* Provide the option not to tamper with Number.prototype.
+* Prefix new Number.prototype methods with "sn_" or similar.
 
-* Automate the test suite (test/gen-test.pl).
+* Provide the option not to tamper with Number.prototype.
 
 * Announce on comp.lang.scheme.
 
