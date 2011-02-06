@@ -4,12 +4,12 @@ TODO:
 
 * Prefix new Number.prototype methods with "sn_" or similar.
 
-* Provide the option not to tamper with Number.prototype.
-
 * Announce on comp.lang.scheme.
 
 * ECMA Number.prototype methods: toLocaleString, toFixed,
   toExponential, toPrecision.  Implement for exact numbers.
+
+* Consider providing the option not to tamper with Number.prototype.
 
 * BigInteger: Consider having pow() reject non-integer arguments.
 
