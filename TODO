@@ -1,8 +1,5 @@
 TODO:
 
-* number->string: Decimal: Trim unneeded digits and support explicit
-  precision.
-
 * Add hooks to support correct exception semantics.
 
 * Prefix new Number.prototype methods with "sn_" or similar.

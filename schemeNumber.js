@@ -868,19 +868,22 @@ DISP.Flonum.debug = function() {
     return "Flonum(" + this.numberToString() + ")";
 };
 
+// Return a string of "0" and "1" characters, possibly including a "."
+// and possibly a leading "-", that in base 2 equals x.  This works by
+// calling Number.prototype.toString with a radix of 2.  Specification
+// ECMA-262 Edition 5 (December 2009) does not strongly assert that
+// this works.  As an alternative, should this prove non-portable
+// (i.e., if it doesn't work in IE), nativeDenominator could do:
+// for (d = 1; x !== floor(x); d *= 2) { x *= 2; } return d;
+function numberToBinary(x) {
+    return x.toString(2);
+}
+
 function nativeDenominator(x) {
     // Get the "denominator" of a floating point value.
     // The result will be a power of 2.
-    // This works by calling Number.prototype.toString with a radix of 2
-    // and assuming the result will be a sequence of "0" and "1" characters,
-    // possibly including a "." and possibly a leading "-".
-    // Specification ECMA-262 Edition 5 (December 2009) does not strongly
-    // support this assumption.  As an alternative, should this assumption
-    // prove non-portable (i.e., if it doesn't work in IE), we could try
-    // for (var d = 1; x !== floor(x); d *= 2) { x *= 2; } return d;
-
     //assert(isFinite(x));
-    var s = x.toString(2);
+    var s = numberToBinary(x);
     var i = s.indexOf(".");
     if (i === -1)
         return 1;
@@ -904,7 +907,6 @@ function nativeToRationalString(q, radix) {
 }
 
 DISP.Flonum.numberToString = function(radix, precision) {
-    // XXX Handle precision?
     if (radix && radix != 10 && isFinite(this))
         return "#i" + nativeToRationalString(this, radix);
 
@@ -914,19 +916,32 @@ DISP.Flonum.numberToString = function(radix, precision) {
         return (this > 0 ? "+inf.0" : "-inf.0");
     }
 
-    // XXX ECMAScript starts substituting zeroes for final digits before
-    // it goes to exponential notation (11111111111111111111 .toString()
-    // is "11111111111111110000") and I am not sure this is allowed in
-    // Scheme.
     var s = this.toString();
 
     if (s.indexOf('.') === -1) {
         // Force the result to contain a decimal point as per R6RS.
         var e = s.indexOf('e');
         if (e === -1)
-            return s + ".0"; // Could use "." but ".0" diffs better for testing.
-        return s.substring(0, e) + "." + s.substring(e);
+            s += ".";
+        else
+            s = s.substring(0, e) + "." + s.substring(e);
     }
+
+    if (precision != undefined) {
+        var p = toInteger(precision);
+        if (!p.isExact() || !p.isPositive())
+            throw new RangeError("Precision is not an exact positive integer: "
+                                 + p.numberToString());
+        p = p.numberToString();
+        if (p < 53) {
+            var bits = numberToBinary(this).replace(/[-+.]/g, "")
+                .replace(/^0+/, "").length;
+            if (p < bits)
+                p = bits;
+        }
+        s += "|" + p;
+    }
+
     return s;
 };
 
