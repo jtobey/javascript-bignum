@@ -17,10 +17,7 @@ if (!BigInteger) {
         throw new Error("BigInteger is not defined.");
 }
 
-var SchemeNumber = (function(SN_IS_NUMBER) {
-
-if (SN_IS_NUMBER === undefined)
-    SN_IS_NUMBER = true;  // Modify Number.prototype by default.
+var SchemeNumber = (function() {
 
 var call     = Function.prototype.call;
 var apply    = Function.prototype.apply;
@@ -57,21 +54,21 @@ function pureVirtual() {
 
 /* Internal class hierarchy:
 
-   SN  <----  C  <----  Rectangular
-                   |
-                   `--  R  <----  Flonum[1]
-                             |
-                             `--  ER  <---  EQ  <----  EQFraction
-                                                  |
-                                                  `--  EI  <----  EINative
-                                                             |
-                                                             `--  EIBig
+   Number  <----  C  <----  Rectangular
+                       |
+                       `--  R  <----  Flonum[1]
+                                 |
+                                 `--  ER  <---  EQ  <----  EQFraction
+                                                      |
+                                                      `--  EI  <----  EINative
+                                                                 |
+                                                                 `--  EIBig
 
-   [1] The Flonum class actually equals SN for reasons of efficiency
-   and interoperability with native numbers.  Logically, Flonum should
-   be a direct subclass of R.  Code at the bottom of this file
-   populates missing slots in Flonum.prototype as if that were the
-   case.
+   [1] The Flonum class actually equals Number for reasons of
+   efficiency and interoperability with native numbers.  Logically,
+   Flonum should be a direct subclass of R.  Code at the bottom of
+   this file populates missing slots in Flonum.prototype as if that
+   were the case.
 
    The concrete classes are:
 
@@ -93,12 +90,9 @@ function pureVirtual() {
    R <-- BigFloat - inexact real of non-standard precision.
  */
 
+// These variables are abstracted in case we implement a version not
+// based on Number.prototype.
 
-// Abstract over whether the user lets us add to the standard
-// Number.prototype.  XXX This doesn't work yet, you have to let me
-// add methods to Number.prototype.
-
-var SN;            // private alias for the public SchemeNumber constructor.
 var toSN;          // returns its argument if already an SN, else converts it.
 var toFlonum;      // converts its argument to number and returns inexact real.
 var isNumber;      // returns true if its argument is a Scheme number.
@@ -106,105 +100,23 @@ var INEXACT_ZERO;  // Flonum zero.
 var floPow;        // Math.pow, with result converted to Flonum.
 var floLog;        // Math.log, with result converted to Flonum.
 
-if (SN_IS_NUMBER) {
+toSN = function(obj) {
+    if (obj instanceof C || typeof obj === "number")
+        return obj;
+    return parseNumber(String(obj));
+};
 
-    SN = Number;
+isNumber = function(x) {
+    return x instanceof C || typeof x === "number";
+};
 
-    toSN = function(obj) {
-        if (obj instanceof SN || typeof obj === "number")
-            return obj;
-        //if (obj && obj.toSchemeNumber)
-        //    return obj.toSchemeNumber();
-        return parseNumber(String(obj));
-    };
-    //String.prototype.toSchemeNumber = function() {
-    //    return parseNumber(this);
-    //};
+toFlonum = Number;
+INEXACT_ZERO = 0;
+floPow = pow;
+floLog = log;
 
-    isNumber = function(x) {
-        return x instanceof SN || typeof x === "number";
-    };
 
-    toFlonum = Number;
-
-    INEXACT_ZERO = 0;
-
-    floPow = pow;
-    floLog = log;
-}
-else {
-
-    function wrapUnderscoreMethod(f) {
-        switch (f.length) {
-        case 0: return function() {
-                return call.call(f, this._);
-            };
-        case 1: return function(a) {
-                return call.call(f, this._, a);
-            };
-        case 2: return function(a, b) {
-                return call.call(f, this._, a, b);
-            };
-        default: return function() {
-                var len = arguments.length;
-                var args = Array(len);
-                while (len--)
-                    args[len] = arguments[len];
-                return apply.call(f, this._, args);
-            };
-        }
-    }
-
-    // Make SN imitate the standard Number object for most purposes.
-
-    SN = function(x) {
-        if (arguments.length === 0)
-            x = 0;
-        if (!(this instanceof SN))
-            return Number(x);
-        this._ = Number(x);
-    };
-    SN.prototype = new Number();
-    SN.prototype.constructor = SN;
-    SN.prototype.valueOf = function() { return this._; };
-    ["toString", "toLocaleString", "toFixed", "toExponential", "toPrecision"]
-        .forEach(function(name) {
-                SN.prototype[name]
-                    = wrapUnderscoreMethod(Number.prototype[name]);
-            });
-    ["MAX_VALUE", "MIN_VALUE", "NaN", "NEGATIVE_INFINITY", "POSITIVE_INFINITY"]
-        .forEach(function(name) {
-                SN[name] = new SN(Number[name]);
-            });
-
-    toSN = function(obj) {
-        if (obj instanceof SN)
-            return obj;
-        if (typeof obj === "number")
-            return toFlonum(obj);
-        if (obj instanceof Number)
-            return toFlonum(Number(obj));
-        if (obj && obj.toSchemeNumber)
-            return obj.toSchemeNumber();
-        return parseNumber(obj);
-    };
-
-    isNumber = function(x) {
-        return x instanceof SN;
-    };
-
-    toFlonum = function(x) {
-        x = Number(x);
-        if (x === 0)
-            return INEXACT_ZERO;
-        return new SN(x);
-    };
-
-    INEXACT_ZERO = new SN(0);
-
-    floPow = function(x, y) { return toFlonum(pow(x, y)); };
-    floLog = function(x)    { return toFlonum(log(x)); };
-}
+var SN = {};     // Private alias for the public SchemeNumber object.
 
 function defaultRaise(conditionType, message, irritant) {
     var msg = "SchemeNumber: " + conditionType + ": " + message;
@@ -227,7 +139,7 @@ function raise() {
     defaultRaise.apply(this, args);
 }
 
-var Flonum = SN;
+var Flonum = Number;  // See comment about internal class hierarchy.
 
 var HIERARCHY = {
     C: ["Rectangular", "R"],
@@ -570,20 +482,16 @@ SN.fn = {
     inexact : function(z) {
         if (typeof z === "number")
             return toFlonum(z);
-        if (z instanceof SN)
+        if (isNumber(z))
             return z.toInexact();
-        if (z instanceof Number)
-            return toFlonum(Number(z));
         return parseNumber(z, false);
     },
 
     exact : function(z) {
         if (typeof z === "number")
             return nativeToExact(z);
-        if (z instanceof SN)
+        if (isNumber(z))
             return z.toExact();
-        if (z instanceof Number)
-            return nativeToExact(Number(z));
         return parseNumber(z, true);
     },
 
@@ -904,11 +812,10 @@ function rationalize(x, delta) {
 }
 
 //
-// Flonum: Inexact real as a native number, wrapped if configured with
-// SchemeNumber_is_Number=false.
+// Flonum: Inexact real as a native number.
 //
 
-DISP.Flonum.toJSValue = SN.prototype.valueOf;
+DISP.Flonum.toJSValue = Number.prototype.valueOf;
 
 DISP.Flonum.isExact    = retFalse;
 DISP.Flonum.isInexact  = retTrue;
@@ -1220,7 +1127,7 @@ var PI           = SN.PI;
 
 function C() {}
 
-C.prototype = new SN();
+C.prototype = new Flonum();  // See comment about internal class hierarchy.
 
 DISP.C.isReal     = retFalse;
 DISP.C.isRational = retFalse;
@@ -2730,17 +2637,11 @@ modifyString = function(string) {
     .forEach(doClass);
 };
 
-SN._ = {};
-SN._.modifyString = modifyString;
+SN._ = {modifyString: modifyString};
 
 return SN;
 
-// Set this.SchemeNumber_is_Number = false if you do *not* want this
-// library to add methods to Number.prototype and create
-// String.prototype.toSchemeNumber.
-// XXX This doesn't work yet, you must leave this.SchemeNumber_is_Number
-// undefined or set it true.
-})(this.SchemeNumber_is_Number);
+})();
 
 if (typeof exports !== "undefined") {
     exports._ = SchemeNumber._;

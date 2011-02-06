@@ -2,9 +2,7 @@ TODO:
 
 * Prefix new Number.prototype methods with "SN_" or similar.
 
-* Reconsider the utility of (x instanceof SchemeNumber) versus the
-  pain of sharing a namespace with Number; consider renaming
-  SchemeNumber.fn, since it is also Number.fn.
+* Rerun the test suite.
 
 * Announce on comp.lang.scheme.
 
