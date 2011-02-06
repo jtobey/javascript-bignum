@@ -27,8 +27,9 @@ Scheme specification, Section 11.7, along with "eqv?" from Section
 
 Known deviations:
 
-  * We have not implemented the R6RS condition system or ensured that
-    the numeric functions raise the specified condition types.
+  * In the JavaScript tradition, most functions ignore extra
+    arguments.  R6RS Section 6.2 requires an &assertion exception in
+    these cases.
 
 Arcane features such as explicit mantissa widths or complex
 transcendental functions, while believed complete, are unoptimized.
@@ -52,8 +53,6 @@ denominator) in lowest terms.
 
 Non-real complex numbers are represented in rectangular coordinates,
 either both exact or both inexact.
-
-In the JavaScript tradition, most functions ignore extra arguments.
 
 
 INSTALLATION
@@ -116,6 +115,21 @@ Functions specified to return two values (div-and-mod and
 exact-integer-sqrt) return a two-element array as per JavaScript
 conventions.
 
+When a function encounters a situation where the specification
+requires it to raise an exception with a certain condition type, it
+calls the function SchemeNumber.raise with two or more arguments:
+
+  * the condition type, as a string, e.g., "&assertion"
+
+  * an error message
+
+  * zero or more irritants (erroneous data).
+
+The default SchemeNumber.raise function simply throws an Error.
+Programs may assign a custom function to SchemeNumber.raise.  Such a
+function must never return to its caller; it must abort the
+computation, such as by executing a throw statement.
+
 
 CAVEATS
 
@@ -134,8 +148,8 @@ as Scheme would, use SchemeNumber.fn["number->string"].
 
 To test a Scheme number for equality with another Scheme number or a
 native value, use SchemeNumber.fn["="].  Likewise for ">" etc.  Refer
-to R6RS [1] for the full list of functions, and note the unimplemented
-list above.
+to R6RS [1] for the full list of functions, and note the deviations
+listed above.
 
 John Tobey
 February 6, 2011

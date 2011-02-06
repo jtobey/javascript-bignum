@@ -1,10 +1,6 @@
 TODO:
 
-* sf["number->string"](Number.MIN_VALUE,16) loops.
-
-* Add hooks to support correct exception semantics.
-
-* Prefix new Number.prototype methods with "sn_" or similar.
+* Prefix new Number.prototype methods with "SN_" or similar.
 
 * Reconsider the utility of (x instanceof SchemeNumber) versus the
   pain of sharing a namespace with Number; consider renaming

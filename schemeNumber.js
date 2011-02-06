@@ -46,10 +46,10 @@ function retZero()    { return ZERO; }
 function retOne()     { return ONE; }
 
 function divisionByExactZero() {
-    throw new RangeError("Division by exact zero");
+    raise("&assertion", "division by exact zero");
 }
 function unimpl() {
-    throw new Error("Unimplemented");
+    throw new Error("BUG: unimplemented");
 }
 function pureVirtual() {
     throw new Error("BUG: Pure virtual function not overridden");
@@ -204,6 +204,27 @@ else {
 
     floPow = function(x, y) { return toFlonum(pow(x, y)); };
     floLog = function(x)    { return toFlonum(log(x)); };
+}
+
+function defaultRaise(conditionType, message, irritant) {
+    var msg = "SchemeNumber: " + conditionType + ": " + message;
+    if (arguments.length > 2)
+        msg += ": " + irritant;
+    throw new Error(msg);
+}
+SN.raise = defaultRaise;
+
+function raise() {
+    var len = arguments.length;
+    var args = new Array(len);
+    while (len--)
+        args[len] = arguments[len];
+
+    // Call the exception hook.
+    SN.raise.apply(this, args);
+
+    // Oops, it returned.  Fall back to our known good raiser.
+    defaultRaise.apply(this, args);
 }
 
 var Flonum = SN;
@@ -455,7 +476,7 @@ function stringToNumber(s, radix, exact) {
         if (e === PARSE_ERROR)
             return false;
         if (s == undefined)
-            throw new TypeError("Missing argument");
+            raise("&assertion", "missing argument");
         throw e;
     }
 }
@@ -463,7 +484,7 @@ function stringToNumber(s, radix, exact) {
 function parseNumber(s, exact, radix) {
     var ret = stringToNumber(s, radix, exact);
     if (ret === false)
-        throw new SyntaxError("Not a number: " + s);
+        raise("&assertion", "not a number", s);
     return ret;
 }
 
@@ -480,14 +501,26 @@ function makePolar(r, theta) {
 function toReal(x) {
     x = toSN(x);
     if (!x.isReal())
-        throw new TypeError("Not a real number: " + x);
+        raise("&assertion", "not a real number", x);
     return x;
 }
 
 function toInteger(n) {
     n = toSN(n);
     if (!n.isInteger())
-        throw new TypeError("Not an integer: " + n);
+        raise("&assertion", "not an integer", n);
+    return n;
+}
+
+function assertRational(q) {
+    if (!q.isRational())
+        raise("&assertion", "not a rational number", q);
+    return q;
+}
+
+function assertNonNegative(n) {
+    if (n.isNegative())
+        raise("&assertion", "negative number", n);
     return n;
 }
 
@@ -621,12 +654,12 @@ SN.fn = {
     },
 
     abs             : makeUnary("abs"),
-    "div-and-mod"   : makeBinary("divAndMod"),
-    div             : makeBinary("div"),
-    mod             : makeBinary("mod"),
-    "div0-and-mod0" : function(x, y) { return div0AndOrMod0(x, y, 2); },
-    div0            : function(x, y) { return div0AndOrMod0(x, y, 0); },
-    mod0            : function(x, y) { return div0AndOrMod0(x, y, 1); },
+    "div-and-mod"   : function(x, y) { return doDivMod(x, y, false, 2); },
+    div             : function(x, y) { return doDivMod(x, y, false, 0); },
+    mod             : function(x, y) { return doDivMod(x, y, false, 1); },
+    "div0-and-mod0" : function(x, y) { return doDivMod(x, y, true, 2); },
+    div0            : function(x, y) { return doDivMod(x, y, true, 0); },
+    mod0            : function(x, y) { return doDivMod(x, y, true, 1); },
 
     gcd : function() {
         var ret = ZERO;
@@ -681,8 +714,8 @@ SN.fn = {
         switch (arguments.length) {
         case 1: return toSN(y).atan();
         case 2: return toSN(y).atan2(x);
-        default: throw new TypeError("atan expects 1 to 2 arguments, given "
-                                     + arguments.length);
+        default: raise("&assertion", "atan expects 1 to 2 arguments, given "
+                       + arguments.length);
         }
     },
 
@@ -750,7 +783,7 @@ function makeMaxMin(cmp) {
     return function(a) {
         var len = arguments.length;
         if (len === 0)
-            throw new TypeError("max/min needs at least one argument");
+            raise("&assertion", "max/min needs at least one argument");
 
         var ret = toReal(a);
         var exact = ret.isExact();
@@ -772,9 +805,27 @@ function makeMaxMin(cmp) {
     };
 }
 
-function div0AndOrMod0(x, y, which) {
+function divModArg2Zero(arg) {
+    raise("&assertion", "div/mod second argument is zero", arg);
+}
+
+function doDivMod(x, y, is0, which) {
     x = toReal(x);
     y = toReal(y);
+
+    if (!x.isFinite())
+        raise("&assertion", "div/mod first argument is not finite", x);
+    if (y.isZero())
+        divModArg2Zero(y);
+
+    if (!is0) {
+        switch (which) {
+        case 0: return x.div(y);
+        case 1: return x.mod(y);
+        case 2: default: return x.divAndMod(y);
+        }
+    }
+
     var dm = x.divAndMod(y);
     var m = dm[1];
     var yabs = y.abs();
@@ -925,8 +976,9 @@ DISP.Flonum.numberToString = function(radix, precision) {
     if (precision != undefined) {
         var p = toInteger(precision);
         if (!p.isExact() || !p.isPositive())
-            throw new RangeError("Precision is not an exact positive integer: "
-                                 + p.numberToString());
+            raise("&assertion",
+                  "precision is not an exact positive integer", p);
+
         p = p.numberToString();
         if (p < 53) {
             var bits = numberToBinary(this).replace(/[-+.]/g, "")
@@ -947,15 +999,11 @@ DISP.Flonum.imagPart = function() {
 };
 
 DISP.Flonum.denominator = function() {
-    if (isFinite(this))
-        return nativeDenominator(this);
-    throw new TypeError("Not a rational number: " + this);
+    return nativeDenominator(assertRational(this));
 };
 
 DISP.Flonum.numerator = function() {
-    if (isFinite(this))
-        return this * nativeDenominator(this);
-    throw new TypeError("Not a rational number: " + this);
+    return this * nativeDenominator(assertRational(this));
 };
 
 DISP.Flonum.isInteger = function() {
@@ -1003,7 +1051,8 @@ function numberToEI(n) {
 
 function nativeToExact(x) {
     if (!isFinite(x))
-        throw new RangeError("No exact representation for " + x);
+        raise("&implementation-violation",
+              "inexact argument has no reasonably close exact equivalent", x);
 
     var d = nativeDenominator(x);
     var n;
@@ -1050,7 +1099,7 @@ function div_Flonum_R(x, y) {
     if (y < 0)
         return ceil(x / y);
     if (y == 0)
-        throw new RangeError("div/mod by zero");
+        divModArg2Zero(toFlonum(y));
     return NaN;
 }
 DISP.Flonum.divAndMod = function(x) {
@@ -1544,9 +1593,14 @@ DISP.Flonum._expt_Rectangular = function(z) {
 };
 
 // Mitigate the effects of inheriting from Flonum.
-for (var methodName in DISP.Flonum) {
-    if (methodName.indexOf("_Rectangular") !== -1 && !DISP.C[methodName])
-        DISP.C[methodName] = unimpl;
+for (var name in DISP.Flonum) {
+    (function(methodName) {
+        if (methodName.indexOf("_Rectangular") !== -1 && !DISP.C[methodName])
+            DISP.C[methodName] = function() {
+                throw new Error(methodName +
+                                " not implemented for number type");
+            };
+    })(name)
 }
 
 // Arithmetic where the left operand is Rectangular and the right is
@@ -2034,10 +2088,13 @@ function positiveIntegerExpt(b, p) {
     var result = pow(b, p);
     if (result > -9007199254740992 && result < 9007199254740992)
         return toEINative(result);
+
     if (b.log() * p > MAX_LOG)
-        throw new Error("expt: integer exceeds limit of " +
-                        (MAX_LOG / LN10) + " digits; adjust with " +
-                        "SchemeNumber.setMaxIntegerDigits(...)");
+        raise("&implementation-restriction",
+              "exact integer would exceed limit of " +
+              (MAX_LOG / LN10) + " digits; adjust with " +
+              "SchemeNumber.setMaxIntegerDigits(...)");
+
     return new EIBig(b._toBigInteger().pow(p));
 }
 
@@ -2312,7 +2369,7 @@ DISP.EINative.reciprocal = function() {
 
 function divAndMod_EINative(t, x, which) {
     if (x === 0)
-        throw divisionByExactZero();
+        divisionByExactZero();
 
     var div = (x > 0 ? floor(t / x) : ceil(t / x));
     if (which === 0)
@@ -2395,9 +2452,7 @@ DISP.EINative._exp10 = function(n) {
 };
 
 DISP.EINative.exactIntegerSqrt = function() {
-    if (this._ < 0)
-        throw new RangeError("exactIntegerSqrt requires a positive argument");
-    var n = floor(sqrt(this._));
+    var n = floor(sqrt(assertNonNegative(this)._));
     return [toEINative(n), toEINative(this._ - n * n)];
 };
 
@@ -2492,8 +2547,6 @@ DISP.EIBig.exactIntegerSqrt = function() {
     // I know of no use cases for this.  Be stupid.  Be correct.
 
     //assert(this._.compareAbs(FIRST_BIG_INTEGER) >= 0);
-    if (this._.isNegative())
-        throw new RangeError("exact-integer-sqrt requires a positive argument");
 
     function doit(n, a) {
         while (true) {
@@ -2517,7 +2570,7 @@ DISP.EIBig.exactIntegerSqrt = function() {
         }
     }
 
-    var l = this._.log() / 2 / LN10;
+    var l = assertNonNegative(this)._.log() / 2 / LN10;
     var a = BigInteger(pow(10, l - floor(l)).toString()
                        + "e" + floor(l));
     return doit(this._, a).map(reduceBigInteger);
