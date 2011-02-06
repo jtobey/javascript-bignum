@@ -24,6 +24,7 @@ if (SN_IS_NUMBER === undefined)
 
 var call     = Function.prototype.call;
 var apply    = Function.prototype.apply;
+var abs      = Math.abs;
 var floor    = Math.floor;
 var ceil     = Math.ceil;
 var round    = Math.round;
@@ -32,6 +33,8 @@ var sqrt     = Math.sqrt;
 var atan2    = Math.atan2;
 var log      = Math.log;
 var exp      = Math.exp;
+var LN2      = Math.LN2;
+var LN10     = Math.LN10;
 var isFinite = this.isFinite;
 var isNaN    = this.isNaN;
 
@@ -234,7 +237,6 @@ var radixComplex = /^(.*)([-+].*)i$/;
 
 var nanInfPattern = /^[-+](nan|inf)\.0$/;
 var exponentMarkerPattern = /[eEsSfFdDlL]/;
-var mantissaWidthPattern = /\|[0-9]+$/;
 var decimal10Pattern = /^([0-9]+\.?|[0-9]*\.[0-9]+)([eEsSfFdDlL][-+]?[0-9]+)?$/;
 
 var uintegerPattern = {
@@ -300,9 +302,28 @@ function stringToNumber(s, radix, exact) {
         if (radix !== 10)
             lose();
 
+        var pipe = s.indexOf('|');
+        if (pipe !== -1) {
+
+            // WHOA!!!  Explicit mantissa width!  Somebody really
+            // cares about correctness.  However, I haven't got all
+            // day, so execution speed loses.
+
+            var afterPipe = s.substring(pipe + 1);
+            if (!uintegerPattern[10].test(afterPipe))
+                lose();
+
+            s = s.substring(0, pipe);
+            var precision = parseInt(afterPipe);
+
+            if (precision === 0)
+                s = "0.0";
+            else if (precision < 53)
+                return parseWithWidth(s, precision, exact);
+        }
+
         // We have only one floating point width.
-        s = s.replace(mantissaWidthPattern, '')
-            .replace(exponentMarkerPattern, 'e');
+        s = s.replace(exponentMarkerPattern, 'e');
 
         var dot = s.indexOf('.');
         var e = s.indexOf('e');
@@ -369,6 +390,52 @@ function stringToNumber(s, radix, exact) {
         return makeRectangular(x, y);
     }
 
+    // Parse a real that had a |p attached.
+    // See the second half of R6RS Section 4.2.8 and also
+    // http://www.mail-archive.com/r6rs-discuss@lists.r6rs.org/msg01676.html.
+    function parseWithWidth(s, precision) {
+
+        // First, parse it as exact.
+        var x = stringToNumber(s, radix, true);
+        if (x === false || !x.isReal())
+            lose();
+
+        if (!x.isZero()) {
+            var xabs = x.abs();
+
+            var shift = precision - floor(xabs.log() / LN2) - 1;
+            var scale = positiveIntegerExpt(TWO, abs(shift));
+            if (shift < 0)
+                scale = scale.reciprocal();
+            var shifted = xabs.multiply(scale);
+
+            // Correct for log() imprecision.
+            var denom = positiveIntegerExpt(TWO, precision);
+            while (shifted.ge(denom)) {
+                shifted = shifted.divide(TWO);
+                scale = scale.divide(TWO);
+            }
+            for (var twiceShifted = shifted.add(shifted);
+                 twiceShifted.lt(denom);
+                 twiceShifted = shifted.add(shifted)) {
+                shifted = twiceShifted;
+                scale = scale.add(scale);
+            }
+
+            // 0.5 <= shifted/denom < 1.
+            var rounded = shifted.round().divide(scale);
+            if (x.isNegative())
+                rounded = rounded.negate();
+            x = rounded;
+        }
+
+        // Then make it inexact unless there is #e.
+        if (!exact)
+            x = x.toInexact();
+
+        return x;
+    }
+
     radix = radix || 10;
     try {
         while (s[i] === "#") {
@@ -425,13 +492,13 @@ function toInteger(n) {
 }
 
 // Configurable maximum integer magnitude.
-var MAX_LOG = 1e8 * Math.LN10;  // 100 million digits.
+var MAX_LOG = 1e8 * LN10;  // 100 million digits.
 
 SN.getMaxIntegerDigits = function() {
-    return MAX_LOG / Math.LN10;
+    return MAX_LOG / LN10;
 };
 SN.setMaxIntegerDigits = function(max) {
-    MAX_LOG = max * Math.LN10;
+    MAX_LOG = max * LN10;
 };
 
 //
@@ -1816,6 +1883,10 @@ DISP.EQFraction.sqrt = function() {
     return this._n.sqrt().divide(this._d.sqrt());
 };
 
+DISP.EQFraction.log = function() {
+    return this._n.log().subtract(this._d.log());
+};
+
 //
 // EI: Exact integer abstract base class.
 //
@@ -1942,7 +2013,7 @@ function positiveIntegerExpt(b, p) {
         return toEINative(result);
     if (b.log() * p > MAX_LOG)
         throw new Error("expt: integer exceeds limit of " +
-                        (MAX_LOG / Math.LN10) + " digits; adjust with " +
+                        (MAX_LOG / LN10) + " digits; adjust with " +
                         "SchemeNumber.setMaxIntegerDigits(...)");
     return new EIBig(b._toBigInteger().pow(p));
 }
@@ -2206,9 +2277,9 @@ DISP.EINative.square = function() {
 DISP.EINative.reciprocal = function() {
     var x = this._;
     /*
-    if (x === 0)  // XXX Could remove this check, since ZERO overrides.
+    if (x === 0)  // Removed this check, since ZERO overrides.
         throw divisionByExactZero();
-    if (x === 1 || x === -1)  // Could remove this too, same reason.
+    if (x === 1 || x === -1)  // Removed this too, same reason.
         return this;
     */
     if (x < 0)
@@ -2399,7 +2470,7 @@ DISP.EIBig.exactIntegerSqrt = function() {
 
     //assert(this._.compareAbs(FIRST_BIG_INTEGER) >= 0);
     if (this._.isNegative())
-        throw new RangeError("exactIntegerSqrt requires a positive argument");
+        throw new RangeError("exact-integer-sqrt requires a positive argument");
 
     function doit(n, a) {
         while (true) {
@@ -2423,7 +2494,7 @@ DISP.EIBig.exactIntegerSqrt = function() {
         }
     }
 
-    var l = this._.log() / 2 / Math.LN10;
+    var l = this._.log() / 2 / LN10;
     var a = BigInteger(Math.pow(10, l - Math.floor(l)).toString()
                        + "e" + Math.floor(l));
     return doit(this._, a).map(reduceBigInteger);

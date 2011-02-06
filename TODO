@@ -1,7 +1,7 @@
 TODO:
 
-* Support explicit mantissa width
-  (http://www.mail-archive.com/r6rs-discuss@lists.r6rs.org/msg01764.html).
+* number->string: Decimal: Trim unneeded digits and support explicit
+  precision.
 
 * Add hooks to support correct exception semantics.
 

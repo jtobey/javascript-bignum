@@ -24,12 +24,13 @@ Infinity as in ECMAScript.
 This implementation provides all functions listed in the R6RS[1]
 Scheme specification, Section 11.7, along with "eqv?".
 
-Not yet implemented cases:
-* number->string ignores precision argument.
-* string->number ignores mantissa width.
+Known deviations:
 
-We have not implemented the R6RS condition system or ensured that the
-numeric functions raise the specified condition types.
+  * number->string ignores the precision argument and may include
+    excess digits.
+
+  * We have not implemented the R6RS condition system or ensured that
+    the numeric functions raise the specified condition types.
 
 The complex number support, while believed complete, is unoptimized.
 
