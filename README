@@ -144,8 +144,8 @@ willingness to add methods to Number.prototype but my unwillingness to
 replace the standard Number.prototype.toString.)  To serialize numbers
 as Scheme would, use SchemeNumber.fn["number->string"].
 
-    "" + sn(2);                            // 2
-    SchemeNumber.fn["number->string"](2);  // 2.0
+    "" + sn(2);                            // "2"
+    SchemeNumber.fn["number->string"](2);  // "2."
 
 To test a Scheme number for equality with another Scheme number or a
 native value, use SchemeNumber.fn["="].  Likewise for ">" etc.  Refer

@@ -1,9 +1,5 @@
 TODO:
 
-* Review all of schemeNumber.js.
-
-* Announce on comp.lang.scheme.
-
 * Test divAndMod_EINative corner cases.
 
 * Move documentation from README to its own file.  HTML?
