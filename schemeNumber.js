@@ -104,7 +104,7 @@ function toSN(obj) {
 };
 
 function isNumber(x) {
-    return x instanceof C || x instanceof Number || typeof x === "number";
+    return x instanceof Number || typeof x === "number";
 };
 
 toFlonum = Number;
@@ -955,6 +955,42 @@ DISP.Flonum.SN_isNaN = function() {
     return isNaN(this);
 };
 
+DISP.Flonum.SN_isEven = function() {
+    //assert(this == floor(this));
+    return (this & 1) === 0;
+};
+
+DISP.Flonum.SN_isOdd = function() {
+    //assert(this == floor(this));
+    return (this & 1) === 1;
+};
+
+DISP.Flonum.SN_eq = function(z) { return toSN(z).SN__eq_Flonum(this); };
+DISP.Flonum.SN_ne = function(z) { return toSN(z).SN__ne_Flonum(this); };
+DISP.Flonum.SN_gt = function(x) { return toReal(x).SN__gt_Flonum(this); };
+DISP.Flonum.SN_lt = function(x) { return toReal(x).SN__lt_Flonum(this); };
+DISP.Flonum.SN_ge = function(x) { return toReal(x).SN__ge_Flonum(this); };
+DISP.Flonum.SN_le = function(x) { return toReal(x).SN__le_Flonum(this); };
+
+DISP.Flonum.SN_compare = function(x) {
+    return toReal(x).SN__compare_Flonum(this);
+};
+
+// Note operand order!
+DISP.Flonum.SN__eq_R = function(x) { return +x == this; };
+DISP.Flonum.SN__ne_R = function(x) { return +x != this; };
+DISP.Flonum.SN__gt_R = function(x) { return x > this; };
+DISP.Flonum.SN__lt_R = function(x) { return x < this; };
+DISP.Flonum.SN__ge_R = function(x) { return x >= this; };
+DISP.Flonum.SN__le_R = function(x) { return x <= this; };
+
+DISP.Flonum.SN__compare_R = function(x) {
+    if (+x == this) return 0;
+    if (x < this) return -1;
+    if (x > this) return 1;
+    return NaN;
+};
+
 function numberToEI(n) {
     if (n < 9007199254740992 && n > -9007199254740992)
         return toEINative(n);
@@ -993,6 +1029,32 @@ DISP.Flonum.SN_toExact = function() {
 
 DISP.Flonum.SN_toInexact = retThis;
 
+DISP.Flonum.SN_add = function(z) {
+    return toSN(z).SN__add_Flonum(this);
+};
+DISP.Flonum.SN_subtract = function(z) {
+    return toSN(z).SN__subtract_Flonum(this);
+};
+DISP.Flonum.SN_multiply = function(z) {
+    return toSN(z).SN__multiply_Flonum(this);
+};
+DISP.Flonum.SN_divide = function(z) {
+    return toSN(z).SN__divide_Flonum(this);
+};
+
+DISP.Flonum.SN__add_R = function(x) {
+    return x + this;
+};
+DISP.Flonum.SN__subtract_R = function(x) {
+    return x - this;
+};
+DISP.Flonum.SN__multiply_R = function(x) {
+    return x * this;
+};
+DISP.Flonum.SN__divide_R = function(x) {
+    return x / this;
+};
+
 DISP.Flonum.SN_negate = function() {
     return -this;
 };
@@ -1028,33 +1090,6 @@ DISP.Flonum.SN_mod = function(x) {
 
 DISP.Flonum.SN_square = function() {
     return this * this;
-};
-
-DISP.Flonum.SN_eq = function(z) { return toSN(z).SN__eq_Flonum(this); };
-DISP.Flonum.SN_ne = function(z) { return toSN(z).SN__ne_Flonum(this); };
-DISP.Flonum.SN_gt = function(x) { return toReal(x).SN__gt_Flonum(this); };
-DISP.Flonum.SN_lt = function(x) { return toReal(x).SN__lt_Flonum(this); };
-DISP.Flonum.SN_ge = function(x) { return toReal(x).SN__ge_Flonum(this); };
-DISP.Flonum.SN_le = function(x) { return toReal(x).SN__le_Flonum(this); };
-
-// Note operand order!
-DISP.Flonum.SN__gt_R = function(x) { return x > this; };
-DISP.Flonum.SN__lt_R = function(x) { return x < this; };
-DISP.Flonum.SN__ge_R = function(x) { return x >= this; };
-DISP.Flonum.SN__le_R = function(x) { return x <= this; };
-
-DISP.Flonum.SN_compare = function(x) {
-    return toReal(x).SN__compare_Flonum(this);
-};
-
-DISP.Flonum.SN_isEven = function() {
-    //assert(this == floor(this));
-    return (this & 1) === 0;
-};
-
-DISP.Flonum.SN_isOdd = function() {
-    //assert(this == floor(this));
-    return (this & 1) === 1;
 };
 
 DISP.Flonum.SN_round = function() {
@@ -1237,10 +1272,8 @@ DISP.R.SN_angle = function() {
 
 // Dispatches.
 
-DISP.R.SN__eq_Flonum = function(x) { return +x == this; };
-DISP.R.SN__ne_Flonum = function(x) { return +x != this; };
-DISP.Flonum.SN__eq_R = DISP.R.SN__eq_Flonum;
-DISP.Flonum.SN__ne_R = DISP.R.SN__ne_Flonum;
+DISP.R.SN__eq_Flonum = DISP.Flonum.SN__eq_R;
+DISP.R.SN__ne_Flonum = DISP.Flonum.SN__ne_R;
 
 DISP.R.SN__eq_Rectangular = function(z) {
     return z._y.SN_isZero() && z._x.SN_eq(this);
@@ -1249,51 +1282,37 @@ DISP.R.SN__ne_Rectangular = function(z) {
     return !z._y.SN_isZero() || z._x.SN_ne(this);
 };
 
-// Note operand order!
 DISP.R.SN__gt_Flonum = DISP.Flonum.SN__gt_R;
 DISP.R.SN__lt_Flonum = DISP.Flonum.SN__lt_R;
 DISP.R.SN__ge_Flonum = DISP.Flonum.SN__ge_R;
 DISP.R.SN__le_Flonum = DISP.Flonum.SN__le_R;
+DISP.R.SN__compare_Flonum = DISP.Flonum.SN__compare_R;
 
-DISP.R.SN__compare_Flonum = function(x) {
-    if (+x == this) return 0;
-    if (x < this) return -1;
-    if (x > this) return 1;
-    return NaN;
-};
-
-DISP.R.SN_gt = function(x) { return toReal(x).SN__gt_R(this); };
-DISP.R.SN_lt = function(x) { return toReal(x).SN__lt_R(this); };
-DISP.R.SN_ge = function(x) { return toReal(x).SN__ge_R(this); };
-DISP.R.SN_le = function(x) { return toReal(x).SN__le_R(this); };
+DISP.R.SN_compare = pureVirtual;
+DISP.R.SN_gt = function(x) { return this.SN_compare(x) > 0; };
+DISP.R.SN_lt = function(x) { return this.SN_compare(x) < 0; };
+DISP.R.SN_ge = function(x) { return this.SN_compare(x) >= 0; };
+DISP.R.SN_le = function(x) { return this.SN_compare(x) <= 0; };
 
 DISP.R.SN_add = function(z) {
     return toSN(z).SN__add_R(this);
 };
-DISP.Flonum.SN__add_R = function(x) {
-    return x + this;
-};
+DISP.R.SN__add_Flonum = DISP.Flonum.SN__add_R;
 
 DISP.R.SN_subtract = function(z) {
     return toSN(z).SN__subtract_R(this);
 };
-DISP.Flonum.SN__subtract_R = function(x) {
-    return x - this;
-};
+DISP.R.SN__subtract_Flonum = DISP.Flonum.SN__subtract_R;
 
 DISP.R.SN_multiply = function(z) {
     return toSN(z).SN__multiply_R(this);
 };
-DISP.Flonum.SN__multiply_R = function(x) {
-    return x * this;
-};
+DISP.R.SN__multiply_Flonum = DISP.Flonum.SN__multiply_R;
 
 DISP.R.SN_divide = function(z) {
     return toSN(z).SN__divide_R(this);
 };
-DISP.Flonum.SN__divide_R = function(x) {
-    return x / this;
-};
+DISP.R.SN__divide_Flonum = DISP.Flonum.SN__divide_R;
 
 function complexExpt(b, p) {
     if (b.isZero()) {
@@ -1517,17 +1536,6 @@ DISP.Flonum.SN__expt_Rectangular = function(z) {
                      toFlonum(atan2(z._y, z._x) * this));
 };
 
-// Mitigate the effects of inheriting from Flonum.
-for (var name in DISP.Flonum) {
-    (function(methodName) {
-        if (methodName.indexOf("_Rectangular") !== -1 && !DISP.C[methodName])
-            DISP.C[methodName] = function() {
-                throw new Error(methodName +
-                                " not implemented for number type");
-            };
-    })(name)
-}
-
 // Arithmetic where the left operand is Rectangular and the right is
 // this real number.
 
@@ -1672,8 +1680,8 @@ DISP.EQ.SN_ne = function(z) {
 };
 DISP.EQ.SN__ne_EQ = pureVirtual;
 
-DISP.EQ.SN_compare = function(z) {
-    return toReal(z).SN__compare_EQ(this);
+DISP.EQ.SN_compare = function(x) {
+    return toReal(x).SN__compare_EQ(this);
 };
 DISP.EQ.SN__compare_EQ = pureVirtual;
 
@@ -1917,8 +1925,8 @@ DISP.EI.SN_truncate    = retThis;
 
 DISP.EI.SN__toBigInteger = pureVirtual;
 
-DISP.EI.SN_eq = function(x) {
-    return x.SN__eq_EI(this);
+DISP.EI.SN_eq = function(z) {
+    return toSN(z).SN__eq_EI(this);
 };
 DISP.EI.SN__eq_EI = function(n) {
     return n.SN__toBigInteger().compare(this.SN__toBigInteger()) === 0;
@@ -1927,8 +1935,8 @@ DISP.EI.SN__eq_EQ = function(q) {
     return q.SN_numerator().SN_eq(this) && q.SN_denominator().SN_eq(ONE);
 };
 
-DISP.EI.SN_ne = function(x) {
-    return x.SN__ne_EI(this);
+DISP.EI.SN_ne = function(z) {
+    return toSN(z).SN__ne_EI(this);
 };
 DISP.EI.SN__ne_EI = function(n) {
     return n.SN__toBigInteger().compare(this.SN__toBigInteger()) !== 0;
@@ -1937,8 +1945,14 @@ DISP.EI.SN__ne_EQ = function(q) {
     return q.SN_numerator().SN_ne(this) || q.SN_denominator().SN_ne(ONE);
 };
 
+DISP.EI.SN_compare = function(x) {
+    return toReal(x).SN__compare_EI(this);
+};
 DISP.EI.SN__compare_EQ = function(q) {
     return q.SN_numerator().SN_compare(q.SN_denominator().SN_multiply(this));
+};
+DISP.EI.SN__compare_EI = function(n) {
+    return n.SN__toBigInteger().compare(this.SN__toBigInteger());
 };
 
 DISP.EI.SN_add = function(z) {
@@ -2227,6 +2241,14 @@ DISP.EINative.SN_sign = function() {
     return (this._ > 0 ? 1 : (this._ == 0 ? 0 : -1));
 };
 
+DISP.EINative.SN_isEven = function() {
+    return (this._ & 1) === 0;
+};
+
+DISP.EINative.SN_isOdd = function() {
+    return (this._ & 1) === 1;
+};
+
 DISP.EINative.SN_eq = function(z) {
     return toSN(z).SN__eq_EINative(this);
 };
@@ -2468,10 +2490,6 @@ DISP.EIBig.SN_square = function() {
     return new EIBig(this._.square());
 };
 
-DISP.EIBig.SN__compare_EI = function(n) {
-    return n._.compare(this._);
-};
-
 DISP.EIBig.SN__exp10 = function(n) {
     //assert(n === floor(n));
     if (n === 0)
@@ -2559,6 +2577,11 @@ function gcd(a, b) {
     return gcdNative(a._, b._);
 }
 
+//
+// Inheritance plumbing.
+//
+
+/*
 function showMethodClasses() {
     var map = {};
     for (var className in DISP)
@@ -2568,69 +2591,79 @@ function showMethodClasses() {
         for (var className in map[methName])
             print(className + "." + methName + (map[methName][className] === pureVirtual ? " =0" : ""));
 }
-//showMethodClasses();
+showMethodClasses();
+*/
 
-// Workarounds for Number/SN not inheriting from C and R.
-for (var methodName in DISP.R) {
-    if (/^SN_/.test(methodName) && !DISP.Flonum[methodName]) {
-        DISP.Flonum[methodName] = DISP.R[methodName];
-        if (!DISP.C[methodName])
-            DISP.C[methodName] = undefined;
+function resolveOverload(className) {
+    var proto = DISP[className];
+    var newMethods = {};
+
+    function resolve(subclasses, prefix, method) {
+        function resolveSub(subclass) {
+            if (proto[prefix + subclass])
+                return;
+            //print(className + "." + prefix + subclass + " -> " + oldName);
+            newMethods[prefix + subclass] = method;
+            resolve(HIERARCHY[subclass], prefix, method);
+        }
+        if (subclasses)
+            subclasses.forEach(resolveSub);
+    }
+
+    for (var oldName in proto) {
+        if (!/^SN_/.test(oldName))
+            continue;
+
+        var underscore = oldName.lastIndexOf("_");
+        if (underscore === -1)
+            continue;
+
+        var oldMethod = proto[oldName];
+        if (!oldMethod) {
+            //print("Bogus " + className + ".prototype." + oldName);
+            continue;
+        }
+
+        var oldClass = oldName.substring(underscore + 1);
+
+        resolve(HIERARCHY[oldClass],
+                oldName.substring(0, underscore + 1),
+                oldMethod);
+    }
+
+    for (var methodName in newMethods) {
+        proto[methodName] = newMethods[methodName];
     }
 }
+
+for (var className in CLASSES)
+    resolveOverload(className);
+
+// Workaround for Flonum not inheriting from R.
+for (var methodName in DISP.R) {
+    if (/^SN_/.test(methodName) && !DISP.Flonum[methodName])
+        DISP.Flonum[methodName] = DISP.R[methodName];
+}
+
+// Workaround for Flonum not inheriting from C.
 for (var methodName in DISP.C) {
     if (/^SN_/.test(methodName) && !DISP.Flonum[methodName])
         DISP.Flonum[methodName] = DISP.C[methodName];
 }
 
-function resolveOverload() {
-    for (var className in CLASSES) {
-        var proto = DISP[className];
-        var newMethods = {};
+// Workaround for C inheriting from Flonum.
+for (var methodName in DISP.Flonum) {
+    //if (!DISP.C[methodName]) print("Nuking C." + methodName);
+    if (!DISP.C[methodName])
+        DISP.C[methodName] = unimpl;
+}
 
-        function resolve(subclasses, prefix, method) {
-            if (!subclasses)
-                return;
-            function resolveSub(subclass) {
-                if (proto[prefix + subclass])
-                    return;
-                //print(className + "." + prefix + subclass + " -> " + oldName);
-                newMethods[prefix + subclass] = method;
-                resolve(HIERARCHY[subclass], prefix, method);
-            }
-            subclasses.forEach(resolveSub);
-        }
-
-        for (var oldName in proto) {
-            if (!/^SN_/.test(oldName))
-                continue;
-
-            var underscore = oldName.lastIndexOf("_");
-            if (underscore === -1)
-                continue;
-
-            var oldMethod = proto[oldName];
-            if (!oldMethod) {
-                //print("Bogus " + className + ".prototype." + oldName);
-                continue;
-            }
-
-            var oldClass = oldName.substring(underscore + 1);
-
-            resolve(HIERARCHY[oldClass],
-                    oldName.substring(0, underscore + 1),
-                    oldMethod);
-        }
-
-        for (var methodName in newMethods) {
-            proto[methodName] = newMethods[methodName];
-        }
-        for (var methodName in proto) {
-            CLASSES[className].prototype[methodName] = proto[methodName];
-        }
+// Install methods.
+for (var className in CLASSES) {
+    for (var methodName in DISP[className]) {
+        CLASSES[className].prototype[methodName] = DISP[className][methodName];
     }
 }
-resolveOverload();
 
 function checkPureVirtual() {
     for (var className in CLASSES) {

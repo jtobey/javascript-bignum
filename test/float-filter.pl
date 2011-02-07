@@ -1,6 +1,7 @@
 #! /usr/bin/perl -p
 
-# Normalize insignificant differences in floating point output.
+# Normalize many (but not yet all!) insignificant differences in
+# floating point output.
 
 for (substr($_,index($_,')'))) {
     s/[-+](?:nan|inf)\.0[-+](?:nan|inf)\.0i/+nan.0+nan.0i/;
