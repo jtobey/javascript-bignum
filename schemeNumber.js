@@ -435,7 +435,7 @@ function assertNonNegative(n) {
 }
 
 // Configurable maximum integer magnitude.
-var MAX_LOG = 1e8 * LN10;  // 100 million digits.
+var MAX_LOG = 1e6 * LN10;  // 1 million digits.
 
 SN.getMaxIntegerDigits = function() {
     return MAX_LOG / LN10;

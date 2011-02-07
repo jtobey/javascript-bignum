@@ -53,9 +53,11 @@ Non-real complex numbers are represented in rectangular coordinates,
 either both exact or both inexact.
 
 To avoid using up all system memory, exact results of a call to "expt"
-are capped at 100 million (1e8) digits.  To query or change this
-value, use SchemeNumber.getMaxIntegerDigits() or
-SchemeNumber.setMaxIntegerDigits(newMax).
+are capped at 1 million (1e6) digits.  To query or change this value,
+use SchemeNumber.getMaxIntegerDigits() or
+SchemeNumber.setMaxIntegerDigits(newMax).  This does *not* currently
+protect against all such denials of service.  For example, parsing
+"#e1e9999999" tries to allocate 10 million digits.
 
 
 INSTALLATION
