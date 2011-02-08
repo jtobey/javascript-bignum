@@ -469,21 +469,8 @@ SN.fn = {
     "exact?"   : makeUnary("SN_isExact"),
     "inexact?" : makeUnary("SN_isInexact"),
 
-    inexact : function(z) {
-        if (typeof z === "number")
-            return toFlonum(z);
-        if (isNumber(z))
-            return z.SN_toInexact();
-        return parseNumber(z, false);
-    },
-
-    exact : function(z) {
-        if (typeof z === "number")
-            return nativeToExact(z);
-        if (isNumber(z))
-            return z.SN_toExact();
-        return parseNumber(z, true);
-    },
+    inexact : makeUnary("SN_toInexact"),
+    exact   : makeUnary("SN_toExact"),
 
     "=" : function(a, b) {
         var len = arguments.length;
