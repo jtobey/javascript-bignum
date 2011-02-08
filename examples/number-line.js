@@ -1,5 +1,29 @@
+/*  SVG scrollable, zoomable number line.
 
-// Artithmetic abstraction.
+    Zoom out to a googol, and you can zoom in until the 100-digit
+    numbers are consecutive.
+
+    This file is number-line.js.  It requires biginteger.js and
+    schemeNumber.js from javascript-bignum
+    (https://github.com/jtobey/javascript-bignum).
+
+    Refer to these files from SVG as follows, replacing the xlink:href
+    values with correct URLs to the named files:
+
+    <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+    <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
+    <svg xmlns="http://www.w3.org/2000/svg"
+         xmlns:xlink="http://www.w3.org/1999/xlink"
+         onload="init(this)">
+      <script type="application/ecmascript" xlink:href="biginteger.js" />
+      <script type="application/ecmascript" xlink:href="schemeNumber.js" />
+      <script type="application/ecmascript" xlink:href="number-line.js" />
+    </svg>
+
+    Copyright (c) 2011 John Tobey <John.Tobey@gmail.com>
+ */
+
+// Arithmetic abstraction.
 var makePos, pos2text, valueOf, add, subtract, multiply, divide, div;
 var isZero, le, lt, gt, trimPos;
 var WHICH_MATH = "Scheme";
@@ -270,7 +294,7 @@ function log(name, evt) {
 }
 
 function statistics() {
-    var ret = "";
+    var ret = "NUMBER LINE STATISTICS:\n";
     ret += "redraws: " + redrawCount + " avg " +
         (redrawTime / redrawCount / 1000).toFixed(3) + "s\n";
     ret += "redrawTime: " + redrawTime + "\n";
