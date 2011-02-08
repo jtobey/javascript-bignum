@@ -51,7 +51,7 @@ if (!BigInteger) {
     integer with complete precision, not *Infinity* as in ECMAScript.
 
     This implementation provides all functions listed in the <R6RS
-    Scheme specification at http://r6rs.org/>, Section 11.7, along
+    Scheme specification at http://www.r6rs.org/>, Section 11.7, along
     with <eqv?> from Section 11.5.  (<eqv?> uses JavaScript's *===* to
     compare non-numbers.)
 
@@ -546,12 +546,12 @@ function assertNonNegative(n) {
     > a5 = ns(sf.numerator(1/3), 16);    // "#i15555555555555"
     > a6 = ns(sf.denominator(1/3), 16);  // "#i40000000000000"
 
-    The *#i* prefix denotes an inexact number, as detailed in R6RS
-    [1].  Since 1/3 is a native JavaScript number, the library regards
-    it as inexact, and operations such as numerator yield inexact
-    integer results.  If we used *"1/3"* (quoted) instead of *1/3*,
-    the numerator and denominator would be the mathematically correct
-    1 and 3.
+    The *#i* prefix denotes an inexact number, as detailed in <R6RS at
+    http://www.r6rs.org/>.  Since 1/3 is a native JavaScript number,
+    the library regards it as inexact, and operations such as
+    numerator yield inexact integer results.  If we used *"1/3"*
+    (quoted) instead of *1/3*, the numerator and denominator would be
+    the mathematically correct 1 and 3.
 
     Functions specified to return two values (such as <div-and-mod>
     and <exact-integer-sqrt>) return a two-element array as per
@@ -560,10 +560,10 @@ function assertNonNegative(n) {
     Caveats:
 
       o As currently implemented (but expected to change), most
-        functions ignore extra arguments.  <R6RS at http://r6rs.org/>
-        Section 6.2 requires an *&assertion* exception in these cases.
-        This is the only known deviation from R6RS semantics as of
-        2011-02-08.
+        functions ignore extra arguments.  <R6RS at
+        http://www.r6rs.org/> Section 6.2 requires an *&assertion*
+        exception in these cases.  This is the only known deviation
+        from R6RS semantics as of 2011-02-08.
 
       o Arcane features such as explicit mantissa widths or complex
         transcendental functions, while believed complete, are
@@ -586,8 +586,8 @@ function assertNonNegative(n) {
 
     To test a Scheme number for numerical equality with another Scheme
     number or a native value, use <SchemeNumber.fn["="]>.  Likewise
-    for *">"* etc.  Refer to <R6RS at http://r6rs.org/> for the full
-    list of functions.
+    for *">"* etc.  Refer to <R6RS at http://www.r6rs.org/> for the
+    full list of functions.
 
     See Also:
 
