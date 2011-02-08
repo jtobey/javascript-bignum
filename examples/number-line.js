@@ -3,10 +3,11 @@
 var makePos, pos2text, valueOf, add, subtract, multiply, divide, div;
 var isZero, le, lt, gt, trimPos;
 var WHICH_MATH = "Scheme";
+
 if (WHICH_MATH === "Scheme") {
     var sf = SchemeNumber.fn;
     exact    = sf.exact;
-    pos2text = function(x) { return sf["number->string"](x); };
+    pos2text = sf["number->string"];
     add      = sf["+"];
     subtract = sf["-"];
     multiply = sf["*"];
@@ -30,9 +31,9 @@ if (WHICH_MATH === "Scheme") {
         return divide(sf.round(multiply(pos, d)), d);
     };
 }
-else {
-    exact    = function(x)    { return x; };
-    pos2text = function(p)    { return p; };
+else {  // Just native math, no schemeNumber.js or biginteger.js needed.
+    exact    = Number;
+    pos2text = String;
     add      = function(x, y) { return x + y; };
     subtract = function(x, y) { return x - y; };
     multiply = function(x, y) { return x * y; };
@@ -71,7 +72,7 @@ function init(svg) {
     window.addEventListener('mouseup', mouseup, true);
     window.addEventListener('click', click, true);
     window.addEventListener('mousemove', mousemove, true);
-    window.addEventListener('DOMMouseScroll', mousescroll, true);
+    window.addEventListener('DOMMouseScroll', mousescroll, true); // XXX firefox
     window.addEventListener('resize', function() { redraw(svg); }, false);
     draw(svg);
 }
@@ -103,7 +104,7 @@ function draw(svg) {
     for (; le(i, hiBound); i = add(i, step)) {
         if (count++ > limit) {
             alert("The numbers are getting too big! " +
-                  [count, hpx, intTextPixels, pos2text(i)]);  // 164,675,12.5,2273201718951068473231554543576467700230703002423341552
+                  [count, hpx, intTextPixels, pos2text(i)]);
             return;
         }
         y = hpx - multiply(subtract(i, loBound), intPixels);
