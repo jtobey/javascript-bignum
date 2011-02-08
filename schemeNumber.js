@@ -51,7 +51,7 @@ if (!BigInteger) {
     integer with complete precision, not *Infinity* as in ECMAScript.
 
     This implementation provides all functions listed in the <R6RS
-    Scheme specification at http://r6rs.org/>, Section 11.7, along
+    Scheme specification at http://www.r6rs.org/>, Section 11.7, along
     with <eqv?> from Section 11.5.  (<eqv?> uses JavaScript's *===* to
     compare non-numbers.)
 
@@ -560,7 +560,7 @@ function assertNonNegative(n) {
     Caveats:
 
       o As currently implemented (but expected to change), most
-        functions ignore extra arguments.  <R6RS at http://r6rs.org/>
+        functions ignore extra arguments.  <R6RS at http://www.r6rs.org/>
         Section 6.2 requires an *&assertion* exception in these cases.
         This is the only known deviation from R6RS semantics as of
         2011-02-08.
@@ -586,8 +586,8 @@ function assertNonNegative(n) {
 
     To test a Scheme number for numerical equality with another Scheme
     number or a native value, use <SchemeNumber.fn["="]>.  Likewise
-    for *">"* etc.  Refer to <R6RS at http://r6rs.org/> for the full
-    list of functions.
+    for *">"* etc.  Refer to <R6RS at http://www.r6rs.org/> for the
+    full list of functions.
 
     See Also:
 
