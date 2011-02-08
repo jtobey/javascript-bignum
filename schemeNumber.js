@@ -1,18 +1,6 @@
 // Scheme numerical tower in JavaScript.  Described in README.
 // Copyright (c) 2011 by John Tobey <John.Tobey@gmail.com>
 
-/*
-    File: schemeNumber.js
-
-    Exports:
-
-        <SchemeNumber>
-
-    Depends:
-
-        <biginteger.js> for <BigInteger>
- */
-
 // Grab the BigInteger library.
 var BigInteger;
 if (typeof require !== "undefined")
@@ -34,11 +22,11 @@ if (!BigInteger) {
     A number object as <defined by the Scheme language at
     http://www.r6rs.org/>.
 
-    Scheme supports *exact* arithmetic and mixing exact with standard
-    (*inexact*) numbers.  Several basic operations, including
-    addition, subtraction, multiplication, and division, when given
-    only exact arguments, must return an exact, numerically correct
-    result.
+    The Scheme language supports *exact* arithmetic and mixing exact
+    with standard (*inexact*) numbers.  Several basic operations,
+    including addition, subtraction, multiplication, and division,
+    when given only exact arguments, must return an exact, numerically
+    correct result.
 
     These operations are allowed to fail due to running out of memory,
     but they are not allowed to return approximations the way
@@ -47,19 +35,19 @@ if (!BigInteger) {
 
     For example, adding exact *1/100* to exact *0* one hundred times
     produces exactly *1*, not 1.0000000000000007 as in JavaScript.
-    Raising exact *2* to the power of exact *1024* returns a 308-digit
-    integer with complete precision, not *Infinity* as in ECMAScript.
+    Raising exact *2* to the 1024th power returns a 308-digit integer
+    with complete precision, not *Infinity* as in ECMAScript.
 
     This implementation provides all functions listed in the <R6RS
     Scheme specification at http://r6rs.org/>, Section 11.7, along
-    with <eqv?> from Section 11.5.  (<eqv?> uses JavaScript's *===* to
+    with *eqv?* from Section 11.5.  (*eqv?* uses JavaScript's *===* to
     compare non-numbers.)
 
-    The schemeNumber.js file exports an object <SchemeNumber>.  It
+    The schemeNumber.js file exports an object *SchemeNumber*.  It
     contains a property <fn>, which in turn contains the functions
     implementing the numeric types.
 
-    The <SchemeNumber> object is in fact a function that converts its
+    The *SchemeNumber* object is in fact a function that converts its
     argument to a Scheme number: similar to a constructor, but it may
     not always return an object, let alone a unique object.
 
@@ -79,21 +67,14 @@ if (!BigInteger) {
 
     Exceptions:
 
-        If *obj* can not be parsed, <SchemeNumber> will <raise> an
+        If *obj* can not be parsed, *SchemeNumber* will <raise> an
         exception with condition type *&assertion*.
 
     See Also:
 
-        <fn>, <raise>
-*/
+        <fn>
+ */
 var SchemeNumber = (function() {
-
-/*
-    Property: VERSION
-    Library version as an array of integers.
-
-    For example, *[1,2,4]* corresponds to Version 1.2.4.
-*/
 
 var abs      = Math.abs;
 var floor    = Math.floor;
@@ -162,7 +143,7 @@ function pureVirtual() {
    EQ <-- EQNative - exact rational as native number (power-of-2 denominator);
    EQ <-- EQDecimal - exact rational as BigInteger times a power of 10;
    R <-- BigFloat - inexact real of non-standard precision.
-*/
+ */
 
 // SN: private alias for the public SchemeNumber object.
 function SN(obj) {
@@ -484,21 +465,21 @@ function assertNonNegative(n) {
 }
 
 /*
-    Property: fn
+    Object: fn
     Container of Scheme functions.
 
-    The <SchemeNumber> object contains a property, <SchemeNumber.fn>,
+    The <SchemeNumber> object contains a property, *SchemeNumber.fn*,
     which in turn contains the functions implementing the Scheme
     numeric types.
 
-    These functions are stored in <fn> under their Scheme names, so
+    These functions are stored in *fn* under their Scheme names, so
     ["quotation"] is needed where the names contain characters that
     are incompatible with dot.notation.
 
-    You may find it convenient to copy <SchemeNumber>, <fn>, and the
-    output function <number->string> into short-named variables, by
-    convention *sn*, *sf*, and *ns*.  The rest of this section assumes
-    you have done this:
+    You may find it convenient to copy <SchemeNumber>, *fn*, and the
+    output function *number->string* into short-named variables, by
+    convention *sn*, *sf*, and *ns*.  The rest of this document
+    assumes you have done this:
 
     > var sn = SchemeNumber;
     > var sf = sn.fn;
@@ -520,28 +501,25 @@ function assertNonNegative(n) {
     Note that the following functions accept any type of arguments and
     therefore do not apply SchemeNumber to them:
 
-    - <eqv?>
-    - <number?>
-    - <complex?>
-    - <real?>
-    - <rational?>
-    - <integer?>
-    - <real-valued?>
-    - <rational-valued?>
-    - <integer-valued?>
+    - *eqv?*
+    - *number?*
+    - *complex?*
+    - *real?*
+    - *rational?*
+    - *integer?*
+    - *real-valued?*
+    - *rational-valued?*
+    - *integer-valued?*
 
-    Here, then, is 2 to the 1,024th power, as a decimal
-    string:
+    Here, then, is 2 to the 1,024th power, as a decimal string:
 
     > a3 = ns(sf.expt("2", "1024"));
 
-    Fractional
-    arithmetic:
+    Fractional arithmetic:
 
     > a4 = sf["+"]("1/3", "4/5");  // 17/15
 
-    Numerator and denominator of a floating-point value,
-    hexadecimal:
+    Numerator and denominator of a floating-point value, hexadecimal:
 
     > a5 = ns(sf.numerator(1/3), 16);    // "#i15555555555555"
     > a6 = ns(sf.denominator(1/3), 16);  // "#i40000000000000"
@@ -553,8 +531,8 @@ function assertNonNegative(n) {
     the numerator and denominator would be the mathematically correct
     1 and 3.
 
-    Functions specified to return two values (such as <div-and-mod>
-    and <exact-integer-sqrt>) return a two-element array as per
+    Functions specified to return two values (such as *div-and-mod*
+    and *exact-integer-sqrt*) return a two-element array as per
     JavaScript conventions.
 
     Caveats:
@@ -579,20 +557,20 @@ function assertNonNegative(n) {
         but not to replace the standard Number.prototype.toString.)
 
     To serialize numbers as Scheme would, use
-    <SchemeNumber.fn["number->string"]>.
+    *SchemeNumber.fn["number->string"]*.
 
     > "" + SchemeNumber(2);                  // "2"
     > SchemeNumber.fn["number->string"](2);  // "2."
 
     To test a Scheme number for numerical equality with another Scheme
-    number or a native value, use <SchemeNumber.fn["="]>.  Likewise
+    number or a native value, use *SchemeNumber.fn["="]*.  Likewise
     for *">"* etc.  Refer to <R6RS at http://r6rs.org/> for the full
     list of functions.
 
     See Also:
 
         <SchemeNumber>
-*/
+ */
 
 SchemeNumber.fn = {
 
@@ -951,15 +929,23 @@ function rationalize(x, delta) {
     return ret.SN_add(b);
 }
 
+function defaultRaise(conditionType, message, irritant) {
+    var msg = "SchemeNumber: " + conditionType + ": " + message;
+    if (arguments.length > 2)
+        msg += ": " + irritant;
+    throw new Error(msg);
+}
+
 /*
-    Property: raise
-    Function that translates a Scheme exception to ECMAScript.
+    Function: raise
 
-    When a library function encounters a situation where the Scheme
+    Translate a Scheme exception to ECMAScript.
+
+    When a function encounters a situation where the Scheme
     specification requires it to raise an exception with a certain
-    condition type, the function calls <SchemeNumber.raise>.
+    condition type, it calls *SchemeNumber.raise*.
 
-    Programs may assign a custom function to <SchemeNumber.raise> to
+    Programs may assign a custom function to *SchemeNumber.raise* to
     intercept such exceptions.
 
     Parameters:
@@ -970,21 +956,14 @@ function rationalize(x, delta) {
 
     Returns:
 
-        The default <SchemeNumber.raise> function simply throws an
+        The default *SchemeNumber.raise* function simply throws an
         *Error*.
 
     See Also:
 
         <fn>, <SchemeNumber>
-*/
+ */
 SchemeNumber.raise = defaultRaise;
-
-function defaultRaise(conditionType, message, irritant) {
-    var msg = "SchemeNumber: " + conditionType + ": " + message;
-    if (arguments.length > 2)
-        msg += ": " + irritant;
-    throw new Error(msg);
-}
 
 function raise() {
     var len = arguments.length;
@@ -1000,31 +979,41 @@ function raise() {
 }
 
 /*
-    Property: maxIntegerDigits
-    Maximum size of integers created by the <expt> function.
+    Configuration: maxIntegerDigits
+    Maximum size of integers created by the *expt* function.
 
     To avoid using up all system memory, exact results of a call to
-    <SchemeNumber.fn.expt> are capped at a configurable number of
-    digits, by default one million.  <SchemeNumber.maxIntegerDigits>
-    holds this limit.
+    *SchemeNumber.fn.expt* are capped at 1 million (1e6) digits.
 
-    The size limit does *not* currently protect against other means of
-    creating large exact integers.  For example, when passed
-    "#e1e9999999", the <SchemeNumber> function tries to allocate 10
-    million digits, regardless of <maxIntegerDigits>.
+    To query or change this value, use
+    *SchemeNumber.getMaxIntegerDigits()* or
+    *SchemeNumber.setMaxIntegerDigits(NEW_VALUE)*.
 
-    In a future release, cases such as the preceeding example may be
-    checked.  If there is any possibility of legitimately creating
-    such large integers, either as number objects or components
-    thereof, code should increase <maxIntegerDigits>.
+    This does *not* currently protect against all such denials of
+    service.  For example, parsing "#e1e9999999" tries to allocate 10
+    million digits, regardless of the setting.
+
+    Getter:
+
+        - SchemeNumber.getMaxIntegerDigits()
+
+    Setter:
+
+        - SchemeNumber.setMaxIntegerDigits(NEW_VALUE)
 
     Default Value:
 
         - 1000000 (1e6 or 1 million)
-*/
-
+ */
 // Configurable maximum integer magnitude.
-SN.maxIntegerDigits = 1e6;  // 1 million digits.
+var MAX_LOG = 1e6 * LN10;  // 1 million digits.
+
+SN.getMaxIntegerDigits = function() {
+    return MAX_LOG / LN10;
+};
+SN.setMaxIntegerDigits = function(max) {
+    MAX_LOG = max * LN10;
+};
 
 //
 // Flonum: Inexact real as a native number.
@@ -1044,7 +1033,7 @@ DISP.Flonum.SN_debug = function() {
 // calling Number.prototype.toString with a radix of 2.  Specification
 // ECMA-262 Edition 5 (December 2009) does not strongly assert that
 // this works.  As an alternative, should this prove non-portable
-// (translation: fails in IE), nativeDenominator could instead do:
+// (i.e., if it doesn't work in IE), nativeDenominator could do:
 // for (d = 1; x !== floor(x); d *= 2) { x *= 2; } return d;
 function numberToBinary(x) {
     return x.toString(2);
@@ -2242,18 +2231,16 @@ DISP.EI.SN__divide_EQ = function(q) {
 };
 
 function positiveIntegerExpt(b, p) {
-    //assert(p > 0);
-    //assert(p == round(p));
+    //assert(p > 0); assert(p == round(p));
     var result = pow(b, p);
     if (result > -9007199254740992 && result < 9007199254740992)
         return toEINative(result);
 
-    var newLog = b.SN_log() * p;
-    if (newLog > SN.maxIntegerDigits * LN10)
+    if (b.SN_log() * p > MAX_LOG)
         raise("&implementation-restriction",
-              "exact integer would exceed limit of " + (+SN.maxIntegerDigits) +
-              " digits; adjust SchemeNumber.maxIntegerDigits",
-              newLog / LN10);
+              "exact integer would exceed limit of " +
+              (MAX_LOG / LN10) + " digits; adjust with " +
+              "SchemeNumber.setMaxIntegerDigits(...)");
 
     return new EIBig(b.SN__toBigInteger().pow(p));
 }
