@@ -1,0 +1,6 @@
+#!/bin/sh
+
+[ -d docs ] || mkdir docs
+[ -d NaturalDocs ] || mkdir NaturalDocs
+NaturalDocs -i . -p NaturalDocs -o HTML docs --documented-only \
+    --exclude-input test --exclude-input examples

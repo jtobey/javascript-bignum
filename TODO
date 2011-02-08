@@ -2,8 +2,6 @@ TODO:
 
 * Test divAndMod_EINative corner cases.
 
-* Move documentation from README to a new HTML file.
-
 * ECMA Number.prototype methods: toLocaleString, toFixed,
   toExponential, toPrecision.  Implement for fractions and big ints.
 
@@ -19,9 +17,6 @@ TODO:
 
 * Consider aliasing or renaming BigInteger.toString() so as not to
   conflict with the default toString().
-
-* Consider exposing the library version like SchemeNumber.VERSION ===
-  BigInteger.VERSION === "1.0"
 
 * Consider a BigDecimal class like Java's BigDecimal.
 

@@ -61,11 +61,14 @@ schemeNumber.js.
 
 USAGE
 
-See documentation in schemeNumber.js, or try to extract it to HTML
-using NaturalDocs [2].
+See documentation in schemeNumber.js, or view it on the Web at
+http://john-edwin-tobey.org/Scheme/javascript-bignum/docs/files/schemeNumber-js.html,
+or try to extract it to HTML using NaturalDocs [2] and the build-docs
+script in this directory.
+
 
 John Tobey
-February 7, 2011
+February 8, 2011
 
 [1] R6RS Scheme specification.  See http://www.r6rs.org/ (I recommend
 the PDF, not the HTML version.  http://www.r6rs.org/final/r6rs.pdf),

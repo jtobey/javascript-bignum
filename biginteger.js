@@ -8,6 +8,14 @@
 */
 
 /*
+	File: biginteger.js
+
+	Exports:
+
+        <BigInteger>
+*/
+
+/*
 	Class: BigInteger
 	An arbitrarily-large integer.
 
