@@ -31,9 +31,6 @@ Known deviation:
     arguments.  R6RS Section 6.2 requires an &assertion exception in
     these cases.
 
-Arcane features such as explicit mantissa widths or complex
-transcendental functions, while believed complete, are unoptimized.
-
 
 IMPLEMENTATION DETAILS
 
@@ -64,122 +61,8 @@ schemeNumber.js.
 
 USAGE
 
-    SchemeNumber(arg)
-    SchemeNumber.fn[...](...)
-    SchemeNumber.raise
-    SchemeNumber.getMaxIntegerDigits()
-    SchemeNumber.setMaxIntegerDigits(NUMBER)
-
-The schemeNumber.js file exports an object "SchemeNumber".  It
-contains a property "fn", which in turn contains the functions
-implementing the numeric types.  These functions are stored in "fn"
-under their Scheme names, so ["quotation"] is needed where the names
-contain characters that are incompatible with dot.notation.
-
-The SchemeNumber object is in fact a function that converts its
-argument to a Scheme number: similar to a constructor, but it does not
-always return an object, let alone a unique object.
-
-You may find it convenient to copy SchemeNumber, fn, and the output
-function number->string into easily typed variables, by convention
-"sn", "sf", and "ns".  The rest of this document assumes you have done
-this:
-
-    var sn = SchemeNumber;
-    var sf = sn.fn;
-    var ns = sf["number->string"];
-
-Functions that require a Scheme number argument automatically filter
-the argument through SchemeNumber.  It returns its argument unchanged
-if given a Scheme number, converts a string as if by string->number,
-and treats a native number as an inexact real.
-
-For example, "2" (string) would be exact (parsed as Scheme) but 2
-(equal to 2.0) would be inexact, as demonstrated:
-
-    a1 = sf["exact?"]("2");       // a1 === true
-    a1 = sf["exact?"](sn("2"));   // same
-
-    a2 = sf["exact?"](2);         // a2 === false
-    a2 = sf["exact?"]("2.0");     // same
-    a2 = sf["exact?"](sn("2.0")); // same
-
-Note that the following functions accept any type of arguments and
-therefore do not apply SchemeNumber to them:
-
-    eqv?
-    number?
-    complex?
-    real?
-    rational?
-    integer?
-    real-valued?
-    rational-valued?
-    integer-valued?
-
-Here, then, is 2 to the 1,024th power, as a decimal string:
-
-    a3 = ns(sf.expt("2", "1024"));
-
-Fractional arithmetic:
-
-    a4 = sf["+"]("1/3", "4/5");  // 17/15
-
-Numerator and denominator of a floating-point value, hexadecimal:
-
-    a5 = ns(sf.numerator(1/3), 16);    // "#i15555555555555"
-    a6 = ns(sf.denominator(1/3), 16);  // "#i40000000000000"
-
-The "#i" prefix denotes an inexact number, as detailed in R6RS [1].
-Since 1/3 is a native JavaScript number, the library regards it as
-inexact, and operations such as numerator yield inexact integer
-results.  If we used "1/3" (quoted) instead of 1/3, the numerator and
-denominator would be the mathematically correct 1 and 3.
-
-Functions specified to return two values (such as div-and-mod and
-exact-integer-sqrt) return a two-element array as per JavaScript
-conventions.
-
-When a function encounters a situation where the specification
-requires it to raise an exception with a certain condition type, it
-calls the function SchemeNumber.raise with two or more arguments:
-
-  * the condition type, as a string, e.g., "&assertion"
-
-  * an error message
-
-  * zero or more irritants (erroneous data).
-
-The default SchemeNumber.raise function simply throws an Error.
-Programs may assign a custom function to SchemeNumber.raise.
-
-To avoid using up all system memory, exact results of a call to "expt"
-are capped at 1 million (1e6) digits.  To query or change this value,
-use SchemeNumber.getMaxIntegerDigits() or
-SchemeNumber.setMaxIntegerDigits(NEW_MAX).  This does *not* currently
-protect against all such denials of service.  For example, parsing
-"#e1e9999999" tries to allocate 10 million digits.
-
-
-CAVEATS
-
-The library exhibits other visible behaviors besides those describe
-herein.  However, they are not part of its public API and may change
-significantly in future releases.
-
-In particular, Scheme numbers' "toString" property sometimes produces
-output that is incorrect in the Scheme sense.  (This stems from my
-willingness to add methods to Number.prototype but not to replace the
-standard Number.prototype.toString.)  To serialize numbers as Scheme
-would, use SchemeNumber.fn["number->string"].
-
-    "" + SchemeNumber(2);                  // "2"
-    SchemeNumber.fn["number->string"](2);  // "2."
-
-To test a Scheme number for numerical equality with another Scheme
-number or a native value, use SchemeNumber.fn["="].  Likewise for ">"
-etc.  Refer to R6RS [1] for the full list of functions, and note the
-deviation mentioned above regarding extra arguments.
+See documentation in schemeNumber.js, or try to extract it to HTML
+using NaturalDocs [2].
 
 John Tobey
 February 7, 2011
@@ -187,3 +70,5 @@ February 7, 2011
 [1] R6RS Scheme specification.  See http://www.r6rs.org/ (I recommend
 the PDF, not the HTML version.  http://www.r6rs.org/final/r6rs.pdf),
 Section 11.7 (Base library, Arithmetic).
+
+[2] NaturalDocs.  http://www.naturaldocs.org/.
