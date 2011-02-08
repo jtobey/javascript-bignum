@@ -2,12 +2,16 @@ TODO:
 
 * Test divAndMod_EINative corner cases.
 
-* Move documentation from README to its own file.  HTML?
+* Move documentation from README to a new HTML file.
 
 * ECMA Number.prototype methods: toLocaleString, toFixed,
   toExponential, toPrecision.  Implement for fractions and big ints.
 
 * Run the test suite with assertions uncommented.
+
+* Make R6RS functions raise &assertion on wrong number of arguments.
+
+* Document the Scheme functions independently of R6RS.
 
 * Consider providing the option not to tamper with Number.prototype.
 
@@ -20,3 +24,8 @@ TODO:
   BigInteger.VERSION === "1.0"
 
 * Consider a BigDecimal class like Java's BigDecimal.
+
+* Consider creating a framework for selecting implementations of
+  BigInteger (and perhaps alternatives to EQFraction or even
+  Rectangular).  The library could dynamically measure usage and swap
+  implementations on-the-fly to improve performance.

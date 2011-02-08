@@ -1,8 +1,16 @@
-JS = rhino -f
+#JS = rhino -f
+JS = ( rhino 2>/dev/null | grep '^(' ) <
 SCHEME = mosh
 EDITOR = emacs
+PAGER = less
+JSDEP = ../biginteger.js ../schemeNumber.js
 
-default: test-sn.diff
+.PHONY: default full clean
+
+default: js.raw.good test-sn.js $(JSDEP)
+	$(JS) test-sn.js | diff js.raw.good - | $(PAGER)
+
+full: test-sn.diff
 	$(EDITOR) $^
 
 test-sn.diff: js.out scheme.out
@@ -17,7 +25,7 @@ test-sn.%: gen-test.pl
 	./float-filter.pl < $< > $@.tmp
 	mv $@.tmp $@
 
-js.raw: test-sn.js ../biginteger.js ../schemeNumber.js
+js.raw: test-sn.js $(JSDEP)
 	$(JS) $< > $@.tmp
 	mv $@.tmp $@
 
