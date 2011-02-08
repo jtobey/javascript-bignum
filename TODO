@@ -9,7 +9,8 @@ TODO:
 
 * Make R6RS functions raise &assertion on wrong number of arguments.
 
-* Document the Scheme functions independently of R6RS.
+* Document the Scheme functions independently of R6RS but with
+  "specified by..."
 
 * Consider providing the option not to tamper with Number.prototype.
 
