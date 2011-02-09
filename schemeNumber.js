@@ -88,12 +88,7 @@ if (!BigInteger) {
 */
 var SchemeNumber = (function() {
 
-/*
-    Property: VERSION
-    Library version as an array of integers.
-
-    For example, *[1,2,4]* corresponds to Version 1.2.4.
-*/
+function assert(x) { if (!x) throw new Error("assertion failed"); }
 
 var abs      = Math.abs;
 var floor    = Math.floor;
@@ -172,6 +167,14 @@ function SN(obj) {
 }
 // For NaturalDocs:
 var SchemeNumber = SN;
+
+/*
+    Property: VERSION
+    Library version as an array of integers.
+
+    For example, *[1,2,4]* corresponds to Version 1.2.4.
+*/
+SchemeNumber.VERSION = [1];
 
 function isNumber(x) {
     return x instanceof Number || typeof x === "number";
@@ -727,10 +730,9 @@ SchemeNumber.fn = {
         for (var i = 0; i < len; i++) {
             var arg = toInteger(arguments[i]);
             exact = exact && arg.SN_isExact();
-            arg = arg.SN_toExact();
+            arg = arg.SN_abs().SN_toExact();
             ret = ret.SN_multiply(arg).SN_divide(gcdNonneg(ret, arg.SN_abs()));
         }
-        ret = ret.SN_abs();
         return (exact ? ret : ret.SN_toInexact());
     },
 
@@ -1235,7 +1237,7 @@ function nativeToExact(x) {
 }
 
 DISP.Flonum.SN_toExact = function() {
-    return nativeToExact(this);
+    return nativeToExact(+this);
 };
 
 DISP.Flonum.SN_toInexact = retThis;
@@ -1944,8 +1946,8 @@ function canonicalEQ(n, d) {
 //
 
 function EQFraction(n, d) {
-    //assert(d.gt(ONE));
-    //assert(gcdNonneg(n.abs(), d).eq(ONE));
+    //assert(d.SN_gt(ONE));
+    //assert(gcdNonneg(n.SN_abs(), d).SN_eq(ONE));
     this._n = n;
     this._d = d;
 }
@@ -2270,7 +2272,7 @@ DISP.EI.SN__expt_EI = function(n) {
     var s = this.SN_sign();
     // Any inexactness is beyond the range that will fit in memory, we
     // assume.
-    //assert(thisSN_.abs().SN_gt(ONE));
+    //assert(this.SN_abs().SN_gt(ONE));
     var a = positiveIntegerExpt(n, this.SN_abs().valueOf());
     return (s > 0 ? a : a.SN_reciprocal());
 };

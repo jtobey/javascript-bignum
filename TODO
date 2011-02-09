@@ -7,8 +7,6 @@ TODO:
 * ECMA Number.prototype methods: toLocaleString, toFixed,
   toExponential, toPrecision.  Implement for fractions and big ints.
 
-* Run the test suite with assertions uncommented.
-
 * Document the Scheme functions independently of R6RS but with
   "specified by..."
 
