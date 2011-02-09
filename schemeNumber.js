@@ -714,7 +714,7 @@ SchemeNumber.fn = {
         for (var i = 0; i < len; i++) {
             var arg = toInteger(arguments[i]);
             exact = exact && arg.SN_isExact();
-            ret = gcd(ret, arg.SN_abs().SN_toExact());
+            ret = gcdNonneg(ret, arg.SN_abs().SN_toExact());
         }
         ret = ret.SN_abs();
         return (exact ? ret : ret.SN_toInexact());
@@ -728,7 +728,7 @@ SchemeNumber.fn = {
             var arg = toInteger(arguments[i]);
             exact = exact && arg.SN_isExact();
             arg = arg.SN_toExact();
-            ret = ret.SN_multiply(arg).SN_divide(gcd(ret, arg.SN_abs()));
+            ret = ret.SN_multiply(arg).SN_divide(gcdNonneg(ret, arg.SN_abs()));
         }
         ret = ret.SN_abs();
         return (exact ? ret : ret.SN_toInexact());
@@ -1924,7 +1924,7 @@ function reduceEQ(n, d) {
     if (d.SN_isZero())
         divisionByExactZero();
 
-    var g = gcd(n.SN_abs(), d.SN_abs());
+    var g = gcdNonneg(n.SN_abs(), d.SN_abs());
 
     n = n.SN_div(g);
     d = d.SN_div(g);
@@ -1945,7 +1945,7 @@ function canonicalEQ(n, d) {
 
 function EQFraction(n, d) {
     //assert(d.gt(ONE));
-    //assert(gcd(n.abs(), d).eq(ONE));
+    //assert(gcdNonneg(n.abs(), d).eq(ONE));
     this._n = n;
     this._d = d;
 }
@@ -2763,31 +2763,35 @@ function gcdNative(a, b) {
     return toEINative(b);
 }
 
-function gcdBig(a, b) {
+// a and b must be nonnegative, exact integers.
+function gcdNonneg(a, b) {
+    //assert(!a.SN_isNegative());
+    //assert(!b.SN_isNegative());
+    //assert(a instanceof EI);
+    //assert(b instanceof EI);
+    if (a instanceof EINative && b instanceof EINative)
+        return gcdNative(a.valueOf(), b.valueOf());
+
+    a = a.SN__toBigInteger();
+    if (a.isZero())
+        return b;
+
+    b = b.SN__toBigInteger();
     var c;
-    while (!a.isZero()) {
+
+    while (true) {
         c = a;
         a = b.remainder(a);
+        if (a.isZero())
+            return new EIBig(c);
         b = c;
+        if (b.compareAbs(FIRST_BIG_INTEGER) < 0)
+            return gcdNative(a.valueOf(), b.valueOf());
     }
-    return reduceBigInteger(b);
 }
 
 function numberToBigInteger(n) {
     return BigInteger.parse(n.toString(16), 16);
-}
-
-// a and b must be nonnegative, either EIBig or EINative.
-function gcd(a, b) {
-    //assert(!a.SN_isNegative());
-    //assert(!b.SN_isNegative());
-    //assert(a instanceof EIBig || a instanceof EINative);
-    //assert(b instanceof EIBig || b instanceof EINative);
-    if (a instanceof EIBig)
-        return gcdBig(a._, b.SN__toBigInteger());
-    if (b instanceof EIBig)
-        return gcdBig(numberToBigInteger(a._), b._);
-    return gcdNative(a._, b._);
 }
 
 //
