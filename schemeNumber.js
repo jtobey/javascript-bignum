@@ -486,6 +486,12 @@ function assertNonNegative(n) {
     return n;
 }
 
+function assertExact(z) {
+    if (z.SN_isInexact())
+        raise("&assertion", "inexact number", z);
+    return z;
+}
+
 /*
     Property: fn
     Container of Scheme functions.
@@ -565,12 +571,6 @@ function assertNonNegative(n) {
 
     Caveats:
 
-      o As currently implemented (but expected to change), most
-        functions ignore extra arguments.  <R6RS at
-        http://www.r6rs.org/> Section 6.2 requires an *&assertion*
-        exception in these cases.  This is the only known deviation
-        from R6RS semantics as of 2011-02-08.
-
       o Arcane features such as explicit mantissa widths or complex
         transcendental functions, while believed complete, are
         unoptimized.
@@ -601,30 +601,15 @@ function assertNonNegative(n) {
 */
 
 SchemeNumber.fn = {
-
-    "eqv?" : function(a, b) {
-        if (a === b)
-            return true;
-        a = SN(a);
-        b = SN(b);
-        return (a.SN_isExact() === b.SN_isExact() && a.SN_eq(b));
-    },
-
-    "number?"   : isNumber,
-    "complex?"  : isComplex,
-    "real?"     : function(x) { return isNumber(x) && x.SN_isReal();     },
-    "rational?" : function(x) { return isNumber(x) && x.SN_isRational(); },
-    "integer?"  : function(x) { return isNumber(x) && x.SN_isInteger();  },
-
-    "real-valued?" : isRealValued,
-
-    "rational-valued?" : function(x) {
-        return isRealValued(x) && x.SN_realPart().SN_isRational();
-    },
-
-    "integer-valued?" : function(x) {
-        return isRealValued(x) && x.SN_realPart().SN_isInteger();
-    },
+    "eqv?"      : fn_isEqv,
+    "number?"   : fn_isNumber,
+    "complex?"  : fn_isComplex,
+    "real?"     : fn_isReal,
+    "rational?" : fn_isRational,
+    "integer?"  : fn_isInteger,
+    "real-valued?"     : fn_isRealValued,
+    "rational-valued?" : fn_isRationalValued,
+    "integer-valued?"  : fn_isIntegerValued,
 
     "exact?"   : makeUnary("SN_isExact"),
     "inexact?" : makeUnary("SN_isInexact"),
@@ -632,16 +617,7 @@ SchemeNumber.fn = {
     inexact : makeUnary("SN_toInexact"),
     exact   : makeUnary("SN_toExact"),
 
-    "=" : function(a, b) {
-        var len = arguments.length;
-        a = SN(a);
-        for (var i = 1; i < len; i++) {
-            if (!a.SN_eq(arguments[i]))
-                return false;
-        }
-        return true;
-    },
-
+    "="  : fn_equals,
     "<"  : makeComparator("SN_lt"),
     ">"  : makeComparator("SN_gt"),
     "<=" : makeComparator("SN_le"),
@@ -680,8 +656,11 @@ SchemeNumber.fn = {
     "-" : function(a) {
         var ret = SN(a);
         var len = arguments.length;
-        if (len < 2)
-            return ret.SN_negate();
+
+        switch (len) {
+        case 0: args1plus(arguments);
+        case 1: return ret.SN_negate();
+        }
         var i = 1;
         while (i < len)
             ret = ret.SN_subtract(SN(arguments[i++]));
@@ -691,10 +670,12 @@ SchemeNumber.fn = {
     "/" : function(a) {
         var first = SN(a);
         var len = arguments.length;
-        if (len < 2)
-            return first.SN_reciprocal();
-        if (len === 2)
-            return first.SN_divide(arguments[1]);
+
+        switch (len) {
+        case 0: args1plus(arguments);
+        case 1: return first.SN_reciprocal();
+        case 2: return first.SN_divide(arguments[1]);
+        }
         var product = ONE;
         var i = 1;
         while (i < len)
@@ -703,12 +684,12 @@ SchemeNumber.fn = {
     },
 
     abs             : makeUnary("SN_abs"),
-    "div-and-mod"   : function(x, y) { return doDivMod(x, y, false, 2); },
-    div             : function(x, y) { return doDivMod(x, y, false, 0); },
-    mod             : function(x, y) { return doDivMod(x, y, false, 1); },
-    "div0-and-mod0" : function(x, y) { return doDivMod(x, y, true, 2); },
-    div0            : function(x, y) { return doDivMod(x, y, true, 0); },
-    mod0            : function(x, y) { return doDivMod(x, y, true, 1); },
+    "div-and-mod"   : makeDivMod(false, 2),
+    div             : makeDivMod(false, 0),
+    mod             : makeDivMod(false, 1),
+    "div0-and-mod0" : makeDivMod(true, 2),
+    div0            : makeDivMod(true, 0),
+    mod0            : makeDivMod(true, 1),
 
     gcd : function() {
         var ret = ZERO;
@@ -747,9 +728,11 @@ SchemeNumber.fn = {
 
     log : function(z, base) {
         var ret = SN(z).SN_log();
-        if (typeof base !== "undefined")
-            ret = ret.SN_divide(SN(base).SN_log());
-        return ret;
+        switch (arguments.length) {
+        case 2: ret = ret.SN_divide(SN(base).SN_log());  // fall through
+        case 1: return ret;
+        default: wrongArgCount("1-2", arguments);
+        }
     },
 
     sin  : makeUnary("SN_sin"),
@@ -762,8 +745,7 @@ SchemeNumber.fn = {
         switch (arguments.length) {
         case 1: return SN(y).SN_atan();
         case 2: return SN(y).SN_atan2(x);
-        default: raise("&assertion", "atan expects 1 to 2 arguments, given "
-                       + arguments.length);
+        default: wrongArgCount("1-2", arguments);
         }
     },
 
@@ -772,10 +754,12 @@ SchemeNumber.fn = {
     expt : makeBinary("SN_expt"),
 
     "make-rectangular" : function(x, y) {
+        arguments.length === 2 || args2(arguments);
         return makeRectangular(toReal(x), toReal(y));
     },
 
     "make-polar" : function(r, theta) {
+        arguments.length === 2 || args2(arguments);
         return makePolar(toReal(r), toReal(theta));
     },
 
@@ -785,37 +769,123 @@ SchemeNumber.fn = {
     angle       : makeUnary("SN_angle"),
 
     "number->string" : function(z, radix, precision) {
-        return SN(z).SN_numberToString(radix, precision);
+        var r = radix;
+        switch (arguments.length) {
+        case 3: assertExact(toInteger(precision));  // fall through
+        case 2:
+            r = assertExact(toInteger(r)).valueOf();
+            if (!uintegerPattern[r])
+                raise("&assertion", "invalid radix", radix);
+            // fall through
+        case 1: break;
+        default: wrongArgCount("1-3", arguments);
+        }
+        return SN(z).SN_numberToString(r, precision);
     },
 
     "string->number" : function(s, radix) {
-        return stringToNumber(String(s), radix);
+        switch (arguments.length) {
+        case 1:
+        case 2: return stringToNumber(String(s), radix);
+        default: wrongArgCount("1-2", arguments);
+        }
     }
 };
 
 // Scheme function helpers.
 
-function isComplex(x) {
-    return isNumber(x) && x.SN_isComplex();
-}
-function isRealValued(x) {
-    return isComplex(x) && x.SN_imagPart().SN_isZero();
+function wrongArgCount(expected, a) {
+    raise("&assertion", "expected " + expected +
+          " function argument" + (expected == "1" ? "" : "s") +
+          ", got " + a.length);
 }
 
-function makeUnary(methodName) {
-    return function(a) {
-        return SN(a)[methodName]();
-    };
+function args1(a) { a.length === 1 || wrongArgCount(1, a); }
+function args2(a) { a.length === 2 || wrongArgCount(2, a); }
+
+function args1plus(a) { a.length > 0 || wrongArgCount("1 or more", a); }
+function args2plus(a) { a.length > 1 || wrongArgCount("2 or more", a); }
+
+function fn_isEqv(a, b) {
+    arguments.length === 2 || args2(arguments);
+    if (a === b)
+        return true;
+    a = SN(a);
+    b = SN(b);
+    return (a.SN_eq(b) && a.SN_isExact() === b.SN_isExact());
 }
-function makeBinary(methodName) {
-    return function(a, b) {
-        return SN(a)[methodName](b);
-    };
+
+function fn_isNumber(x) {
+    arguments.length === 1 || args1(arguments);
+    return isNumber(x);
+}
+
+function fn_isComplex(x) {
+    arguments.length === 1 || args1(arguments);
+    return isNumber(x) && x.SN_isComplex();
+}
+
+function fn_isReal(x) {
+    arguments.length === 1 || args1(arguments);
+    return isNumber(x) && x.SN_isReal();
+}
+
+function fn_isRational(x) {
+    arguments.length === 1 || args1(arguments);
+    return isNumber(x) && x.SN_isRational();
+}
+
+function fn_isInteger(x) {
+    arguments.length === 1 || args1(arguments);
+    return isNumber(x) && x.SN_isInteger();
+}
+
+function fn_isRealValued(x) {
+    arguments.length === 1 || args1(arguments);
+    return isNumber(x) && x.SN_imagPart().SN_isZero();
+}
+
+function fn_isRationalValued(x) {
+    arguments.length === 1 || args1(arguments);
+    return fn_isRealValued(x) && x.SN_realPart().SN_isRational();
+}
+
+function fn_isIntegerValued(x) {
+    arguments.length === 1 || args1(arguments);
+    return fn_isRealValued(x) && x.SN_realPart().SN_isInteger();
+}
+
+function fn_equals(a, b) {
+    var len = arguments.length;
+    len > 1 || args2plus(arguments);
+    a = SN(a);
+    for (var i = 1; i < len; i++) {
+        if (!a.SN_eq(arguments[i]))
+            return false;
+    }
+    return true;
+}
+
+function makeUnary(method) {
+    function unary(a) {
+        arguments.length === 1 || args1(arguments);
+        return SN(a)[method]();
+    }
+    return unary;
+}
+
+function makeBinary(method) {
+    function binary(a, b) {
+        arguments.length === 2 || args1(arguments);
+        return SN(a)[method](b);
+    }
+    return binary;
 }
 
 function makeComparator(cmp) {
-    return function(a, b) {
+    function comparator(a, b) {
         var len = arguments.length;
+        len > 1 || args2plus(arguments);
         b = toReal(b);
         if (!toReal(a)[cmp](b))
             return false;
@@ -826,14 +896,14 @@ function makeComparator(cmp) {
             b = c;
         }
         return true;
-    };
+    }
+    return comparator;
 }
 
 function makeMaxMin(cmp) {
-    return function(a) {
+    function maxMin(a) {
         var len = arguments.length;
-        if (len === 0)
-            raise("&assertion", "max/min needs at least one argument");
+        len > 0 || args1plus(arguments);
 
         var ret = toReal(a);
         var exact = ret.SN_isExact();
@@ -852,50 +922,57 @@ function makeMaxMin(cmp) {
             }
         }
         return exact ? ret : ret.SN_toInexact();
-    };
+    }
+    return maxMin;
 }
 
 function divModArg2Zero(arg) {
     raise("&assertion", "div/mod second argument is zero", arg);
 }
 
-function doDivMod(x, y, is0, which) {
-    x = toReal(x);
-    y = toReal(y);
+function makeDivMod(is0, which) {
+    function divMod(x, y) {
+        arguments.length === 2 || args2(arguments);
+        x = toReal(x);
+        y = toReal(y);
 
-    if (!x.SN_isFinite())
-        raise("&assertion", "div/mod first argument is not finite", x);
-    if (y.SN_isZero())
-        divModArg2Zero(y);
+        if (!x.SN_isFinite())
+            raise("&assertion", "div/mod first argument is not finite", x);
+        if (y.SN_isZero())
+            divModArg2Zero(y);
 
-    if (!is0) {
+        if (!is0) {
+            switch (which) {
+            case 0: return x.SN_div(y);
+            case 1: return x.SN_mod(y);
+            case 2: default: return x.SN_divAndMod(y);
+            }
+        }
+
+        var dm = x.SN_divAndMod(y);
+        var m = dm[1];
+        var yabs = y.SN_abs();
+
+        if (m.SN_add(m).SN_ge(yabs)) {
+            switch (which) {
+            case 0: return dm[0].SN_add(y.SN_isNegative() ? M_ONE : ONE);
+            case 1: return m.SN_subtract(yabs);
+            case 2: default: return [dm[0].SN_add(y.SN_isNegative() ?
+                                                  M_ONE : ONE),
+                                     m.SN_subtract(yabs)];
+            }
+        }
         switch (which) {
-        case 0: return x.SN_div(y);
-        case 1: return x.SN_mod(y);
-        case 2: default: return x.SN_divAndMod(y);
+        case 0: return dm[0];
+        case 1: return m;
+        case 2: default: return dm;
         }
     }
-
-    var dm = x.SN_divAndMod(y);
-    var m = dm[1];
-    var yabs = y.SN_abs();
-
-    if (m.SN_add(m).SN_ge(yabs)) {
-        switch (which) {
-        case 0: return dm[0].SN_add(y.SN_isNegative() ? M_ONE : ONE);
-        case 1: return m.SN_subtract(yabs);
-        case 2: default: return [dm[0].SN_add(y.SN_isNegative() ? M_ONE : ONE),
-                                 m.SN_subtract(yabs)];
-        }
-    }
-    switch (which) {
-    case 0: return dm[0];
-    case 1: return m;
-    case 2: default: return dm;
-    }
+    return divMod;
 }
 
 function rationalize(x, delta) {
+    args2(arguments);
     x = SN(x);
     delta = SN(delta);
 
@@ -986,8 +1063,11 @@ SchemeNumber.raise = defaultRaise;
 
 function defaultRaise(conditionType, message, irritant) {
     var msg = "SchemeNumber: " + conditionType + ": " + message;
-    if (arguments.length > 2)
+    if (arguments.length > 2) {
+        if (isNumber(irritant))
+            irritant = irritant.SN_numberToString();
         msg += ": " + irritant;
+    }
     throw new Error(msg);
 }
 
@@ -1099,19 +1179,13 @@ DISP.Flonum.SN_numberToString = function(radix, precision) {
     }
 
     if (precision != undefined) {
-        var p = toInteger(precision);
-        if (!p.SN_isExact() || !p.SN_isPositive())
-            raise("&assertion",
-                  "precision is not an exact positive integer", p);
-
-        p = p.SN_numberToString();
-        if (p < 53) {
+        if (precision < 53) {
             var bits = numberToBinary(this).replace(/[-+.]/g, "")
-                .replace(/^0+/, "").length;
-            if (p < bits)
-                p = bits;
+                .replace(/^0+/, "").replace(/0+$/, "").length;
+            if (precision < bits)
+                precision = bits;
         }
-        s += "|" + p;
+        s += "|" + precision;
     }
 
     return s;
@@ -1390,11 +1464,16 @@ DISP.C.SN_isUnit     = retFalse;
 
 DISP.C.SN_isComplex  = retTrue;
 
-DISP.C.toString = function(radix, precision) {  // XXX is this used?
-    return this.SN_numberToString(radix, precision);
-};
-DISP.C.valueOf = DISP.C.toString;  // XXX is this used?
 DISP.C.SN_numberToString = pureVirtual;
+
+DISP.C.toString = function(radix) {
+    return this.SN_numberToString(radix);
+};
+DISP.C.valueOf = function() {
+    if (this.SN_imagPart().isZero())
+        return this.SN_realPart().valueOf();
+    return NaN;
+};
 
 DISP.C.SN_debug = function() { return "C"; };
 

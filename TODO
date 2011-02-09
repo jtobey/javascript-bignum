@@ -1,7 +1,5 @@
 TODO:
 
-* Make R6RS functions raise &assertion on wrong number of arguments.
-
 * Test divAndMod_EINative corner cases.
 
 * ECMA Number.prototype methods: toLocaleString, toFixed,
