@@ -1528,10 +1528,10 @@ DISP.R.SN_divide = function(z) {
 DISP.R.SN__divide_Flonum = DISP.Flonum.SN__divide_R;
 
 function complexExpt(b, p) {
-    if (b.isZero()) {
-        if (p.isZero())
+    if (b.SN_isZero()) {
+        if (p.SN_isZero())
             return toFlonum(1);
-        if (p.realPart().isPositive())
+        if (p.SN_realPart().SN_isPositive())
             return INEXACT_ZERO;
         raise("&implementation-restriction", "invalid power for zero expt", p);
     }
