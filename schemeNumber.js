@@ -2709,7 +2709,7 @@ DISP.EIBig.SN__exp10 = function(n) {
         return this;
     if (n > 0)
         return new EIBig(this._.exp10(n));
-    return reduceEQ(this, ONE._exp10(-n));
+    return reduceEQ(this, ONE.SN__exp10(-n));
 };
 
 DISP.EIBig.SN_sqrt = function() {
