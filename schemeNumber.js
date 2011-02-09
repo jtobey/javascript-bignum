@@ -43,7 +43,7 @@ if (!BigInteger) {
     These operations are allowed to fail due to running out of memory,
     but they are not allowed to return approximations the way
     ECMAScript operators may, unless given one or more inexact
-    argument.
+    arguments.
 
     For example, adding exact *1/100* to exact *0* one hundred times
     produces exactly *1*, not 1.0000000000000007 as in JavaScript.
@@ -493,7 +493,10 @@ function assertNonNegative(n) {
 
     These functions are stored in <fn> under their Scheme names, so
     ["quotation"] is needed where the names contain characters that
-    are incompatible with dot.notation.
+    are incompatible with dot.notation.  (In JavaScript, *X.Y* and
+    *X["Y"]* are equivalent expressions where Y is a valid identifier.
+    Not all Scheme function names are valid JavaScript identifiers, so
+    one needs the second syntax to extract them from <fn>.)
 
     You may find it convenient to copy <SchemeNumber>, <fn>, and the
     output function <number->string> into short-named variables, by
@@ -517,8 +520,8 @@ function assertNonNegative(n) {
     > a2 = sf["exact?"]("2.0");     // same
     > a2 = sf["exact?"](sn("2.0")); // same
 
-    Note that the following functions accept any type of arguments and
-    therefore do not apply SchemeNumber to them:
+    Note that the following functions accept arguments of any type and
+    therefore do not apply <SchemeNumber> to their arguments:
 
     - <eqv?>
     - <number?>
@@ -530,7 +533,7 @@ function assertNonNegative(n) {
     - <rational-valued?>
     - <integer-valued?>
 
-    Here, then, is 2 to the 1,024th power, as a decimal
+    Here, for example, is 2 to the 1,024th power, as a decimal
     string:
 
     > a3 = ns(sf.expt("2", "1024"));
@@ -571,12 +574,12 @@ function assertNonNegative(n) {
 
       o The library exhibits other visible behaviors besides those
         described herein.  However, they are not part of its public
-        API and may change significantly in future releases.
+        API and may change or disappear from one release to the next.
 
       o In particular, Scheme numbers' *toString* property sometimes
         produces output that is incorrect in the Scheme sense.  (This
-        stems from my willingness to add methods to Number.prototype
-        but not to replace the standard Number.prototype.toString.)
+        stems from the decision to represent inexact reals as
+        unadorned native numbers.)
 
     To serialize numbers as Scheme would, use
     <SchemeNumber.fn["number->string"]>.
@@ -2706,7 +2709,7 @@ DISP.EIBig.SN__exp10 = function(n) {
         return this;
     if (n > 0)
         return new EIBig(this._.exp10(n));
-    return reduceEQ(this, ONE._exp10(-n));
+    return reduceEQ(this, ONE.SN__exp10(-n));
 };
 
 DISP.EIBig.SN_sqrt = function() {

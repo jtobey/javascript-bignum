@@ -100,7 +100,7 @@ my @SPEC =
      [qw( imag-part z )                                 ],
      [qw( magnitude z )                                 ],
      [qw( angle z )                                     ],
-     [qw( number->string z )                            ],
+     [qw( number->string z+big )                        ],
      [qw( number->string z radix )                      ],
      [qw( number->string z radix ksmall )               ],
     );
@@ -123,9 +123,11 @@ my %DATA =
      ksmall => [qw( 1 7 )],
      klarge => [qw( #e1e17 9007199254740992 )],
      radix => [qw( 2 8 10 16 )],
-     big1 =>['2273201718951068473231554543576467700230703002423341552'],
-     big2 =>['2273201718951068473231548191215506418319396854124635512'],
+     'z+big' => [qw( 'z 'bigint 'bd1 )],
+     big1 => ['2273201718951068473231554543576467700230703002423341552'],
+     big2 => ['2273201718951068473231548191215506418319396854124635512'],
      bigint => [qw( 'big1 'big2 )],
+     bd1 => ['#e1234567890.123456789'],
     );
 sub splice_subtypes {
     my ($code) = (@_);
