@@ -88,12 +88,7 @@ if (!BigInteger) {
 */
 var SchemeNumber = (function() {
 
-/*
-    Property: VERSION
-    Library version as an array of integers.
-
-    For example, *[1,2,4]* corresponds to Version 1.2.4.
-*/
+function assert(x) { if (!x) throw new Error("assertion failed"); }
 
 var abs      = Math.abs;
 var floor    = Math.floor;
@@ -172,6 +167,14 @@ function SN(obj) {
 }
 // For NaturalDocs:
 var SchemeNumber = SN;
+
+/*
+    Property: VERSION
+    Library version as an array of integers.
+
+    For example, *[1,2,4]* corresponds to Version 1.2.4.
+*/
+SchemeNumber.VERSION = [1];
 
 function isNumber(x) {
     return x instanceof Number || typeof x === "number";
@@ -714,7 +717,7 @@ SchemeNumber.fn = {
         for (var i = 0; i < len; i++) {
             var arg = toInteger(arguments[i]);
             exact = exact && arg.SN_isExact();
-            ret = gcd(ret, arg.SN_abs().SN_toExact());
+            ret = gcdNonneg(ret, arg.SN_abs().SN_toExact());
         }
         ret = ret.SN_abs();
         return (exact ? ret : ret.SN_toInexact());
@@ -727,10 +730,9 @@ SchemeNumber.fn = {
         for (var i = 0; i < len; i++) {
             var arg = toInteger(arguments[i]);
             exact = exact && arg.SN_isExact();
-            arg = arg.SN_toExact();
-            ret = ret.SN_multiply(arg).SN_divide(gcd(ret, arg.SN_abs()));
+            arg = arg.SN_abs().SN_toExact();
+            ret = ret.SN_multiply(arg).SN_divide(gcdNonneg(ret, arg.SN_abs()));
         }
-        ret = ret.SN_abs();
         return (exact ? ret : ret.SN_toInexact());
     },
 
@@ -1235,7 +1237,7 @@ function nativeToExact(x) {
 }
 
 DISP.Flonum.SN_toExact = function() {
-    return nativeToExact(this);
+    return nativeToExact(+this);
 };
 
 DISP.Flonum.SN_toInexact = retThis;
@@ -1526,10 +1528,10 @@ DISP.R.SN_divide = function(z) {
 DISP.R.SN__divide_Flonum = DISP.Flonum.SN__divide_R;
 
 function complexExpt(b, p) {
-    if (b.isZero()) {
-        if (p.isZero())
+    if (b.SN_isZero()) {
+        if (p.SN_isZero())
             return toFlonum(1);
-        if (p.realPart().isPositive())
+        if (p.SN_realPart().SN_isPositive())
             return INEXACT_ZERO;
         raise("&implementation-restriction", "invalid power for zero expt", p);
     }
@@ -1924,7 +1926,7 @@ function reduceEQ(n, d) {
     if (d.SN_isZero())
         divisionByExactZero();
 
-    var g = gcd(n.SN_abs(), d.SN_abs());
+    var g = gcdNonneg(n.SN_abs(), d.SN_abs());
 
     n = n.SN_div(g);
     d = d.SN_div(g);
@@ -1944,8 +1946,8 @@ function canonicalEQ(n, d) {
 //
 
 function EQFraction(n, d) {
-    //assert(d.gt(ONE));
-    //assert(gcd(n.abs(), d).eq(ONE));
+    //assert(d.SN_gt(ONE));
+    //assert(gcdNonneg(n.SN_abs(), d).SN_eq(ONE));
     this._n = n;
     this._d = d;
 }
@@ -2270,7 +2272,7 @@ DISP.EI.SN__expt_EI = function(n) {
     var s = this.SN_sign();
     // Any inexactness is beyond the range that will fit in memory, we
     // assume.
-    //assert(thisSN_.abs().SN_gt(ONE));
+    //assert(this.SN_abs().SN_gt(ONE));
     var a = positiveIntegerExpt(n, this.SN_abs().valueOf());
     return (s > 0 ? a : a.SN_reciprocal());
 };
@@ -2763,31 +2765,35 @@ function gcdNative(a, b) {
     return toEINative(b);
 }
 
-function gcdBig(a, b) {
+// a and b must be nonnegative, exact integers.
+function gcdNonneg(a, b) {
+    //assert(!a.SN_isNegative());
+    //assert(!b.SN_isNegative());
+    //assert(a instanceof EI);
+    //assert(b instanceof EI);
+    if (a instanceof EINative && b instanceof EINative)
+        return gcdNative(a.valueOf(), b.valueOf());
+
+    a = a.SN__toBigInteger();
+    if (a.isZero())
+        return b;
+
+    b = b.SN__toBigInteger();
     var c;
-    while (!a.isZero()) {
+
+    while (true) {
         c = a;
         a = b.remainder(a);
+        if (a.isZero())
+            return new EIBig(c);
         b = c;
+        if (b.compareAbs(FIRST_BIG_INTEGER) < 0)
+            return gcdNative(a.valueOf(), b.valueOf());
     }
-    return reduceBigInteger(b);
 }
 
 function numberToBigInteger(n) {
     return BigInteger.parse(n.toString(16), 16);
-}
-
-// a and b must be nonnegative, either EIBig or EINative.
-function gcd(a, b) {
-    //assert(!a.SN_isNegative());
-    //assert(!b.SN_isNegative());
-    //assert(a instanceof EIBig || a instanceof EINative);
-    //assert(b instanceof EIBig || b instanceof EINative);
-    if (a instanceof EIBig)
-        return gcdBig(a._, b.SN__toBigInteger());
-    if (b instanceof EIBig)
-        return gcdBig(numberToBigInteger(a._), b._);
-    return gcdNative(a._, b._);
 }
 
 //
