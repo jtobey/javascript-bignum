@@ -716,90 +716,247 @@ var fn = SchemeNumber.fn = {
     Refer to the argument type key under <Function list>.
 
     fn["number?"](obj)   - Returns true if *obj* is a Scheme number.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_440>.
+
     fn["complex?"](obj)  - Returns true if *obj* is a Scheme complex number.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_442>.
+
     fn["real?"](obj)     - Returns true if *obj* is a Scheme real number.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_444>.
+
     fn["rational?"](obj) - Returns true if *obj* is a Scheme rational number.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_446>.
+
     fn["integer?"](obj)  - Returns true if *obj* is a Scheme integer.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_448>.
+
     fn["real-valued?"](obj) - Returns true if *obj* is a Scheme complex number
                               and *fn["imag-part"](obj)* is zero.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_450>.
+
     fn["rational-valued?"](obj) - Returns true if *obj* is real-valued and
                                   *fn["real-part"](obj)* is rational.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_452>.
+
     fn["integer-valued?"](obj)  - Returns true if *obj* is real-valued and
                                   *fn["real-part"](obj)* is an integer.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_454>.
+
     fn["exact?"](z)   - Returns true if *z* is exact.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_456>.
+
     fn["inexact?"](z) - Returns true if *z* is inexact.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_458>.
+
+    fn.inexact(z) - Returns an inexact number equal to *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_460>.
+
+    fn.exact(z)   - Returns an exact number equal to *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_462>.
+
     fn["eqv?"](obj1, obj2) - Returns true if *obj1 === obj2* or both arguments
                              are Scheme numbers and behave identically.
+                             Specified by <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_428>.
+
     fn["="](z, z, z...) - Returns true if all arguments are mathematically
                           equal, though perhaps differing in exactness.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_464>.
+
     fn["<"](x, x, x...) - Returns true if arguments increase monotonically.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_466>.
+
     fn[">"](x, x, x...) - Returns true if arguments decrease monotonically.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_468>.
+
     fn["<="](x, x, x...) - Returns true if arguments are monotonically
                            nondecreasing.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_470>.
+
     fn[">="](x, x, x...) - Returns true if arguments are monotonically
                            nonincreasing.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_472>.
+
     fn["zero?"](z)      - Returns true if *z* equals zero.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_474>.
+
     fn["positive?"](x)  - Returns true if *x* is positive.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_476>.
+
     fn["negative?"](x)  - Returns true if *x* is negative.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_478>.
+
     fn["odd?"](n)       - Returns true if *n* is odd.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_480>.
+
     fn["even?"](n)      - Returns true if *n* is even.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_482>.
+
     fn["finite?"](x)    - Returns true if *x* is finite.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_484>.
+
     fn["infinite?"](x)  - Returns true if *x* is plus or minus infinity.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_486>.
+
     fn["nan?"](x)       - Returns true if *x* is a NaN.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_488>.
+
     fn.max(x, x...)     - Returns the greatest argument.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_490>.
+
     fn.min(x, x...)     - Returns the least argument.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_492>.
+
     fn["+"](z...)       - Returns the sum of the arguments.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_494>.
+
     fn["*"](z...)       - Returns the product of the arguments.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_496>.
+
     fn["-"](z)          - Returns the negation of *z* (-*z*).
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_498>.
+
     fn["-"](z1, z2...)  - Returns *z1* minus the sum of the *z2*(s).
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_500>.
+
     fn["/"](z)          - Returns the reciprocal of *z* (1 / *z*).
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_502>.
+
     fn["/"](z1, z2...)  - Returns *z1* divided by the product of the *z2*(s).
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_504>.
+
     fn.abs(x)           - Returns the absolute value of *x*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_506>.
+
     fn["div-and-mod"](x, y) - Returns *fn.div(x, y)* and *fn.mod(x, y)*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_508>.
+
     fn.div(x, y)        - Returns the greatest integer less than or equal to
                           *x* / *y*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_510>.
+
     fn.mod(x, y)        - Returns *x* - (*y* * fn.div(*x*, *y*)).
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_512>.
+
     fn["div0-and-mod0"](x, y) - Returns *fn.div0(x, y)* and *fn.mod0(x, y)*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_514>.
+
     fn.div0(x, y)       - Returns the integer nearest *x* / *y*, ties go lower.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_516>.
+
     fn.mod0(x, y)       - Returns *x* - (*y* * fn.div0(*x*, *y*)).
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_518>.
+
     fn.gcd(n...) - Returns the arguments' greatest common non-negative divisor.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_520>.
+
     fn.lcm(n...) - Returns the arguments' least common positive multiple.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_522>.
+
     fn.numerator(q)     - Returns *q* * *fn.denominator(q)*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_524>.
+
     fn.denominator(q)   - Returns the smallest positive integer which when
                           multiplied by *q* yields an integer.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_526>.
+
     fn.floor(x)         - Returns the greatest integer not greater than *x*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_528>.
+
     fn.ceiling(x)       - Returns the least integer not less than *x*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_530>.
+
     fn.truncate(x)      - Returns the closest integer between 0 and *x*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_532>.
+
     fn.round(x)         - Returns the closest integer to *x*, ties go even.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_534>.
+
     fn.rationalize(x, y) - Returns the simplest fraction within *y* of *x*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_536>.
+
     fn.exp(z)           - Returns e to the *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_540>.
+
     fn.log(z)           - Returns the natural logarithm of *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_542>.
+
     fn.log(z1, z2)      - Returns the base-*z2* logarithm of *z1*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_544>.
+
     fn.sin(z)           - Returns the sine of *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_546>.
+
     fn.cos(z)           - Returns the cosine of *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_548>.
+
     fn.tan(z)           - Returns the tangent of *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_550>.
+
     fn.asin(z)          - Returns a number whose sine is *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_552>.
+
     fn.acos(z)          - Returns a number whose cosine is *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_554>.
+
     fn.atan(z)          - Returns a number whose tangent is *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_556>.
+
     fn.atan(y, x)       - Returns the angle that passes through *(x,y)*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_558>.
+
     fn.sqrt(z)          - Returns the square root of *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_560>.
+
     fn["exact-integer-sqrt"](k) - Returns maximal exact s and non-negative r
                                   such that s*s + r = *k*.
-    fn["fn.expt"](z1, z2) - Returns *z1* to the power *z2*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_562>.
+
+    fn.expt(z1, z2) - Returns *z1* to the power *z2*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_564>.
+
     fn["make-rectangular"](x, y) - Returns the complex number *x + iy*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_566>.
+
     fn["make-polar"](r, theta) - Returns the complex number with magnitude *r*
                                  and angle *theta*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_568>.
+
     fn["real-part"](z) - Returns x such that *z* = x + iy.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_570>.
+
     fn["imag-part"](z) - Returns y such that *z* = x + iy.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_572>.
+
     fn.magnitude(z)    - Returns the magnitude of *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_574>.
+
     fn.angle(z)        - Returns *fn.atan2(y,x)* where *z* = x + iy.
-    fn["number->string"](z) - Converts *z* to a string, base 10.
-    fn["number->string"](z, radix) - Converts *z* to a string, base *radix*.
-    fn["number->string"](z, radix, precision) - Converts and appends "|p" where
-                         p >= *precision* is the count of significant bits.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_576>.
+
+    Function: fn["number->string"](z)
+    Converts *z* to a string, base 10.
+
+    Specified by: <R6RS at
+    http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_578>
+
+    Function: fn["number->string"](z, radix)
+    Converts *z* to a string, base *radix*.
+    *radix* must be exact 2, 8, 10, or 16.
+
+    Specified by: <R6RS at
+    http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_580>
+
+    Function: fn["number->string"](z, radix, precision)
+    Converts and suffixes *z* with a count of significant bits.
+    Appends "|p" to each inexact real component of *z* where p >=
+    *precision* is the smallest mantissa width needed to represent the
+    component exactly.
+
+    Specified by: <R6RS at
+    http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_582>
 
     Function: fn["string->number"](string)
-    Parses *string* as a Scheme number.
+    Parses *string* as a Scheme number.  Returns *false* if unable.
 
     Examples:
 
@@ -822,10 +979,17 @@ var fn = SchemeNumber.fn = {
     > "#i#b101" - inexact 5.0, same as "#b#i101".
     > "1.2345678|24" - rounded as if to single-precision (about 1.23456776).
 
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_584>
+
+    See Also: <R6RS section 4.2.8: Numbers at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-7.html#node_sec_4.2.8>
+
     Function: fn["string->number"](string, radix)
     Parses *string* as a Scheme number using *radix* as default radix.
 
-    If *string* contains a radix prefix, it takes precedence over *radix*.
+    *radix* must be exact 2, 8, 10, or 16.  If *string* contains a
+    radix prefix, it takes precedence over *radix*.
+
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_586>
 */
 
     "eqv?"      : fn_isEqv,
