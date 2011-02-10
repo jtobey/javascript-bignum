@@ -1,7 +1,5 @@
 TODO:
 
-* Test divAndMod_EINative corner cases.
-
 * ECMA Number.prototype methods: toLocaleString, toFixed,
   toExponential, toPrecision.  Implement for fractions and big ints.
 

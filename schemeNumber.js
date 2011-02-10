@@ -2642,15 +2642,15 @@ function divAndMod_EINative(t, x, which) {
 
     if (tmp > -9007199254740992)
         mod = t - tmp;
-    // XXX I'd like a nice test suite for this.
     else if (div > 0)
         mod = (t - x) - (x * (div - 1));
     else
         mod = (t + x) - (x * (div + 1));
-    mod = toEINative(mod);
 
+    mod = toEINative(mod);
     if (which === 1)
         return mod;
+
     return [toEINative(div), mod];
 };
 
