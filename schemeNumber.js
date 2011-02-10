@@ -494,7 +494,7 @@ function assertExact(z) {
 
 /*
     Property: fn
-    Container of Scheme functions.
+    Container of <Scheme functions>.
 
     The <SchemeNumber> object contains a property, <SchemeNumber.fn>,
     which in turn contains the functions implementing the Scheme
@@ -592,15 +592,145 @@ function assertExact(z) {
 
     To test a Scheme number for numerical equality with another Scheme
     number or a native value, use <SchemeNumber.fn["="]>.  Likewise
-    for *">"* etc.  Refer to <R6RS at http://www.r6rs.org/> for the
-    full list of functions.
+    for *">"* etc.
+*/
+var fn = SchemeNumber.fn = {
 
-    See Also:
+/*
+    About: Function list
 
-        <SchemeNumber>
+    All <Scheme functions> are specified by <R6RS at
+    http://www.r6rs.org/>.  In the list below, argument names indicate
+    applicable types as follows:
+
+    obj - any value
+    z - any Scheme number
+    x - a real number
+    y - a real number
+    q - a rational number (excludes infinities and NaN)
+    n - an integer
+    k - an exact, non-negative integer
+    radix - an exact integer, either 2, 8, 10, or 16
+    precision - an exact, positive integer
+
+    Functions: Scheme functions
+    Elements of <fn>.
+
+    Refer to the argument type key under <Function list>.
+
+    fn["number?"](obj)   - Returns true if *obj* is a Scheme number.
+    fn["complex?"](obj)  - Returns true if *obj* is a Scheme complex number.
+    fn["real?"](obj)     - Returns true if *obj* is a Scheme real number.
+    fn["rational?"](obj) - Returns true if *obj* is a Scheme rational number.
+    fn["integer?"](obj)  - Returns true if *obj* is a Scheme integer.
+    fn["real-valued?"](obj) - Returns true if *obj* is a Scheme complex number
+                              and *fn["imag-part"](obj)* is zero.
+    fn["rational-valued?"](obj) - Returns true if *fn["real-valued?"](obj)* and
+                                  *fn["real-part"](obj)* is rational.
+    fn["integer-valued?"](obj)  - Returns true if *fn["real-valued?"](obj)* and
+                                  *fn["real-part"](obj)* is an integer.
+    fn["exact?"](z)   - Returns true if *z* is exact.
+    fn["inexact?"](z) - Returns true if *z* is inexact.
+    fn["eqv?"](obj1, obj2) - Returns true if *obj1 === obj2* or both arguments
+                             are Scheme numbers and behave identically.
+    fn["="](z, z, z...) - Returns true if all arguments are mathematically
+                          equal, though perhaps differing in exactness.
+    fn["<"](x, x, x...) - Returns true if arguments increase monotonically.
+    fn[">"](x, x, x...) - Returns true if arguments decrease monotonically.
+    fn["<="](x, x, x...) - Returns true if arguments are monotonically
+                           nondecreasing.
+    fn[">="](x, x, x...) - Returns true if arguments are monotonically
+                           nonincreasing.
+    fn["zero?"](z)      - Returns true if *z* equals zero.
+    fn["positive?"](x)  - Returns true if *x* is positive.
+    fn["negative?"](x)  - Returns true if *x* is negative.
+    fn["odd?"](n)       - Returns true if *n* is odd.
+    fn["even?"](n)      - Returns true if *n* is even.
+    fn["finite?"](x)    - Returns true if *x* is finite.
+    fn["infinite?"](x)  - Returns true if *x* is plus or minus infinity.
+    fn["nan?"](x)       - Returns true if *x* is a NaN.
+    fn.max(x, x...)     - Returns the greatest argument.
+    fn.min(x, x...)     - Returns the least argument.
+    fn["+"](z...)       - Returns the sum of the arguments.
+    fn["*"](z...)       - Returns the product of the arguments.
+    fn["-"](z)          - Returns the negation of *z* (-*z*).
+    fn["-"](z1, z2...)  - Returns *z1* minus the sum of the *z2*(s).
+    fn["/"](z)          - Returns the reciprocal of *z* (1 / *z*).
+    fn["/"](z1, z2...)  - Returns *z1* divided by the product of the *z2*(s).
+    fn.abs(x)           - Returns the absolute value of *x*.
+    fn["div-and-mod"](x, y) - Returns *fn.div(x, y)* and *fn.mod(x, y)*.
+    fn.div(x, y)        - Returns the greatest integer less than or equal to
+                          *x* / *y*.
+    fn.mod(x, y)        - Returns *x* - (*y* * fn.div(*x*, *y*)).
+    fn["div0-and-mod0"](x, y) - Returns *fn.div0(x, y)* and *fn.mod0(x, y)*.
+    fn.div0(x, y)       - Returns the integer nearest *x* / *y*, ties go lower.
+    fn.mod0(x, y)       - Returns *x* - (*y* * fn.div0(*x*, *y*)).
+    fn.gcd(n...) - Returns the arguments' greatest common non-negative divisor.
+    fn.lcm(n...) - Returns the arguments' least common positive multiple.
+    fn.numerator(q)     - Returns *q* * *fn.denominator(q)*.
+    fn.denominator(q)   - Returns the smallest positive integer which when
+                          multiplied by *q* yields an integer.
+    fn.floor(x)         - Returns the greatest integer not greater than *x*.
+    fn.ceiling(x)       - Returns the least integer not less than *x*.
+    fn.truncate(x)      - Returns the closest integer between 0 and *x*.
+    fn.round(x)         - Returns the closest integer to *x*, ties go even.
+    fn.rationalize(x, y) - Returns the simplest fraction within *y* of *x*.
+    fn.exp(z)           - Returns e to the *z*.
+    fn.log(z)           - Returns the natural logarithm of *z*.
+    fn.log(z1, z2)      - Returns the base-*z2* logarithm of *z1*.
+    fn.sin(z)           - Returns the sine of *z*.
+    fn.cos(z)           - Returns the cosine of *z*.
+    fn.tan(z)           - Returns the tangent of *z*.
+    fn.asin(z)          - Returns a number whose sine is *z*.
+    fn.acos(z)          - Returns a number whose cosine is *z*.
+    fn.atan(z)          - Returns a number whose tangent is *z*.
+    fn.atan(y, x)       - Returns the angle that passes through *(x,y)*.
+    fn.sqrt(z)          - Returns the square root of *z*.
+    fn["exact-integer-sqrt"](k) - Returns maximal exact s and non-negative r
+                                  such that s*s + r = *k*.
+    fn["fn.expt"](z1, z2) - Returns *z1* to the power *z2*.
+    fn["make-rectangular"](x, y) - Returns the complex number *x + iy*.
+    fn["make-polar"](r, theta) - Returns the complex number with magnitude *r*
+                                 and angle *theta*.
+    fn["real-part"](z) - Returns x such that *z* = x + iy.
+    fn["imag-part"](z) - Returns y such that *z* = x + iy.
+    fn.magnitude(z)    - Returns the magnitude of *z*.
+    fn.angle(z)        - Returns *fn.atan2(y,x)* where *z* = x + iy.
+    fn["number->string"](z) - Converts *z* to a string, base 10.
+    fn["number->string"](z, radix) - Converts *z* to a string, base *radix*.
+    fn["number->string"](z, radix, precision) - Converts and appends "|p" where
+                         p >= *precision* is the count of significant bits.
+
+    Function: fn["string->number"](string)
+    Parses *string* as a Scheme number.
+
+    Examples:
+
+    > "1"       - exact 1.
+    > "1."      - inexact 1, same as "1.0".
+    > "1/2"     - exact one-half, same as "2/4" etc.
+    > "0.5"     - inexact 0.5.
+    > "12e3"    - inexact 12000.
+    > "i"       - the imaginary unit.
+    > "-2+1/2i" - exact complex number.
+    > "2.@1"    - complex in polar coordinates, r=2.0, theta=1.0.
+    > "+inf.0"  - positive infinity.
+    > "-inf.0"  - negative infinity.
+    > "+nan.0"  - IEEE NaN (not-a-number).
+    > "#e0.5"   - exact one-half, forced exact by prefix #e.
+    > "#i1/2"   - 0.5, inexact by prefix.
+    > "#x22"    - exact 34 (hexadecimal 22).
+    > "#o177"   - exact 127 (octal 177).
+    > "#b101"   - exact 5 (binary 101).
+    > "#i#b101" - inexact 5.0, same as "#b#i101".
+    > "1.2345678|24" - rounded as if to single-precision (about 1.23456776).
+
+    Function: fn["string->number"](string, radix)
+    Parses *string* as a Scheme number using *radix* as default radix.
+
+    If *string* contains a radix prefix, it takes precedence over *radix*.
 */
 
-var fn = SchemeNumber.fn = {
     "eqv?"      : fn_isEqv,
     "number?"   : fn_isNumber,
     "complex?"  : fn_isComplex,
@@ -1095,7 +1225,7 @@ function raise() {
     Maximum size of integers created by the <expt> function.
 
     To avoid using up all system memory, exact results of a call to
-    <SchemeNumber.fn.expt> are capped at a configurable number of
+    <SchemeNumber.fn.expt(z, z)> are capped at a configurable number of
     digits, by default one million.  <SchemeNumber.maxIntegerDigits>
     holds this limit.
 
@@ -2618,6 +2748,7 @@ DISP.EINative.SN_square = function() {
 
 DISP.EINative.SN_reciprocal = function() {
     var x = this._;
+    assert(x !== 0);
     /*
     if (x === 0)  // Removed this check, since ZERO overrides.
         throw divisionByExactZero();
