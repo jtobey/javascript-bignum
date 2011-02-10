@@ -2,5 +2,6 @@
 
 [ -d docs ] || mkdir docs
 [ -d NaturalDocs ] || mkdir NaturalDocs
-NaturalDocs -i . -p NaturalDocs -o HTML docs --documented-only \
-    --exclude-input test --exclude-input examples
+NaturalDocs -i . -p NaturalDocs -o HTML docs
+perl -pi -e's/&amp;(quot|lt|gt);/&$1;/g; s/&[lr]dquo;/&quot;/g' \
+    docs/files/schemeNumber-js.html

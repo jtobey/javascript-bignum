@@ -1,17 +1,10 @@
 TODO:
 
-* Make R6RS functions raise &assertion on wrong number of arguments.
-
-* Test divAndMod_EINative corner cases.
-
 * ECMA Number.prototype methods: toLocaleString, toFixed,
   toExponential, toPrecision.  Implement for fractions and big ints.
 
-* Document the Scheme functions independently of R6RS but with
-  "specified by..."
-
 * Apply Vitaly Magerya's BigInteger performance patch
-  http://tx97.net/~magv/biginteger.js.diff
+  (comp.lang.scheme thread circa 2011-02-09)
 
 * Consider providing the option not to tamper with Number.prototype.
 

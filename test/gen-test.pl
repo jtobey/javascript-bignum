@@ -61,9 +61,11 @@ my @SPEC =
      [qw( / z z z )                                     ],
      [qw( abs x )                                       ],
      [qw( div-and-mod x x )                             ],
+     [qw( div-and-mod dm1 dm2 )                         ],
      [qw( div x x )                                     ],
      [qw( mod x x )                                     ],
      [qw( div0-and-mod0 x x )                           ],
+     [qw( div0-and-mod0 dm1 dm2 )                       ],
      [qw( div0 x x )                                    ],
      [qw( mod0 x x )                                    ],
      [qw( gcd )                                         ],
@@ -128,6 +130,8 @@ my %DATA =
      big2 => ['2273201718951068473231548191215506418319396854124635512'],
      bigint => [qw( 'big1 'big2 )],
      bd1 => ['#e1234567890.123456789'],
+     dm1 => [qw( -9007199254740991 -8888888888888887 )],
+     dm2 => [qw( -4503599627370496 6655321077788899 )],
     );
 sub splice_subtypes {
     my ($code) = (@_);

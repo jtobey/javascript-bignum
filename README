@@ -25,12 +25,6 @@ This implementation provides all functions listed in the R6RS [1]
 Scheme specification, Section 11.7, along with "eqv?" from Section
 11.5.  ("eqv?" uses JavaScript's "===" to compare non-numbers.)
 
-Known deviation:
-
-  * In the JavaScript tradition, most functions ignore extra
-    arguments.  R6RS Section 6.2 requires an &assertion exception in
-    these cases.
-
 
 IMPLEMENTATION DETAILS
 

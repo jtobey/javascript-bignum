@@ -486,9 +486,15 @@ function assertNonNegative(n) {
     return n;
 }
 
+function assertExact(z) {
+    if (z.SN_isInexact())
+        raise("&assertion", "inexact number", z);
+    return z;
+}
+
 /*
     Property: fn
-    Container of Scheme functions.
+    Container of <Scheme functions>.
 
     The <SchemeNumber> object contains a property, <SchemeNumber.fn>,
     which in turn contains the functions implementing the Scheme
@@ -565,12 +571,6 @@ function assertNonNegative(n) {
 
     Caveats:
 
-      o As currently implemented (but expected to change), most
-        functions ignore extra arguments.  <R6RS at
-        http://www.r6rs.org/> Section 6.2 requires an *&assertion*
-        exception in these cases.  This is the only known deviation
-        from R6RS semantics as of 2011-02-08.
-
       o Arcane features such as explicit mantissa widths or complex
         transcendental functions, while believed complete, are
         unoptimized.
@@ -591,40 +591,159 @@ function assertNonNegative(n) {
     > SchemeNumber.fn["number->string"](2);  // "2."
 
     To test a Scheme number for numerical equality with another Scheme
-    number or a native value, use <SchemeNumber.fn["="]>.  Likewise
-    for *">"* etc.  Refer to <R6RS at http://www.r6rs.org/> for the
-    full list of functions.
+    number or a native value, use <fn["="]>.  Likewise for <fn[">"]>
+    etc.
 
     See Also:
 
-        <SchemeNumber>
+        <Scheme functions>
+*/
+var fn = SchemeNumber.fn = {
+
+/*
+    About: Function list
+
+    All <Scheme functions> are specified by <R6RS at
+    http://www.r6rs.org/>.  In the list below, argument names indicate
+    applicable types as follows:
+
+    obj - any value
+    z - any Scheme number
+    x - a real number
+    y - a real number
+    q - a rational number (excludes infinities and NaN)
+    n - an integer
+    k - an exact, non-negative integer
+    radix - an exact integer, either 2, 8, 10, or 16
+    precision - an exact, positive integer
+
+    Functions: Scheme functions
+    Elements of <fn>.
+
+    Refer to the argument type key under <Function list>.
+
+    fn["number?"](obj)   - Returns true if *obj* is a Scheme number.
+    fn["complex?"](obj)  - Returns true if *obj* is a Scheme complex number.
+    fn["real?"](obj)     - Returns true if *obj* is a Scheme real number.
+    fn["rational?"](obj) - Returns true if *obj* is a Scheme rational number.
+    fn["integer?"](obj)  - Returns true if *obj* is a Scheme integer.
+    fn["real-valued?"](obj) - Returns true if *obj* is a Scheme complex number
+                              and *fn["imag-part"](obj)* is zero.
+    fn["rational-valued?"](obj) - Returns true if *obj* is real-valued and
+                                  *fn["real-part"](obj)* is rational.
+    fn["integer-valued?"](obj)  - Returns true if *obj* is real-valued and
+                                  *fn["real-part"](obj)* is an integer.
+    fn["exact?"](z)   - Returns true if *z* is exact.
+    fn["inexact?"](z) - Returns true if *z* is inexact.
+    fn["eqv?"](obj1, obj2) - Returns true if *obj1 === obj2* or both arguments
+                             are Scheme numbers and behave identically.
+    fn["="](z, z, z...) - Returns true if all arguments are mathematically
+                          equal, though perhaps differing in exactness.
+    fn["<"](x, x, x...) - Returns true if arguments increase monotonically.
+    fn[">"](x, x, x...) - Returns true if arguments decrease monotonically.
+    fn["<="](x, x, x...) - Returns true if arguments are monotonically
+                           nondecreasing.
+    fn[">="](x, x, x...) - Returns true if arguments are monotonically
+                           nonincreasing.
+    fn["zero?"](z)      - Returns true if *z* equals zero.
+    fn["positive?"](x)  - Returns true if *x* is positive.
+    fn["negative?"](x)  - Returns true if *x* is negative.
+    fn["odd?"](n)       - Returns true if *n* is odd.
+    fn["even?"](n)      - Returns true if *n* is even.
+    fn["finite?"](x)    - Returns true if *x* is finite.
+    fn["infinite?"](x)  - Returns true if *x* is plus or minus infinity.
+    fn["nan?"](x)       - Returns true if *x* is a NaN.
+    fn.max(x, x...)     - Returns the greatest argument.
+    fn.min(x, x...)     - Returns the least argument.
+    fn["+"](z...)       - Returns the sum of the arguments.
+    fn["*"](z...)       - Returns the product of the arguments.
+    fn["-"](z)          - Returns the negation of *z* (-*z*).
+    fn["-"](z1, z2...)  - Returns *z1* minus the sum of the *z2*(s).
+    fn["/"](z)          - Returns the reciprocal of *z* (1 / *z*).
+    fn["/"](z1, z2...)  - Returns *z1* divided by the product of the *z2*(s).
+    fn.abs(x)           - Returns the absolute value of *x*.
+    fn["div-and-mod"](x, y) - Returns *fn.div(x, y)* and *fn.mod(x, y)*.
+    fn.div(x, y)        - Returns the greatest integer less than or equal to
+                          *x* / *y*.
+    fn.mod(x, y)        - Returns *x* - (*y* * fn.div(*x*, *y*)).
+    fn["div0-and-mod0"](x, y) - Returns *fn.div0(x, y)* and *fn.mod0(x, y)*.
+    fn.div0(x, y)       - Returns the integer nearest *x* / *y*, ties go lower.
+    fn.mod0(x, y)       - Returns *x* - (*y* * fn.div0(*x*, *y*)).
+    fn.gcd(n...) - Returns the arguments' greatest common non-negative divisor.
+    fn.lcm(n...) - Returns the arguments' least common positive multiple.
+    fn.numerator(q)     - Returns *q* * *fn.denominator(q)*.
+    fn.denominator(q)   - Returns the smallest positive integer which when
+                          multiplied by *q* yields an integer.
+    fn.floor(x)         - Returns the greatest integer not greater than *x*.
+    fn.ceiling(x)       - Returns the least integer not less than *x*.
+    fn.truncate(x)      - Returns the closest integer between 0 and *x*.
+    fn.round(x)         - Returns the closest integer to *x*, ties go even.
+    fn.rationalize(x, y) - Returns the simplest fraction within *y* of *x*.
+    fn.exp(z)           - Returns e to the *z*.
+    fn.log(z)           - Returns the natural logarithm of *z*.
+    fn.log(z1, z2)      - Returns the base-*z2* logarithm of *z1*.
+    fn.sin(z)           - Returns the sine of *z*.
+    fn.cos(z)           - Returns the cosine of *z*.
+    fn.tan(z)           - Returns the tangent of *z*.
+    fn.asin(z)          - Returns a number whose sine is *z*.
+    fn.acos(z)          - Returns a number whose cosine is *z*.
+    fn.atan(z)          - Returns a number whose tangent is *z*.
+    fn.atan(y, x)       - Returns the angle that passes through *(x,y)*.
+    fn.sqrt(z)          - Returns the square root of *z*.
+    fn["exact-integer-sqrt"](k) - Returns maximal exact s and non-negative r
+                                  such that s*s + r = *k*.
+    fn["fn.expt"](z1, z2) - Returns *z1* to the power *z2*.
+    fn["make-rectangular"](x, y) - Returns the complex number *x + iy*.
+    fn["make-polar"](r, theta) - Returns the complex number with magnitude *r*
+                                 and angle *theta*.
+    fn["real-part"](z) - Returns x such that *z* = x + iy.
+    fn["imag-part"](z) - Returns y such that *z* = x + iy.
+    fn.magnitude(z)    - Returns the magnitude of *z*.
+    fn.angle(z)        - Returns *fn.atan2(y,x)* where *z* = x + iy.
+    fn["number->string"](z) - Converts *z* to a string, base 10.
+    fn["number->string"](z, radix) - Converts *z* to a string, base *radix*.
+    fn["number->string"](z, radix, precision) - Converts and appends "|p" where
+                         p >= *precision* is the count of significant bits.
+
+    Function: fn["string->number"](string)
+    Parses *string* as a Scheme number.
+
+    Examples:
+
+    > "1"       - exact 1.
+    > "1."      - inexact 1, same as "1.0".
+    > "1/2"     - exact one-half, same as "2/4" etc.
+    > "0.5"     - inexact 0.5.
+    > "12e3"    - inexact 12000.
+    > "i"       - the imaginary unit.
+    > "-2+1/2i" - exact complex number.
+    > "2.@1"    - complex in polar coordinates, r=2.0, theta=1.0.
+    > "+inf.0"  - positive infinity.
+    > "-inf.0"  - negative infinity.
+    > "+nan.0"  - IEEE NaN (not-a-number).
+    > "#e0.5"   - exact one-half, forced exact by prefix #e.
+    > "#i1/2"   - 0.5, inexact by prefix.
+    > "#x22"    - exact 34 (hexadecimal 22).
+    > "#o177"   - exact 127 (octal 177).
+    > "#b101"   - exact 5 (binary 101).
+    > "#i#b101" - inexact 5.0, same as "#b#i101".
+    > "1.2345678|24" - rounded as if to single-precision (about 1.23456776).
+
+    Function: fn["string->number"](string, radix)
+    Parses *string* as a Scheme number using *radix* as default radix.
+
+    If *string* contains a radix prefix, it takes precedence over *radix*.
 */
 
-SchemeNumber.fn = {
-
-    "eqv?" : function(a, b) {
-        if (a === b)
-            return true;
-        a = SN(a);
-        b = SN(b);
-        return (a.SN_isExact() === b.SN_isExact() && a.SN_eq(b));
-    },
-
-    "number?"   : isNumber,
-    "complex?"  : isComplex,
-    "real?"     : function(x) { return isNumber(x) && x.SN_isReal();     },
-    "rational?" : function(x) { return isNumber(x) && x.SN_isRational(); },
-    "integer?"  : function(x) { return isNumber(x) && x.SN_isInteger();  },
-
-    "real-valued?" : isRealValued,
-
-    "rational-valued?" : function(x) {
-        return isRealValued(x) && x.SN_realPart().SN_isRational();
-    },
-
-    "integer-valued?" : function(x) {
-        return isRealValued(x) && x.SN_realPart().SN_isInteger();
-    },
+    "eqv?"      : fn_isEqv,
+    "number?"   : fn_isNumber,
+    "complex?"  : fn_isComplex,
+    "real?"     : fn_isReal,
+    "rational?" : fn_isRational,
+    "integer?"  : fn_isInteger,
+    "real-valued?"     : fn_isRealValued,
+    "rational-valued?" : fn_isRationalValued,
+    "integer-valued?"  : fn_isIntegerValued,
 
     "exact?"   : makeUnary("SN_isExact"),
     "inexact?" : makeUnary("SN_isInexact"),
@@ -632,16 +751,7 @@ SchemeNumber.fn = {
     inexact : makeUnary("SN_toInexact"),
     exact   : makeUnary("SN_toExact"),
 
-    "=" : function(a, b) {
-        var len = arguments.length;
-        a = SN(a);
-        for (var i = 1; i < len; i++) {
-            if (!a.SN_eq(arguments[i]))
-                return false;
-        }
-        return true;
-    },
-
+    "="  : fn_equals,
     "<"  : makeComparator("SN_lt"),
     ">"  : makeComparator("SN_gt"),
     "<=" : makeComparator("SN_le"),
@@ -678,10 +788,13 @@ SchemeNumber.fn = {
     },
 
     "-" : function(a) {
-        var ret = SN(a);
         var len = arguments.length;
-        if (len < 2)
-            return ret.SN_negate();
+
+        switch (len) {
+        case 0: args1plus(arguments);
+        case 1: return SN(a).SN_negate();
+        }
+        var ret = SN(a);
         var i = 1;
         while (i < len)
             ret = ret.SN_subtract(SN(arguments[i++]));
@@ -689,26 +802,27 @@ SchemeNumber.fn = {
     },
 
     "/" : function(a) {
-        var first = SN(a);
         var len = arguments.length;
-        if (len < 2)
-            return first.SN_reciprocal();
-        if (len === 2)
-            return first.SN_divide(arguments[1]);
+
+        switch (len) {
+        case 0: args1plus(arguments);
+        case 1: return SN(a).SN_reciprocal();
+        case 2: return SN(a).SN_divide(arguments[1]);
+        }
         var product = ONE;
         var i = 1;
         while (i < len)
             product = product.SN_multiply(SN(arguments[i++]));
-        return first.SN_divide(product);
+        return SN(a).SN_divide(product);
     },
 
     abs             : makeUnary("SN_abs"),
-    "div-and-mod"   : function(x, y) { return doDivMod(x, y, false, 2); },
-    div             : function(x, y) { return doDivMod(x, y, false, 0); },
-    mod             : function(x, y) { return doDivMod(x, y, false, 1); },
-    "div0-and-mod0" : function(x, y) { return doDivMod(x, y, true, 2); },
-    div0            : function(x, y) { return doDivMod(x, y, true, 0); },
-    mod0            : function(x, y) { return doDivMod(x, y, true, 1); },
+    "div-and-mod"   : makeDivMod(false, 2),
+    div             : makeDivMod(false, 0),
+    mod             : makeDivMod(false, 1),
+    "div0-and-mod0" : makeDivMod(true, 2),
+    div0            : makeDivMod(true, 0),
+    mod0            : makeDivMod(true, 1),
 
     gcd : function() {
         var ret = ZERO;
@@ -747,9 +861,11 @@ SchemeNumber.fn = {
 
     log : function(z, base) {
         var ret = SN(z).SN_log();
-        if (typeof base !== "undefined")
-            ret = ret.SN_divide(SN(base).SN_log());
-        return ret;
+        switch (arguments.length) {
+        case 2: ret = ret.SN_divide(SN(base).SN_log());  // fall through
+        case 1: return ret;
+        default: wrongArgCount("1-2", arguments);
+        }
     },
 
     sin  : makeUnary("SN_sin"),
@@ -762,8 +878,7 @@ SchemeNumber.fn = {
         switch (arguments.length) {
         case 1: return SN(y).SN_atan();
         case 2: return SN(y).SN_atan2(x);
-        default: raise("&assertion", "atan expects 1 to 2 arguments, given "
-                       + arguments.length);
+        default: wrongArgCount("1-2", arguments);
         }
     },
 
@@ -772,10 +887,12 @@ SchemeNumber.fn = {
     expt : makeBinary("SN_expt"),
 
     "make-rectangular" : function(x, y) {
+        arguments.length === 2 || args2(arguments);
         return makeRectangular(toReal(x), toReal(y));
     },
 
     "make-polar" : function(r, theta) {
+        arguments.length === 2 || args2(arguments);
         return makePolar(toReal(r), toReal(theta));
     },
 
@@ -785,37 +902,130 @@ SchemeNumber.fn = {
     angle       : makeUnary("SN_angle"),
 
     "number->string" : function(z, radix, precision) {
-        return SN(z).SN_numberToString(radix, precision);
+        var r = radix;
+        switch (arguments.length) {
+        case 3: assertExact(toInteger(precision));  // fall through
+        case 2:
+            r = assertExact(toInteger(r)).valueOf();
+            if (!uintegerPattern[r])
+                raise("&assertion", "invalid radix", radix);
+            // fall through
+        case 1: break;
+        default: wrongArgCount("1-3", arguments);
+        }
+        return SN(z).SN_numberToString(r, precision);
     },
 
     "string->number" : function(s, radix) {
-        return stringToNumber(String(s), radix);
+        switch (arguments.length) {
+        case 1:
+        case 2: return stringToNumber(String(s), radix);
+        default: wrongArgCount("1-2", arguments);
+        }
     }
 };
 
 // Scheme function helpers.
 
-function isComplex(x) {
-    return isNumber(x) && x.SN_isComplex();
-}
-function isRealValued(x) {
-    return isComplex(x) && x.SN_imagPart().SN_isZero();
+function wrongArgCount(expected, a) {
+    var msg = "Function"
+
+    for (name in fn) {
+        if (fn[name] === a.callee) {
+            msg += " '" + name + "'";
+            break;
+        }
+    }
+    raise("&assertion", msg + " expected " + expected +
+          " argument" + (expected == "1" ? "" : "s") + ", got " + a.length);
 }
 
-function makeUnary(methodName) {
-    return function(a) {
-        return SN(a)[methodName]();
-    };
+function args1(a) { a.length === 1 || wrongArgCount(1, a); }
+function args2(a) { a.length === 2 || wrongArgCount(2, a); }
+
+function args1plus(a) { a.length > 0 || wrongArgCount("1 or more", a); }
+function args2plus(a) { a.length > 1 || wrongArgCount("2 or more", a); }
+
+function fn_isEqv(a, b) {
+    arguments.length === 2 || args2(arguments);
+    if (a === b)
+        return true;
+    a = SN(a);
+    b = SN(b);
+    return (a.SN_eq(b) && a.SN_isExact() === b.SN_isExact());
 }
-function makeBinary(methodName) {
-    return function(a, b) {
-        return SN(a)[methodName](b);
-    };
+
+function fn_isNumber(x) {
+    arguments.length === 1 || args1(arguments);
+    return isNumber(x);
+}
+
+function fn_isComplex(x) {
+    arguments.length === 1 || args1(arguments);
+    return isNumber(x) && x.SN_isComplex();
+}
+
+function fn_isReal(x) {
+    arguments.length === 1 || args1(arguments);
+    return isNumber(x) && x.SN_isReal();
+}
+
+function fn_isRational(x) {
+    arguments.length === 1 || args1(arguments);
+    return isNumber(x) && x.SN_isRational();
+}
+
+function fn_isInteger(x) {
+    arguments.length === 1 || args1(arguments);
+    return isNumber(x) && x.SN_isInteger();
+}
+
+function fn_isRealValued(x) {
+    arguments.length === 1 || args1(arguments);
+    return isNumber(x) && x.SN_imagPart().SN_isZero();
+}
+
+function fn_isRationalValued(x) {
+    arguments.length === 1 || args1(arguments);
+    return fn_isRealValued(x) && x.SN_realPart().SN_isRational();
+}
+
+function fn_isIntegerValued(x) {
+    arguments.length === 1 || args1(arguments);
+    return fn_isRealValued(x) && x.SN_realPart().SN_isInteger();
+}
+
+function fn_equals(a, b) {
+    var len = arguments.length;
+    len > 1 || args2plus(arguments);
+    a = SN(a);
+    for (var i = 1; i < len; i++) {
+        if (!a.SN_eq(arguments[i]))
+            return false;
+    }
+    return true;
+}
+
+function makeUnary(method) {
+    function unary(a) {
+        arguments.length === 1 || args1(arguments);
+        return SN(a)[method]();
+    }
+    return unary;
+}
+
+function makeBinary(method) {
+    function binary(a, b) {
+        arguments.length === 2 || args2(arguments);
+        return SN(a)[method](b);
+    }
+    return binary;
 }
 
 function makeComparator(cmp) {
-    return function(a, b) {
+    function comparator(a, b) {
         var len = arguments.length;
+        len > 1 || args2plus(arguments);
         b = toReal(b);
         if (!toReal(a)[cmp](b))
             return false;
@@ -826,14 +1036,14 @@ function makeComparator(cmp) {
             b = c;
         }
         return true;
-    };
+    }
+    return comparator;
 }
 
 function makeMaxMin(cmp) {
-    return function(a) {
+    function maxMin(a) {
         var len = arguments.length;
-        if (len === 0)
-            raise("&assertion", "max/min needs at least one argument");
+        len > 0 || args1plus(arguments);
 
         var ret = toReal(a);
         var exact = ret.SN_isExact();
@@ -852,50 +1062,57 @@ function makeMaxMin(cmp) {
             }
         }
         return exact ? ret : ret.SN_toInexact();
-    };
+    }
+    return maxMin;
 }
 
 function divModArg2Zero(arg) {
     raise("&assertion", "div/mod second argument is zero", arg);
 }
 
-function doDivMod(x, y, is0, which) {
-    x = toReal(x);
-    y = toReal(y);
+function makeDivMod(is0, which) {
+    function divMod(x, y) {
+        arguments.length === 2 || args2(arguments);
+        x = toReal(x);
+        y = toReal(y);
 
-    if (!x.SN_isFinite())
-        raise("&assertion", "div/mod first argument is not finite", x);
-    if (y.SN_isZero())
-        divModArg2Zero(y);
+        if (!x.SN_isFinite())
+            raise("&assertion", "div/mod first argument is not finite", x);
+        if (y.SN_isZero())
+            divModArg2Zero(y);
 
-    if (!is0) {
+        if (!is0) {
+            switch (which) {
+            case 0: return x.SN_div(y);
+            case 1: return x.SN_mod(y);
+            case 2: default: return x.SN_divAndMod(y);
+            }
+        }
+
+        var dm = x.SN_divAndMod(y);
+        var m = dm[1];
+        var yabs = y.SN_abs();
+
+        if (m.SN_add(m).SN_ge(yabs)) {
+            switch (which) {
+            case 0: return dm[0].SN_add(y.SN_isNegative() ? M_ONE : ONE);
+            case 1: return m.SN_subtract(yabs);
+            case 2: default: return [dm[0].SN_add(y.SN_isNegative() ?
+                                                  M_ONE : ONE),
+                                     m.SN_subtract(yabs)];
+            }
+        }
         switch (which) {
-        case 0: return x.SN_div(y);
-        case 1: return x.SN_mod(y);
-        case 2: default: return x.SN_divAndMod(y);
+        case 0: return dm[0];
+        case 1: return m;
+        case 2: default: return dm;
         }
     }
-
-    var dm = x.SN_divAndMod(y);
-    var m = dm[1];
-    var yabs = y.SN_abs();
-
-    if (m.SN_add(m).SN_ge(yabs)) {
-        switch (which) {
-        case 0: return dm[0].SN_add(y.SN_isNegative() ? M_ONE : ONE);
-        case 1: return m.SN_subtract(yabs);
-        case 2: default: return [dm[0].SN_add(y.SN_isNegative() ? M_ONE : ONE),
-                                 m.SN_subtract(yabs)];
-        }
-    }
-    switch (which) {
-    case 0: return dm[0];
-    case 1: return m;
-    case 2: default: return dm;
-    }
+    return divMod;
 }
 
 function rationalize(x, delta) {
+    args2(arguments);
     x = SN(x);
     delta = SN(delta);
 
@@ -986,8 +1203,11 @@ SchemeNumber.raise = defaultRaise;
 
 function defaultRaise(conditionType, message, irritant) {
     var msg = "SchemeNumber: " + conditionType + ": " + message;
-    if (arguments.length > 2)
+    if (arguments.length > 2) {
+        if (isNumber(irritant))
+            irritant = irritant.SN_numberToString();
         msg += ": " + irritant;
+    }
     throw new Error(msg);
 }
 
@@ -1009,7 +1229,7 @@ function raise() {
     Maximum size of integers created by the <expt> function.
 
     To avoid using up all system memory, exact results of a call to
-    <SchemeNumber.fn.expt> are capped at a configurable number of
+    <SchemeNumber.fn.expt(z, z)> are capped at a configurable number of
     digits, by default one million.  <SchemeNumber.maxIntegerDigits>
     holds this limit.
 
@@ -1099,19 +1319,13 @@ DISP.Flonum.SN_numberToString = function(radix, precision) {
     }
 
     if (precision != undefined) {
-        var p = toInteger(precision);
-        if (!p.SN_isExact() || !p.SN_isPositive())
-            raise("&assertion",
-                  "precision is not an exact positive integer", p);
-
-        p = p.SN_numberToString();
-        if (p < 53) {
+        if (precision < 53) {
             var bits = numberToBinary(this).replace(/[-+.]/g, "")
-                .replace(/^0+/, "").length;
-            if (p < bits)
-                p = bits;
+                .replace(/^0+/, "").replace(/0+$/, "").length;
+            if (precision < bits)
+                precision = bits;
         }
-        s += "|" + p;
+        s += "|" + precision;
     }
 
     return s;
@@ -1390,11 +1604,16 @@ DISP.C.SN_isUnit     = retFalse;
 
 DISP.C.SN_isComplex  = retTrue;
 
-DISP.C.toString = function(radix, precision) {  // XXX is this used?
-    return this.SN_numberToString(radix, precision);
-};
-DISP.C.valueOf = DISP.C.toString;  // XXX is this used?
 DISP.C.SN_numberToString = pureVirtual;
+
+DISP.C.toString = function(radix) {
+    return this.SN_numberToString(radix);
+};
+DISP.C.valueOf = function() {
+    if (this.SN_imagPart().isZero())
+        return this.SN_realPart().valueOf();
+    return NaN;
+};
 
 DISP.C.SN_debug = function() { return "C"; };
 
@@ -2533,6 +2752,7 @@ DISP.EINative.SN_square = function() {
 
 DISP.EINative.SN_reciprocal = function() {
     var x = this._;
+    assert(x !== 0);
     /*
     if (x === 0)  // Removed this check, since ZERO overrides.
         throw divisionByExactZero();
@@ -2557,15 +2777,15 @@ function divAndMod_EINative(t, x, which) {
 
     if (tmp > -9007199254740992)
         mod = t - tmp;
-    // XXX I'd like a nice test suite for this.
     else if (div > 0)
         mod = (t - x) - (x * (div - 1));
     else
         mod = (t + x) - (x * (div + 1));
-    mod = toEINative(mod);
 
+    mod = toEINative(mod);
     if (which === 1)
         return mod;
+
     return [toEINative(div), mod];
 };
 
