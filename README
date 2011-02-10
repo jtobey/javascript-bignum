@@ -71,7 +71,7 @@ CHANGES
 1.0.3 - 2011-02-10
 
     * Faster big integer arithmetic, courtesy of Vitaly Magerya.
-      Approximately 30% test suite speedup.
+      Approximately 20% test suite speedup.
 
 1.0.2 - 2011-02-10
 

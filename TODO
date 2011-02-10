@@ -7,6 +7,9 @@ TODO:
 * Consider aliasing or renaming BigInteger.toString() so as not to
   conflict with the default toString().
 
+* BigInteger: Consider patching multiplySingleDigit to support
+  negative "this".
+
 * Consider a BigDecimal class like Java's BigDecimal.
 
 * Consider creating a framework for selecting implementations of
