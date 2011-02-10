@@ -625,9 +625,9 @@ var fn = SchemeNumber.fn = {
     fn["integer?"](obj)  - Returns true if *obj* is a Scheme integer.
     fn["real-valued?"](obj) - Returns true if *obj* is a Scheme complex number
                               and *fn["imag-part"](obj)* is zero.
-    fn["rational-valued?"](obj) - Returns true if *fn["real-valued?"](obj)* and
+    fn["rational-valued?"](obj) - Returns true if *obj* is real-valued and
                                   *fn["real-part"](obj)* is rational.
-    fn["integer-valued?"](obj)  - Returns true if *fn["real-valued?"](obj)* and
+    fn["integer-valued?"](obj)  - Returns true if *obj* is real-valued and
                                   *fn["real-part"](obj)* is an integer.
     fn["exact?"](z)   - Returns true if *z* is exact.
     fn["inexact?"](z) - Returns true if *z* is inexact.
