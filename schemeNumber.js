@@ -71,7 +71,8 @@ if (!BigInteger) {
 
         obj - Object to be converted to a Scheme number.
 
-    *obj* may have any of the following types:
+    *obj* may have any of the following
+    types:
 
         Scheme number - returned unchanged.
         String        - converted as if by *string->number*.
