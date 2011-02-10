@@ -5,6 +5,9 @@
 	Copyright (c) 2009 Matthew Crumley <email@matthewcrumley.com>
 	Copyright (c) 2010,2011 by John Tobey <John.Tobey@gmail.com>
 	Licensed under the MIT license.
+
+	Support for arbitrary internal representation base was added by
+	Vitaly Magerya.
 */
 
 /*
@@ -12,7 +15,7 @@
 
 	Exports:
 
-        <BigInteger>
+		<BigInteger>
 */
 
 /*
@@ -70,14 +73,14 @@ if (!Array.prototype.map) {
 	> var n2 = BigInteger(123);   // Create a new <BigInteger> with value 123
 	> var n3 = BigInteger(n2);    // Return n2, unchanged
 
-	The constructor form only takes an array and a sign. *n* must be an array of
-	numbers in little-endian order, where each digit is between 0 and 9
-	inclusive. A second parameter sets the sign: -1 for negative, +1 for
-	positive, or 0 for zero. The array is *not copied and may be modified*. If
-	the array contains only zeros, the sign parameter is ignored and is forced
-	to zero.
+	The constructor form only takes an array and a sign. *n* must be an
+	array of numbers in little-endian order, where each digit is between 0
+	and BigInteger.base.  The second parameter sets the sign: -1 for
+	negative, +1 for positive, or 0 for zero. The array is *not copied and
+	may be modified*. If the array contains only zeros, the sign parameter
+	is ignored and is forced to zero.
 
-	> new BigInteger([3,2,1], -1): create a new BigInteger with value -123
+	> new BigInteger([5], -1): create a new BigInteger with value -5
 
 	Parameters:
 
@@ -109,6 +112,12 @@ function BigInteger(n, s) {
 	this._d = n;
 	this._s = n.length ? (s || 1) : 0;
 }
+
+// Base-10 speedup hacks in parse, toString, exp10 and log functions
+// require base to be a power of 10. 10^7 is the largest such power
+// that won't cause a precision loss when digits are multiplied.
+BigInteger.base = 10000000;
+BigInteger.base_log10 = 7;
 
 // Constant: ZERO
 // <BigInteger> 0.
@@ -144,41 +153,42 @@ BigInteger._1 = BigInteger.ONE;
 BigInteger.small = [
 	BigInteger.ZERO,
 	BigInteger.ONE,
-	new BigInteger(  [2], 1),
-	new BigInteger(  [3], 1),
-	new BigInteger(  [4], 1),
-	new BigInteger(  [5], 1),
-	new BigInteger(  [6], 1),
-	new BigInteger(  [7], 1),
-	new BigInteger(  [8], 1),
-	new BigInteger(  [9], 1),
-	new BigInteger([0,1], 1),
-	new BigInteger([1,1], 1),
-	new BigInteger([2,1], 1),
-	new BigInteger([3,1], 1),
-	new BigInteger([4,1], 1),
-	new BigInteger([5,1], 1),
-	new BigInteger([6,1], 1),
-	new BigInteger([7,1], 1),
-	new BigInteger([8,1], 1),
-	new BigInteger([9,1], 1),
-	new BigInteger([0,2], 1),
-	new BigInteger([1,2], 1),
-	new BigInteger([2,2], 1),
-	new BigInteger([3,2], 1),
-	new BigInteger([4,2], 1),
-	new BigInteger([5,2], 1),
-	new BigInteger([6,2], 1),
-	new BigInteger([7,2], 1),
-	new BigInteger([8,2], 1),
-	new BigInteger([9,2], 1),
-	new BigInteger([0,3], 1),
-	new BigInteger([1,3], 1),
-	new BigInteger([2,3], 1),
-	new BigInteger([3,3], 1),
-	new BigInteger([4,3], 1),
-	new BigInteger([5,3], 1),
-	new BigInteger([6,3], 1)
+	/* Assuming BigInteger.base > 36 */
+	new BigInteger( [2], 1),
+	new BigInteger( [3], 1),
+	new BigInteger( [4], 1),
+	new BigInteger( [5], 1),
+	new BigInteger( [6], 1),
+	new BigInteger( [7], 1),
+	new BigInteger( [8], 1),
+	new BigInteger( [9], 1),
+	new BigInteger([10], 1),
+	new BigInteger([11], 1),
+	new BigInteger([12], 1),
+	new BigInteger([13], 1),
+	new BigInteger([14], 1),
+	new BigInteger([15], 1),
+	new BigInteger([16], 1),
+	new BigInteger([17], 1),
+	new BigInteger([18], 1),
+	new BigInteger([19], 1),
+	new BigInteger([20], 1),
+	new BigInteger([21], 1),
+	new BigInteger([22], 1),
+	new BigInteger([23], 1),
+	new BigInteger([24], 1),
+	new BigInteger([25], 1),
+	new BigInteger([26], 1),
+	new BigInteger([27], 1),
+	new BigInteger([28], 1),
+	new BigInteger([29], 1),
+	new BigInteger([30], 1),
+	new BigInteger([31], 1),
+	new BigInteger([32], 1),
+	new BigInteger([33], 1),
+	new BigInteger([34], 1),
+	new BigInteger([35], 1),
+	new BigInteger([36], 1)
 ];
 
 // Used for parsing/radix conversion
@@ -208,12 +218,18 @@ BigInteger.prototype.toString = function(base) {
 		return "0";
 	}
 	if (base === 10) {
-		// [].reverse() modifies the array, so we need to copy if first
-		return (this._s < 0 ? "-" : "") + (this._d.slice().reverse().join("") || "0");
+		var str = this._s < 0 ? "-" : "";
+		str += this._d[this._d.length - 1].toString();
+		for (var i = this._d.length - 2; i >= 0; i--) {
+			var group = this._d[i].toString();
+			while (group.length < BigInteger.base_log10) group = '0' + group;
+			str += group;
+		}
+		return str;
 	}
 	else {
 		var numerals = BigInteger.digits;
-		base = BigInteger(base);
+		base = BigInteger.small[base];
 		var sign = this._s;
 
 		var n = this.abs();
@@ -226,7 +242,7 @@ BigInteger.prototype.toString = function(base) {
 			digit = divmod[1];
 			// TODO: This could be changed to unshift instead of reversing at the end.
 			// Benchmark both to compare speeds.
-			digits.push(numerals[digit]);
+			digits.push(numerals[digit.valueOf()]);
 		}
 		return (sign < 0 ? "-" : "") + digits.reverse().join("");
 	}
@@ -371,14 +387,24 @@ BigInteger.parse = function(s, base) {
 		// Get the sign (we know it's not zero)
 		sign = (sign === "-") ? -1 : 1;
 
-		// Optimize base 10
-		if (base === 10) {
+		// Optimize 10
+		if (base == 10) {
+			var d = [];
+			while (digits.length >= BigInteger.base_log10) {
+				d.push(parseInt(digits.splice(-BigInteger.base_log10).join(''), 10));
+			}
+			d.push(parseInt(digits.join(''), 10));
+			return new BigInteger(d, sign);
+		}
+
+		// Optimize base
+		if (base === BigInteger.base) {
 			return new BigInteger(digits.map(Number).reverse(), sign);
 		}
 
 		// Do the conversion
 		var d = BigInteger.ZERO;
-		base = BigInteger(base);
+		base = BigInteger.small[base];
 		var small = BigInteger.small;
 		for (var i = 0; i < digits.length; i++) {
 			d = d.multiply(base).add(small[parseInt(digits[i], 36)]);
@@ -431,8 +457,8 @@ BigInteger.prototype.add = function(n) {
 
 	for (var i = 0; i < size; i++) {
 		digit = a[i] + b[i] + carry;
-		sum[i] = digit % 10;
-		carry = (digit / 10) | 0;
+		sum[i] = digit % BigInteger.base;
+		carry = (digit / BigInteger.base) | 0;
 	}
 	if (bl > al) {
 		a = b;
@@ -440,8 +466,8 @@ BigInteger.prototype.add = function(n) {
 	}
 	for (i = size; carry && i < al; i++) {
 		digit = a[i] + carry;
-		sum[i] = digit % 10;
-		carry = (digit / 10) | 0;
+		sum[i] = digit % BigInteger.base;
+		carry = (digit / BigInteger.base) | 0;
 	}
 	if (carry) {
 		sum[i] = carry;
@@ -550,7 +576,7 @@ BigInteger.prototype.subtract = function(n) {
 	for (i = 0; i < bl; i++) {
 		digit = a[i] - borrow - b[i];
 		if (digit < 0) {
-			digit += 10;
+			digit += BigInteger.base;
 			borrow = 1;
 		}
 		else {
@@ -561,7 +587,7 @@ BigInteger.prototype.subtract = function(n) {
 	for (i = bl; i < al; i++) {
 		digit = a[i] - borrow;
 		if (digit < 0) {
-			digit += 10;
+			digit += BigInteger.base;
 		}
 		else {
 			diff[i++] = digit;
@@ -585,8 +611,8 @@ BigInteger.prototype.subtract = function(n) {
 
 		while (true) {
 			var digit = (a[i] || 0) + 1;
-			sum[i] = digit % 10;
-			if (digit <= 9) {
+			sum[i] = digit % BigInteger.base;
+			if (digit <= BigInteger.base - 1) {
 				break;
 			}
 			++i;
@@ -604,7 +630,7 @@ BigInteger.prototype.subtract = function(n) {
 		while (true) {
 			var digit = (a[i] || 0) - 1;
 			if (digit < 0) {
-				sum[i] = digit + 10;
+				sum[i] = digit + BigInteger.base;
 			}
 			else {
 				sum[i] = digit;
@@ -840,13 +866,13 @@ BigInteger.prototype.multiply = function(n) {
 		var digit;
 		for (var j = i; j < jlimit; j++) {
 			digit = partial[j] + bi * a[j - i] + carry;
-			carry = (digit / 10) | 0;
-			partial[j] = (digit % 10) | 0;
+			carry = (digit / BigInteger.base) | 0;
+			partial[j] = (digit % BigInteger.base) | 0;
 		}
 		if (carry) {
 			digit = partial[j] + carry;
-			carry = (digit / 10) | 0;
-			partial[j] = digit % 10;
+			carry = (digit / BigInteger.base) | 0;
+			partial[j] = digit % BigInteger.base;
 		}
 	}
 	return new BigInteger(partial, this._s * n._s);
@@ -855,7 +881,7 @@ BigInteger.prototype.multiply = function(n) {
 // Multiply a BigInteger by a single-digit native number
 // Assumes that this and n are >= 0
 // This is not really intended to be used outside the library itself
-BigInteger.prototype.multiplySingleDigit = function(n, cache) {
+BigInteger.prototype.multiplySingleDigit = function(n) {
 	if (n === 0 || this._s === 0) {
 		return BigInteger.ZERO;
 	}
@@ -863,27 +889,21 @@ BigInteger.prototype.multiplySingleDigit = function(n, cache) {
 		return this;
 	}
 
-	if (cache[n]) {
-		return cache[n];
-	}
-
 	var digit;
 	if (this._d.length === 1) {
 		digit = this._d[0] * n;
-		if (digit > 9) {
-			return new BigInteger([(digit % 10)|0, (digit / 10)|0], 1);
+		if (digit >= BigInteger.base) {
+			return new BigInteger([(digit % BigInteger.base)|0,
+					(digit / BigInteger.base)|0], 1);
 		}
-		cache[n] = BigInteger.small[digit];
-		return cache[n];
+		return new BigInteger([digit], 1);
 	}
 
 	if (n === 2) {
-		cache[n] = this.add(this);
-		return cache[n];
+		return this.add(this);
 	}
 	if (this.isUnit()) {
-		cache[n] = BigInteger.small[n];
-		return cache[n];
+		return new BigInteger([n], 1);
 	}
 
 	var a = this._d;
@@ -898,17 +918,16 @@ BigInteger.prototype.multiplySingleDigit = function(n, cache) {
 	var carry = 0;
 	for (var j = 0; j < al; j++) {
 		digit = n * a[j] + carry;
-		carry = (digit / 10) | 0;
-		partial[j] = (digit % 10) | 0;
+		carry = (digit / BigInteger.base) | 0;
+		partial[j] = (digit % BigInteger.base) | 0;
 	}
 	if (carry) {
 		digit = carry;
-		carry = (digit / 10) | 0;
-		partial[j] = digit % 10;
+		carry = (digit / BigInteger.base) | 0;
+		partial[j] = digit % BigInteger.base;
 	}
 
-	cache[n] = new BigInteger(partial, 1);
-	return cache[n];
+	return new BigInteger(partial, 1);
 };
 
 /*
@@ -948,8 +967,8 @@ BigInteger.prototype.square = function() {
 	for (i = 0; i < length; i++) {
 		k = i * 2;
 		product = digits[i] * digits[i];
-		carry = (product / 10) | 0;
-		imult1[k] = product % 10;
+		carry = (product / BigInteger.base) | 0;
+		imult1[k] = product % BigInteger.base;
 		imult1[k + 1] = carry;
 	}
 
@@ -959,13 +978,13 @@ BigInteger.prototype.square = function() {
 		k = i * 2 + 1;
 		for (var j = i + 1; j < length; j++, k++) {
 			product = digits[j] * digits[i] * 2 + imult1[k] + carry;
-			carry = (product / 10) | 0;
-			imult1[k] = product % 10;
+			carry = (product / BigInteger.base) | 0;
+			imult1[k] = product % BigInteger.base;
 		}
 		k = length + i;
 		var digit = carry + imult1[k];
-		carry = (digit / 10) | 0;
-		imult1[k] = digit % 10;
+		carry = (digit / BigInteger.base) | 0;
+		imult1[k] = digit % BigInteger.base;
 		imult1[k + 1] += carry;
 	}
 
@@ -1071,7 +1090,6 @@ BigInteger.prototype.divRem = function(n) {
 
 	var sign = this._s * n._s;
 	var a = n.abs();
-	var cache = new Array(10);
 	var b_digits = this._d.slice();
 	var digits = n._d.length;
 	var max = b_digits.length;
@@ -1093,10 +1111,18 @@ BigInteger.prototype.divRem = function(n) {
 			guess = 0;
 		}
 		else {
-			guess = 9;
+			var xlen = part._d.length, ylen = a._d.length;
+			var highx = part._d[xlen-1]*BigInteger.base + part._d[xlen-2];
+			var highy = a._d[ylen-1]*BigInteger.base + a._d[ylen-2];
+			if (part._d.length > a._d.length) {
+				// The length of part._d can either match a._d length,
+				// or exceed it by one.
+				highx = (highx+1)*BigInteger.base;
+			}
+			guess = Math.ceil(highx/highy);
 		}
 		do {
-			var check = a.multiplySingleDigit(guess, cache);
+			var check = a.multiplySingleDigit(guess);
 			if (check.compareAbs(part) <= 0) {
 				break;
 			}
@@ -1111,12 +1137,13 @@ BigInteger.prototype.divRem = function(n) {
 		part._d = diff._d.slice();
 	}
 
-	return [new BigInteger(quot.reverse(), sign), new BigInteger(part._d, this._s)];
+	return [new BigInteger(quot.reverse(), sign),
+		   new BigInteger(part._d, this._s)];
 };
 
-// Throws an exception if n is outside of [-9, -1] or [1, 9].
-// It's not necessary to call this, since the other division functions will call
-// it if they are able to.
+// Throws an exception if n is outside of (-BigInteger.base, -1] or
+// [1, BigInteger.base).  It's not necessary to call this, since the
+// other division functions will call it if they are able to.
 BigInteger.prototype.divRemSmall = function(n) {
 	var r;
 	n = +n;
@@ -1128,7 +1155,7 @@ BigInteger.prototype.divRemSmall = function(n) {
 	var sign = this._s * n_s;
 	n = Math.abs(n);
 
-	if (n < 1 || n > 9) {
+	if (n < 1 || n >= BigInteger.base) {
 		throw new Error("Argument out of range");
 	}
 
@@ -1140,12 +1167,12 @@ BigInteger.prototype.divRemSmall = function(n) {
 		return [(sign === 1) ? this.abs() : new BigInteger(this._d, sign), BigInteger.ZERO];
 	}
 
-	// 2 <= n <= 9
+	// 2 <= n < BigInteger.base
 
 	// divide a single digit by a single digit
 	if (this._d.length === 1) {
-		var q = BigInteger.small[(this._d[0] / n) | 0];
-		r = BigInteger.small[(this._d[0] % n) | 0];
+		var q = new BigInteger([(this._d[0] / n) | 0], 1);
+		r = new BigInteger([(this._d[0] % n) | 0], 1);
 		if (sign < 0) {
 			q = q.negate();
 		}
@@ -1163,11 +1190,11 @@ BigInteger.prototype.divRemSmall = function(n) {
 	var guess;
 
 	while (digits.length) {
-		part = part * 10 + digits[digits.length - 1];
+		part = part * BigInteger.base + digits[digits.length - 1];
 		if (part < n) {
 			quot[i++] = 0;
 			digits.pop();
-			diff = 10 * diff + part;
+			diff = BigInteger.base * diff + part;
 			continue;
 		}
 		if (part === 0) {
@@ -1189,7 +1216,7 @@ BigInteger.prototype.divRemSmall = function(n) {
 		part = diff;
 	}
 
-	r = BigInteger.small[diff];
+	r = new BigInteger([diff], 1);
 	if (this._s < 0) {
 		r = r.negate();
 	}
@@ -1333,15 +1360,26 @@ BigInteger.prototype.exp10 = function(n) {
 		throw new Error("exponent too large in BigInteger.exp10");
 	}
 	if (n > 0) {
-		var zeros = new Array(n);
-		for (var i = 0; i < n; i++) {
-			zeros[i] = 0;
-		}
-		return new BigInteger(zeros.concat(this._d), this._s);
-	}
+		var k = new BigInteger(this._d.slice(), this._s);
 
-	// n < 0
-	return new BigInteger(this._d.slice(-n, this._d.length), this._s);
+		for (; n >= BigInteger.base_log10; n -= BigInteger.base_log10) {
+			k._d.unshift(0);
+		}
+		if (n == 0)
+			return k;
+		k._s = 1;
+		k = k.multiplySingleDigit(Math.pow(10, n));
+		return (this._s < 0 ? k.negate() : k);
+	} else if (-n >= this._d.length*BigInteger.base_log10) {
+		return BigInteger.ZERO;
+	} else {
+		var k = new BigInteger(this._d.slice(), this._s);
+
+		for (n = -n; n >= BigInteger.base_log10; n -= BigInteger.base_log10) {
+			k._d.shift();
+		}
+		return (n == 0) ? k : k.divRemSmall(Math.pow(10, n))[0];
+	}
 };
 
 /*
@@ -1478,12 +1516,13 @@ BigInteger.prototype.log = function() {
 
 	var l = this._d.length;
 
-	if (l < 30) {
-		return Math.log(this.toJSValue());
+	if (l*BigInteger.base_log10 < 30) {
+		return Math.log(this.valueOf());
 	}
 
-	var first30digits = this._d.slice(l-30).reverse().join("");
-	return Math.log(first30digits) + (l - 30) * Math.log(10);
+	var N = Math.ceil(30/BigInteger.base_log10);
+	var firstNdigits = this._d.slice(l - N);
+	return Math.log((new BigInteger(firstNdigits, 1)).valueOf()) + (l - N) * Math.log(BigInteger.base);
 };
 
 /*
