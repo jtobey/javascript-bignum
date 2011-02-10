@@ -178,7 +178,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,0,1];
+SchemeNumber.VERSION = [1,0,2];
 
 function isNumber(x) {
     return x instanceof Number || typeof x === "number";
@@ -464,17 +464,28 @@ function makePolar(r, theta) {
                               r.SN_multiply(theta.SN_sin()));
 }
 
-function toReal(x) {
-    x = SN(x);
+function assertReal(x) {
     if (!x.SN_isReal())
         raise("&assertion", "not a real number", x);
     return x;
 }
 
-function toInteger(n) {
+function toReal(x) {
+    x = SN(x);
+    x.SN_isReal() || assertReal(x);
+    return x;
+}
+
+function assertInteger(n) {
     n = SN(n);
     if (!n.SN_isInteger())
         raise("&assertion", "not an integer", n);
+    return n;
+}
+
+function toInteger(n) {
+    n = SN(n);
+    n.SN_isInteger() || assertInteger(n);
     return n;
 }
 
@@ -637,8 +648,8 @@ SN.maxIntegerDigits = 1e6;  // 1 million digits.
     Numerator and denominator of a floating-point value,
     hexadecimal:
 
-    > a5 = ns(sf.numerator(1/3), 16);    // "#i15555555555555"
-    > a6 = ns(sf.denominator(1/3), 16);  // "#i40000000000000"
+    > a5 = ns(sf.numerator(1/3), "16");    // "#i15555555555555"
+    > a6 = ns(sf.denominator(1/3), "16");  // "#i40000000000000"
 
     The *#i* prefix denotes an inexact number, as detailed in <R6RS at
     http://www.r6rs.org/>.  Since 1/3 is a native JavaScript number,
@@ -986,7 +997,10 @@ var fn = SchemeNumber.fn = {
     "number->string" : function(z, radix, precision) {
         var r = radix;
         switch (arguments.length) {
-        case 3: assertExact(toInteger(precision));  // fall through
+        case 3:
+            precision = toInteger(precision);
+            assertExact(precision);
+            // fall through
         case 2:
             r = assertExact(toInteger(r)).valueOf();
             if (!uintegerPattern[r])
@@ -1082,7 +1096,7 @@ function fn_equals(a, b) {
     len > 1 || args2plus(arguments);
     a = SN(a);
     for (var i = 1; i < len; i++) {
-        if (!a.SN_eq(arguments[i]))
+        if (!a.SN_eq(SN(arguments[i])))
             return false;
     }
     return true;
@@ -1099,7 +1113,7 @@ function makeUnary(method) {
 function makeBinary(method) {
     function binary(a, b) {
         arguments.length === 2 || args2(arguments);
-        return SN(a)[method](b);
+        return SN(a)[method](SN(b));
     }
     return binary;
 }
@@ -1396,15 +1410,15 @@ DISP.Flonum.SN_isOdd = function() {
     return (this & 1) === 1;
 };
 
-DISP.Flonum.SN_eq = function(z) { return SN(z).SN__eq_Flonum(this); };
-DISP.Flonum.SN_ne = function(z) { return SN(z).SN__ne_Flonum(this); };
-DISP.Flonum.SN_gt = function(x) { return toReal(x).SN__gt_Flonum(this); };
-DISP.Flonum.SN_lt = function(x) { return toReal(x).SN__lt_Flonum(this); };
-DISP.Flonum.SN_ge = function(x) { return toReal(x).SN__ge_Flonum(this); };
-DISP.Flonum.SN_le = function(x) { return toReal(x).SN__le_Flonum(this); };
+DISP.Flonum.SN_eq = function(z) { return z.SN__eq_Flonum(this); };
+DISP.Flonum.SN_ne = function(z) { return z.SN__ne_Flonum(this); };
+DISP.Flonum.SN_gt = function(x) { return assertReal(x).SN__gt_Flonum(this); };
+DISP.Flonum.SN_lt = function(x) { return assertReal(x).SN__lt_Flonum(this); };
+DISP.Flonum.SN_ge = function(x) { return assertReal(x).SN__ge_Flonum(this); };
+DISP.Flonum.SN_le = function(x) { return assertReal(x).SN__le_Flonum(this); };
 
 DISP.Flonum.SN_compare = function(x) {
-    return toReal(x).SN__compare_Flonum(this);
+    return assertReal(x).SN__compare_Flonum(this);
 };
 
 // Note operand order!
@@ -1461,16 +1475,16 @@ DISP.Flonum.SN_toExact = function() {
 DISP.Flonum.SN_toInexact = retThis;
 
 DISP.Flonum.SN_add = function(z) {
-    return SN(z).SN__add_Flonum(this);
+    return z.SN__add_Flonum(this);
 };
 DISP.Flonum.SN_subtract = function(z) {
-    return SN(z).SN__subtract_Flonum(this);
+    return z.SN__subtract_Flonum(this);
 };
 DISP.Flonum.SN_multiply = function(z) {
-    return SN(z).SN__multiply_Flonum(this);
+    return z.SN__multiply_Flonum(this);
 };
 DISP.Flonum.SN_divide = function(z) {
-    return SN(z).SN__divide_Flonum(this);
+    return z.SN__divide_Flonum(this);
 };
 
 DISP.Flonum.SN__add_R = function(x) {
@@ -1508,15 +1522,15 @@ function div_Flonum_R(x, y) {
     return NaN;
 }
 DISP.Flonum.SN_divAndMod = function(x) {
-    x = Number(toReal(x));
+    x = +x;
     var div = div_Flonum_R(this, x);
     return [toFlonum(div), toFlonum(this - (x * div))];
 };
 DISP.Flonum.SN_div = function(x) {
-    return div_Flonum_R(this, toReal(x));
+    return div_Flonum_R(this, x);
 };
 DISP.Flonum.SN_mod = function(x) {
-    return this - x * div_Flonum_R(this, toReal(x));
+    return this - x * div_Flonum_R(this, x);
 };
 
 DISP.Flonum.SN_square = function() {
@@ -1575,11 +1589,11 @@ DISP.Flonum.SN_log = function() {
 };
 
 DISP.Flonum.SN_atan2 = function(x) {
-    return atan2(this, toReal(x));
+    return atan2(this, x);
 };
 
 DISP.Flonum.SN_expt = function(z) {
-    return SN(z).SN__expt_Flonum(this);
+    return z.SN__expt_Flonum(this);
 };
 
 // Some famous flonums:
@@ -1739,22 +1753,22 @@ DISP.R.SN_ge = function(x) { return this.SN_compare(x) >= 0; };
 DISP.R.SN_le = function(x) { return this.SN_compare(x) <= 0; };
 
 DISP.R.SN_add = function(z) {
-    return SN(z).SN__add_R(this);
+    return z.SN__add_R(this);
 };
 DISP.R.SN__add_Flonum = DISP.Flonum.SN__add_R;
 
 DISP.R.SN_subtract = function(z) {
-    return SN(z).SN__subtract_R(this);
+    return z.SN__subtract_R(this);
 };
 DISP.R.SN__subtract_Flonum = DISP.Flonum.SN__subtract_R;
 
 DISP.R.SN_multiply = function(z) {
-    return SN(z).SN__multiply_R(this);
+    return z.SN__multiply_R(this);
 };
 DISP.R.SN__multiply_Flonum = DISP.Flonum.SN__multiply_R;
 
 DISP.R.SN_divide = function(z) {
-    return SN(z).SN__divide_R(this);
+    return z.SN__divide_R(this);
 };
 DISP.R.SN__divide_Flonum = DISP.Flonum.SN__divide_R;
 
@@ -1806,13 +1820,13 @@ function mod_R_R(x, y) {
 }
 
 DISP.R.SN_divAndMod = function(x) {
-    return divAndMod_R_R(this, toReal(x));
+    return divAndMod_R_R(this, x);
 };
 DISP.R.SN_div = function(x) {
-    return div_R_R(this, toReal(x));
+    return div_R_R(this, x);
 };
 DISP.R.SN_mod = function(x) {
-    return mod_R_R(this, toReal(x));
+    return mod_R_R(this, x);
 };
 
 DISP.R.SN__divAndMod_R = function(x) {
@@ -1939,7 +1953,7 @@ DISP.Rectangular.SN_angle = function() {
 
 DISP.C.SN__eq_Rectangular = pureVirtual;
 DISP.Rectangular.SN_eq = function(z) {
-    return SN(z).SN__eq_Rectangular(this);
+    return z.SN__eq_Rectangular(this);
 };
 DISP.Rectangular.SN__eq_Rectangular = function(z) {
     return z._x.SN_eq(this._x) && z._y.SN_eq(this._y);
@@ -1950,7 +1964,7 @@ DISP.Rectangular.SN__eq_R = function(x) {
 
 DISP.C.SN__ne_Rectangular = pureVirtual;
 DISP.Rectangular.SN_ne = function(z) {
-    return SN(z).SN__ne_Rectangular(this);
+    return z.SN__ne_Rectangular(this);
 };
 DISP.Rectangular.SN__ne_Rectangular = function(z) {
     return z._x.SN_ne(this._x) || z._y.SN_ne(this._y);
@@ -2001,7 +2015,7 @@ DISP.R.SN__divide_Rectangular = function(z) {
 
 DISP.C.SN__add_Rectangular = pureVirtual;
 DISP.Rectangular.SN_add = function(z) {
-    return SN(z).SN__add_Rectangular(this);
+    return z.SN__add_Rectangular(this);
 };
 DISP.Rectangular.SN__add_R = function(x) {
     return makeRectangular(x.SN_add(this._x), this._y);
@@ -2018,7 +2032,7 @@ DISP.Rectangular.SN_negate = function() {
 
 DISP.C.SN__subtract_Rectangular = pureVirtual;
 DISP.Rectangular.SN_subtract = function(z) {
-    return SN(z).SN__subtract_Rectangular(this);
+    return z.SN__subtract_Rectangular(this);
 };
 DISP.Rectangular.SN__subtract_R = function(x) {
     return makeRectangular(x.SN_subtract(this._x), this._y.SN_negate());
@@ -2031,7 +2045,7 @@ DISP.Rectangular.SN__subtract_Rectangular = function(z) {
 
 DISP.C.SN__multiply_Rectangular = pureVirtual;
 DISP.Rectangular.SN_multiply = function(z) {
-    return SN(z).SN__multiply_Rectangular(this);
+    return z.SN__multiply_Rectangular(this);
 };
 DISP.Rectangular.SN__multiply_R = function(x) {
     return toRectangular(x.SN_multiply(this._x), x.SN_multiply(this._y));
@@ -2057,7 +2071,7 @@ DISP.Rectangular.SN_reciprocal = function() {
 
 DISP.C.SN__divide_Rectangular = pureVirtual;
 DISP.Rectangular.SN_divide = function(z) {
-    return SN(z).SN__divide_Rectangular(this);
+    return z.SN__divide_Rectangular(this);
 };
 function complexDivide(x, y, z) {  // returns (x + iy) / z
     var m2 = rectMagnitude2(z);
@@ -2073,7 +2087,7 @@ DISP.Rectangular.SN__divide_Rectangular = function(z) {
 };
 
 DISP.Rectangular.SN_expt = function(z) {
-    return SN(z).SN__expt_Rectangular(this);
+    return z.SN__expt_Rectangular(this);
 };
 DISP.Rectangular.SN__expt_C = function(z) {
     return complexExpt(z, this);
@@ -2247,42 +2261,42 @@ EQ.prototype = new ER();
 DISP.EQ.SN_isRational = retTrue;
 
 DISP.EQ.SN_eq = function(z) {
-    return SN(z).SN__eq_EQ(this);
+    return z.SN__eq_EQ(this);
 };
 DISP.EQ.SN__eq_EQ = pureVirtual;
 
 DISP.EQ.SN_ne = function(z) {
-    return SN(z).SN__ne_EQ(this);
+    return z.SN__ne_EQ(this);
 };
 DISP.EQ.SN__ne_EQ = pureVirtual;
 
 DISP.EQ.SN_compare = function(x) {
-    return toReal(x).SN__compare_EQ(this);
+    return x.SN__compare_EQ(this);
 };
 DISP.EQ.SN__compare_EQ = pureVirtual;
 
 DISP.EQ.SN_add = function(z) {
-    return SN(z).SN__add_EQ(this);
+    return z.SN__add_EQ(this);
 };
 DISP.EQ.SN__add_EQ = pureVirtual;
 
 DISP.EQ.SN_subtract = function(z) {
-    return SN(z).SN__subtract_EQ(this);
+    return z.SN__subtract_EQ(this);
 };
 DISP.EQ.SN__subtract_EQ = pureVirtual;
 
 DISP.EQ.SN_multiply = function(z) {
-    return SN(z).SN__multiply_EQ(this);
+    return z.SN__multiply_EQ(this);
 };
 DISP.EQ.SN__multiply_EQ = pureVirtual;
 
 DISP.EQ.SN_divide = function(z) {
-    return SN(z).SN__divide_EQ(this);
+    return z.SN__divide_EQ(this);
 };
 DISP.EQ.SN__divide_EQ = pureVirtual;
 
 DISP.EQ.SN_expt = function(z) {
-    return SN(z).SN__expt_EQ(this);
+    return z.SN__expt_EQ(this);
 };
 
 function reduceEQ(n, d) {
@@ -2502,7 +2516,7 @@ DISP.EI.SN_truncate    = retThis;
 DISP.EI.SN__toBigInteger = pureVirtual;
 
 DISP.EI.SN_eq = function(z) {
-    return SN(z).SN__eq_EI(this);
+    return z.SN__eq_EI(this);
 };
 DISP.EI.SN__eq_EI = function(n) {
     return n.SN__toBigInteger().compare(this.SN__toBigInteger()) === 0;
@@ -2512,7 +2526,7 @@ DISP.EI.SN__eq_EQ = function(q) {
 };
 
 DISP.EI.SN_ne = function(z) {
-    return SN(z).SN__ne_EI(this);
+    return z.SN__ne_EI(this);
 };
 DISP.EI.SN__ne_EI = function(n) {
     return n.SN__toBigInteger().compare(this.SN__toBigInteger()) !== 0;
@@ -2522,7 +2536,7 @@ DISP.EI.SN__ne_EQ = function(q) {
 };
 
 DISP.EI.SN_compare = function(x) {
-    return toReal(x).SN__compare_EI(this);
+    return x.SN__compare_EI(this);
 };
 DISP.EI.SN__compare_EQ = function(q) {
     return q.SN_numerator().SN_compare(q.SN_denominator().SN_multiply(this));
@@ -2532,16 +2546,16 @@ DISP.EI.SN__compare_EI = function(n) {
 };
 
 DISP.EI.SN_add = function(z) {
-    return SN(z).SN__add_EI(this);
+    return z.SN__add_EI(this);
 };
 DISP.EI.SN_subtract = function(z) {
-    return SN(z).SN__subtract_EI(this);
+    return z.SN__subtract_EI(this);
 };
 DISP.EI.SN_multiply = function(z) {
-    return SN(z).SN__multiply_EI(this);
+    return z.SN__multiply_EI(this);
 };
 //DISP.EI.SN_divide = function(z) {
-//    return SN(z).SN__divide_EI(this);
+//    return z.SN__divide_EI(this);
 //};
 
 DISP.EI.SN_reciprocal = function() {
@@ -2551,13 +2565,13 @@ DISP.EI.SN_reciprocal = function() {
 };
 
 DISP.EI.SN_divAndMod = function(x) {
-    return toReal(x).SN__divAndMod_EI(this);
+    return x.SN__divAndMod_EI(this);
 };
 DISP.EI.SN_div = function(x) {
-    return toReal(x).SN__div_EI(this);
+    return x.SN__div_EI(this);
 };
 DISP.EI.SN_mod = function(x) {
-    return toReal(x).SN__mod_EI(this);
+    return x.SN__mod_EI(this);
 };
 
 DISP.EI.SN__add_EI = function(n) {
@@ -2627,7 +2641,7 @@ function positiveIntegerExpt(b, p) {
 }
 
 DISP.EI.SN_expt = function(z) {
-    return SN(z).SN__expt_EI(this);
+    return z.SN__expt_EI(this);
 };
 
 DISP.EI.SN__expt_EI = function(n) {
@@ -2702,23 +2716,22 @@ ZERO.SN_compare = function(x) {
 ZERO.SN_add        = SN;
 ZERO.SN_negate     = retThis;
 ZERO.SN_abs        = retThis;
-ZERO.SN_multiply   = function(z) { SN(z); return this; };
+ZERO.SN_multiply   = retThis;
 ZERO.SN_square     = retThis;
 ZERO.SN_reciprocal = divisionByExactZero;
 
 ZERO.SN_subtract = function(z) {
-    return SN(z).SN_negate();
+    return z.SN_negate();
 };
 
 ZERO.SN_divide   = function(z) {
-    z = SN(z);
     if (z.SN_isZero() && z.SN_isExact())
         divisionByExactZero();
     return this;
 };
 
 ZERO.SN_expt = function(z) {
-    switch (SN(z).SN_realPart().SN_sign()) {
+    switch (z.SN_realPart().SN_sign()) {
     case 1: return this;
     case 0: return ONE;
     case -1: default: divisionByExactZero();
@@ -2751,7 +2764,6 @@ M_ONE.SN_square     = retOne;
 M_ONE.SN_sqrt       = function() { return I; };
 
 M_ONE.SN_expt = function(z) {
-    z = SN(z);
     if (!z.SN_isInteger())
         return complexExpt(this, z);
     var ret = (z.SN_isEven() ? ONE : M_ONE);
@@ -2828,21 +2840,21 @@ DISP.EINative.SN_isOdd = function() {
 };
 
 DISP.EINative.SN_eq = function(z) {
-    return SN(z).SN__eq_EINative(this);
+    return z.SN__eq_EINative(this);
 };
 DISP.EINative.SN__eq_EINative = function(n) {
     return n._ === this._;
 };
 
 DISP.EINative.SN_ne = function(z) {
-    return SN(z).SN__ne_EINative(this);
+    return z.SN__ne_EINative(this);
 };
 DISP.EINative.SN__ne_EINative = function(n) {
     return n._ !== this._;
 };
 
 DISP.EINative.SN_compare = function(x) {
-    return toReal(x).SN__compare_EINative(this);
+    return x.SN__compare_EINative(this);
 };
 DISP.EINative.SN__compare_EINative = function(n) {
     return (n._ === this._ ? 0 : (n._ > this._ ? 1 : -1));
@@ -2856,7 +2868,7 @@ function add_EINative_EINative(a, b) {
 }
 
 DISP.EINative.SN_add = function(z) {
-    return SN(z).SN__add_EINative(this);
+    return z.SN__add_EINative(this);
 };
 DISP.EINative.SN__add_EINative = function(n) {
     return add_EINative_EINative(n._, this._);
@@ -2871,14 +2883,14 @@ DISP.EINative.SN_abs = function() {
 };
 
 DISP.EINative.SN_subtract = function(z) {
-    return SN(z).SN__subtract_EINative(this);
+    return z.SN__subtract_EINative(this);
 };
 DISP.EINative.SN__subtract_EINative = function(n) {
     return add_EINative_EINative(n._, -this._);
 };
 
 DISP.EINative.SN_multiply = function(z) {
-    return SN(z).SN__multiply_EINative(this);
+    return z.SN__multiply_EINative(this);
 };
 DISP.EINative.SN__multiply_EINative = function(n) {
     var ret = n._ * this._;
@@ -2934,21 +2946,21 @@ function divAndMod_EINative(t, x, which) {
 };
 
 DISP.EINative.SN_div = function(x) {
-    return toReal(x).SN__div_EINative(this);
+    return x.SN__div_EINative(this);
 };
 DISP.EINative.SN__div_EINative = function(n) {
     return divAndMod_EINative(n._, this._, 0);
 };
 
 DISP.EINative.SN_mod = function(x) {
-    return toReal(x).SN__mod_EINative(this);
+    return x.SN__mod_EINative(this);
 };
 DISP.EINative.SN__mod_EINative = function(n) {
     return divAndMod_EINative(n._, this._, 1);
 };
 
 DISP.EINative.SN_divAndMod = function(x) {
-    return toReal(x).SN__divAndMod_EINative(this);
+    return x.SN__divAndMod_EINative(this);
 };
 DISP.EINative.SN__divAndMod_EINative = function(n) {
     return divAndMod_EINative(n._, this._, 2);
@@ -3046,7 +3058,7 @@ DISP.EIBig.SN__toBigInteger = function() {
 };
 
 DISP.EIBig.SN_add = function(z) {
-    return SN(z).SN__add_EIBig(this);
+    return z.SN__add_EIBig(this);
 };
 
 DISP.EIBig.SN_negate = function() {
@@ -3058,11 +3070,11 @@ DISP.EIBig.SN_abs = function() {
 };
 
 DISP.EIBig.SN_subtract = function(z) {
-    return SN(z).SN__subtract_EIBig(this);
+    return z.SN__subtract_EIBig(this);
 };
 
 DISP.EIBig.SN_multiply = function(z) {
-    return SN(z).SN__multiply_EIBig(this);
+    return z.SN__multiply_EIBig(this);
 };
 
 DISP.EIBig.SN_square = function() {

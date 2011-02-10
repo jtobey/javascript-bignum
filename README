@@ -66,8 +66,17 @@ or try to extract it to HTML using NaturalDocs [2] and the build-docs
 script in this directory.
 
 
-John Tobey
-February 8, 2011
+CHANGES
+
+1.0.2 - 2011-02-10
+
+    * Moved argument conversion from internal methods to public
+      functions for approx. 10% speedup.
+
+1.0.1 - 2011-02-10
+
+    * Support ECMA standard formatting methods: toFixed,
+      toExponential, toPrecision.
 
 [1] R6RS Scheme specification.  See http://www.r6rs.org/ (I recommend
 the PDF, not the HTML version.  http://www.r6rs.org/final/r6rs.pdf),
