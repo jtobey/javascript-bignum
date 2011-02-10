@@ -591,8 +591,12 @@ function assertExact(z) {
     > SchemeNumber.fn["number->string"](2);  // "2."
 
     To test a Scheme number for numerical equality with another Scheme
-    number or a native value, use <SchemeNumber.fn["="]>.  Likewise
-    for *">"* etc.
+    number or a native value, use <fn["="]>.  Likewise for <fn[">"]>
+    etc.
+
+    See Also:
+
+        <Scheme functions>
 */
 var fn = SchemeNumber.fn = {
 
