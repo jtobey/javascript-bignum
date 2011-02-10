@@ -600,7 +600,7 @@ function assertExact(z) {
         <SchemeNumber>
 */
 
-SchemeNumber.fn = {
+var fn = SchemeNumber.fn = {
     "eqv?"      : fn_isEqv,
     "number?"   : fn_isNumber,
     "complex?"  : fn_isComplex,
@@ -654,13 +654,13 @@ SchemeNumber.fn = {
     },
 
     "-" : function(a) {
-        var ret = SN(a);
         var len = arguments.length;
 
         switch (len) {
         case 0: args1plus(arguments);
-        case 1: return ret.SN_negate();
+        case 1: return SN(a).SN_negate();
         }
+        var ret = SN(a);
         var i = 1;
         while (i < len)
             ret = ret.SN_subtract(SN(arguments[i++]));
@@ -668,19 +668,18 @@ SchemeNumber.fn = {
     },
 
     "/" : function(a) {
-        var first = SN(a);
         var len = arguments.length;
 
         switch (len) {
         case 0: args1plus(arguments);
-        case 1: return first.SN_reciprocal();
-        case 2: return first.SN_divide(arguments[1]);
+        case 1: return SN(a).SN_reciprocal();
+        case 2: return SN(a).SN_divide(arguments[1]);
         }
         var product = ONE;
         var i = 1;
         while (i < len)
             product = product.SN_multiply(SN(arguments[i++]));
-        return first.SN_divide(product);
+        return SN(a).SN_divide(product);
     },
 
     abs             : makeUnary("SN_abs"),
@@ -795,9 +794,16 @@ SchemeNumber.fn = {
 // Scheme function helpers.
 
 function wrongArgCount(expected, a) {
-    raise("&assertion", "expected " + expected +
-          " function argument" + (expected == "1" ? "" : "s") +
-          ", got " + a.length);
+    var msg = "Function"
+
+    for (name in fn) {
+        if (fn[name] === a.callee) {
+            msg += " '" + name + "'";
+            break;
+        }
+    }
+    raise("&assertion", msg + " expected " + expected +
+          " argument" + (expected == "1" ? "" : "s") + ", got " + a.length);
 }
 
 function args1(a) { a.length === 1 || wrongArgCount(1, a); }
@@ -876,7 +882,7 @@ function makeUnary(method) {
 
 function makeBinary(method) {
     function binary(a, b) {
-        arguments.length === 2 || args1(arguments);
+        arguments.length === 2 || args2(arguments);
         return SN(a)[method](b);
     }
     return binary;
