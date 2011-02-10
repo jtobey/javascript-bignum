@@ -55,6 +55,10 @@ if (!BigInteger) {
     with <eqv?> from Section 11.5.  (<eqv?> uses JavaScript's *===* to
     compare non-numbers.)
 
+    Exact numbers support the standard ECMA Number formatting methods
+    (toFixed, toExponential, and toPrecision) without a fixed upper
+    limit to precision.
+
     The schemeNumber.js file exports an object <SchemeNumber>.  It
     contains a property <fn>, which in turn contains the functions
     implementing the numeric types.
@@ -174,7 +178,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1];
+SchemeNumber.VERSION = [1,0,1];
 
 function isNumber(x) {
     return x instanceof Number || typeof x === "number";
@@ -491,6 +495,84 @@ function assertExact(z) {
         raise("&assertion", "inexact number", z);
     return z;
 }
+
+/*
+    Property: raise
+    Function that translates a Scheme exception to ECMAScript.
+
+    When a library function encounters a situation where the Scheme
+    specification requires it to raise an exception with a certain
+    condition type, the function calls <SchemeNumber.raise>.
+
+    Programs may assign a custom function to <SchemeNumber.raise> to
+    intercept such exceptions.
+
+    Parameters:
+
+        conditionType - The specified condition, for example, "&assertion".
+        message       - A string describing the error.
+        irritants...  - Zero or more erroneous data arguments.
+
+    Returns:
+
+        The default <SchemeNumber.raise> function simply throws an
+        *Error*.
+
+    See Also:
+
+        <fn>, <SchemeNumber>
+*/
+SchemeNumber.raise = defaultRaise;
+
+function defaultRaise(conditionType, message, irritant) {
+    var msg = "SchemeNumber: " + conditionType + ": " + message;
+    if (arguments.length > 2) {
+        if (isNumber(irritant))
+            irritant = irritant.SN_numberToString();
+        msg += ": " + irritant;
+    }
+    throw new Error(msg);
+}
+
+function raise() {
+    var len = arguments.length;
+    var args = new Array(len);
+    while (len--)
+        args[len] = arguments[len];
+
+    // Call the exception hook.
+    SN.raise.apply(SN, args);
+
+    // Oops, it returned.  Fall back to our known good raiser.
+    defaultRaise.apply(this, args);
+}
+
+/*
+    Property: maxIntegerDigits
+    Maximum size of integers created by the <expt> function.
+
+    To avoid using up all system memory, exact results of a call to
+    <SchemeNumber.fn.expt(z, z)> are capped at a configurable number of
+    digits, by default one million.  <SchemeNumber.maxIntegerDigits>
+    holds this limit.
+
+    The size limit does *not* currently protect against other means of
+    creating large exact integers.  For example, when passed
+    "#e1e9999999", the <SchemeNumber> function tries to allocate 10
+    million digits, regardless of <maxIntegerDigits>.
+
+    In a future release, cases such as the preceeding example may be
+    checked.  If there is any possibility of legitimately creating
+    such large integers, either as number objects or components
+    thereof, code should increase <maxIntegerDigits>.
+
+    Default Value:
+
+        - 1000000 (1e6 or 1 million)
+*/
+
+// Configurable maximum integer magnitude.
+SN.maxIntegerDigits = 1e6;  // 1 million digits.
 
 /*
     Property: fn
@@ -1173,84 +1255,6 @@ function rationalize(x, delta) {
     return ret.SN_add(b);
 }
 
-/*
-    Property: raise
-    Function that translates a Scheme exception to ECMAScript.
-
-    When a library function encounters a situation where the Scheme
-    specification requires it to raise an exception with a certain
-    condition type, the function calls <SchemeNumber.raise>.
-
-    Programs may assign a custom function to <SchemeNumber.raise> to
-    intercept such exceptions.
-
-    Parameters:
-
-        conditionType - The specified condition, for example, "&assertion".
-        message       - A string describing the error.
-        irritants...  - Zero or more erroneous data arguments.
-
-    Returns:
-
-        The default <SchemeNumber.raise> function simply throws an
-        *Error*.
-
-    See Also:
-
-        <fn>, <SchemeNumber>
-*/
-SchemeNumber.raise = defaultRaise;
-
-function defaultRaise(conditionType, message, irritant) {
-    var msg = "SchemeNumber: " + conditionType + ": " + message;
-    if (arguments.length > 2) {
-        if (isNumber(irritant))
-            irritant = irritant.SN_numberToString();
-        msg += ": " + irritant;
-    }
-    throw new Error(msg);
-}
-
-function raise() {
-    var len = arguments.length;
-    var args = new Array(len);
-    while (len--)
-        args[len] = arguments[len];
-
-    // Call the exception hook.
-    SN.raise.apply(SN, args);
-
-    // Oops, it returned.  Fall back to our known good raiser.
-    defaultRaise.apply(this, args);
-}
-
-/*
-    Property: maxIntegerDigits
-    Maximum size of integers created by the <expt> function.
-
-    To avoid using up all system memory, exact results of a call to
-    <SchemeNumber.fn.expt(z, z)> are capped at a configurable number of
-    digits, by default one million.  <SchemeNumber.maxIntegerDigits>
-    holds this limit.
-
-    The size limit does *not* currently protect against other means of
-    creating large exact integers.  For example, when passed
-    "#e1e9999999", the <SchemeNumber> function tries to allocate 10
-    million digits, regardless of <maxIntegerDigits>.
-
-    In a future release, cases such as the preceeding example may be
-    checked.  If there is any possibility of legitimately creating
-    such large integers, either as number objects or components
-    thereof, code should increase <maxIntegerDigits>.
-
-    Default Value:
-
-        - 1000000 (1e6 or 1 million)
-*/
-
-// Configurable maximum integer magnitude.
-SN.maxIntegerDigits = 1e6;  // 1 million digits.
-
 //
 // Flonum: Inexact real as a native number.
 //
@@ -1613,6 +1617,14 @@ DISP.C.valueOf = function() {
     if (this.SN_imagPart().isZero())
         return this.SN_realPart().valueOf();
     return NaN;
+};
+
+DISP.C.toFixed = pureVirtual;
+DISP.C.toExponential = pureVirtual;
+DISP.C.toPrecision = pureVirtual;
+
+DISP.C.toLocaleString = function() {
+    return this.toString();
 };
 
 DISP.C.SN_debug = function() { return "C"; };
@@ -2093,6 +2105,138 @@ DISP.ER.SN_isInfinite = retFalse;
 
 DISP.ER.SN_imagPart   = retZero;
 
+function zeroes(count) {
+    var ret = "000000000000000".substring(0, count & 15);
+    if (count > 15)
+        ret += new Array((count >> 4) + 1).join("0000000000000000");
+    return ret;
+}
+
+// Specified by ECMA-262, 5th edition, 15.7.4.5.
+DISP.ER.toFixed = function(fractionDigits) {
+    var f = (fractionDigits === undefined ? 0 : parseInt(fractionDigits));
+    // XXX Should reject huge values of f.
+    var x = this;
+    var s = "";
+    if (x.SN_isNegative()) {
+        x = x.SN_negate();
+        s = "-";
+    }
+
+    var dm = x.SN_divAndMod(ONE.SN__exp10(-f));
+    var n = dm[0];
+    if (dm[1].SN_add(dm[1]).SN_ge(ONE))
+        n = ONE.SN_add(n);
+    if (n.SN_isZero())
+        return 0;
+    n = n.SN_numberToString();
+    if (f === 0)
+        return s + n;
+
+    var z = f - n.length;
+    if (f > 0) {
+        if (z >= 0)
+            n = zeroes(z + 1) + n;
+        var point = n.length - f;
+        return s + n.substring(0, point) + "." + n.substring(point);
+    }
+    return s + n + zeroes(-f);
+};
+
+DISP.ER.toExponential = function(fractionDigits) {
+    var f = (fractionDigits === undefined ? 20 : parseInt(fractionDigits));
+    if (f < 0)
+        throw new RangeError("SchemeNumber toExponential: negative " +
+                             "argument: " + f);
+
+    // XXX Should reject huge values of f.
+    var x = this;
+    var s = "";
+    if (x.SN_isNegative()) {
+        x = x.SN_negate();
+        s = "-";
+    }
+    else if (x.SN_isZero())
+        return s + "0" + (f > 0 ? "." + zeroes(f) : "") + "e+0";
+
+    var e = floor(x.SN_log() / LN10);
+    var p = ONE.SN__exp10(e - f);
+    var dm = x.SN_divAndMod(p);
+    var n = dm[0];
+    if (dm[1].SN_add(dm[1]).SN_ge(p))
+        n = ONE.SN_add(n);
+    n = n.SN_numberToString();
+
+    // Adjust for inaccuracy in log().
+    if (n.length != f + 1) {
+        //print("Guessed wrong length: " + n.length + " != " + (f + 1));
+        e += n.length - (f + 1);
+        p = ONE.SN__exp10(e - f);
+        dm = x.SN_divAndMod(p);
+        n = dm[0];
+        if (dm[1].SN_add(dm[1]).SN_ge(p))
+            n = ONE.SN_add(n);
+        n = n.SN_numberToString();
+        if (n.length != f + 1)
+            throw new Error("Can not format as exponential: "
+                            + this.SN_numberToString());
+    }
+
+    if (fractionDigits === undefined)
+        n = n.replace(/(\d)0+$/, "$1");
+    if (n.length > 1)
+        n = n[0] + "." + n.substring(1);
+    return s + n + "e" + (e < 0 ? "" : "+") + e;
+};
+
+DISP.ER.toPrecision = function(precision) {
+    var p;
+    if (precision === undefined) {
+        var x = this.SN_toInexact();
+        if (x.SN_isFinite())
+            return x.toString();
+        p = 21;
+    }
+    else {
+        p = parseInt(precision);
+        if (p < 1)
+            throw new RangeError("SchemeNumber toPrecision: expected a " +
+                                 "positive precision, got: " + precision);
+    }
+
+    // XXX Should reject huge values of p.
+    var x = this;
+    var s = "";
+    if (x.SN_isNegative()) {
+        x = x.SN_negate();
+        s = "-";
+    }
+    else if (x.SN_isZero())
+        return s + "0" + (f > 0 ? "." + zeroes(f) : "") + "e+0";
+
+    var ret = x.toExponential(p - 1);
+    var eIndex = ret.indexOf('e');
+    var exponent = parseInt(ret.substring(eIndex));
+    if (exponent >= -6 && exponent < p) {
+        if (exponent === 0)
+            ret = ret.substring(0, eIndex);
+        else {
+            ret = ret.substring(0, 1) + ret.substring(2, eIndex);
+            if (exponent < 0)
+                ret = "0." + zeroes(-1 - exponent) + ret;
+            else if (exponent < p - 1)
+                ret = ret.substring(0, exponent + 1) + "." +
+                    ret.substring(exponent + 1);
+        }
+    }
+    else if (precision === undefined) {
+        ret = ret.substring(0, eIndex).replace(/\.?0+/, "")
+            + ret.substring(eIndex);
+    }
+
+    return s + ret;
+};
+
 //
 // EQ: Exact rational abstract base class.
 //
@@ -2558,7 +2702,7 @@ ZERO.SN_compare = function(x) {
 ZERO.SN_add        = SN;
 ZERO.SN_negate     = retThis;
 ZERO.SN_abs        = retThis;
-ZERO.SN_multiply   = retThis;  // Should validate argument?  XXX
+ZERO.SN_multiply   = function(z) { SN(z); return this; };
 ZERO.SN_square     = retThis;
 ZERO.SN_reciprocal = divisionByExactZero;
 
@@ -2594,7 +2738,7 @@ ONE.SN_abs        = retThis;
 ONE.SN_multiply   = SN;
 ONE.SN_reciprocal = retThis;
 ONE.SN_square     = retThis;
-ONE.SN_expt       = retThis;  // Should validate argument?  XXX
+ONE.SN_expt       = ZERO.SN_multiply;
 ONE.SN_sqrt       = retThis;
 ONE.SN_log        = retZero;
 ONE.SN_acos       = retZero;
@@ -3092,7 +3236,6 @@ for (var methodName in DISP.C) {
 
 // Workaround for C inheriting from Flonum.
 for (var methodName in DISP.Flonum) {
-    //if (!DISP.C[methodName]) print("Nuking C." + methodName);
     if (!DISP.C[methodName])
         DISP.C[methodName] = unimpl;
 }
