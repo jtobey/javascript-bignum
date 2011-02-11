@@ -25,13 +25,18 @@ This implementation provides all functions listed in the R6RS [1]
 Scheme specification, Section 11.7, along with "eqv?" from Section
 11.5.  ("eqv?" uses JavaScript's "===" to compare non-numbers.)
 
+Exact numbers support the standard ECMA Number formatting methods
+(toFixed, toExponential, and toPrecision) without a fixed upper limit
+to precision.
+
 
 IMPLEMENTATION DETAILS
 
 The schemeNumber.js library adds properties to the standard
 Number.prototype object using names prefixed by "SN_".  These are
 private to the library and should not be used by applications.  The
-same warning appies to all properties and methods of Scheme numbers.
+same warning appies to all Scheme number properties whose names begin
+with "_" or "SN_".
 
 Inexact real numbers are represented as native numbers.
 
@@ -61,8 +66,22 @@ or try to extract it to HTML using NaturalDocs [2] and the build-docs
 script in this directory.
 
 
-John Tobey
-February 8, 2011
+CHANGES
+
+1.0.3 - 2011-02-10
+
+    * Faster big integer arithmetic, courtesy of Vitaly Magerya.
+      Approximately 20% test suite speedup.
+
+1.0.2 - 2011-02-10
+
+    * Moved argument conversion from internal methods to public
+      functions.  Approximately 10% test suite speedup.
+
+1.0.1 - 2011-02-10
+
+    * Support ECMA standard formatting methods: toFixed,
+      toExponential, toPrecision.
 
 [1] R6RS Scheme specification.  See http://www.r6rs.org/ (I recommend
 the PDF, not the HTML version.  http://www.r6rs.org/final/r6rs.pdf),

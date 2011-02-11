@@ -55,6 +55,10 @@ if (!BigInteger) {
     with <eqv?> from Section 11.5.  (<eqv?> uses JavaScript's *===* to
     compare non-numbers.)
 
+    Exact numbers support the standard ECMA Number formatting methods
+    (toFixed, toExponential, and toPrecision) without a fixed upper
+    limit to precision.
+
     The schemeNumber.js file exports an object <SchemeNumber>.  It
     contains a property <fn>, which in turn contains the functions
     implementing the numeric types.
@@ -67,7 +71,8 @@ if (!BigInteger) {
 
         obj - Object to be converted to a Scheme number.
 
-    *obj* may have any of the following types:
+    *obj* may have any of the following
+    types:
 
         Scheme number - returned unchanged.
         String        - converted as if by *string->number*.
@@ -174,7 +179,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1];
+SchemeNumber.VERSION = [1,0,3];
 
 function isNumber(x) {
     return x instanceof Number || typeof x === "number";
@@ -460,17 +465,28 @@ function makePolar(r, theta) {
                               r.SN_multiply(theta.SN_sin()));
 }
 
-function toReal(x) {
-    x = SN(x);
+function assertReal(x) {
     if (!x.SN_isReal())
         raise("&assertion", "not a real number", x);
     return x;
 }
 
-function toInteger(n) {
+function toReal(x) {
+    x = SN(x);
+    x.SN_isReal() || assertReal(x);
+    return x;
+}
+
+function assertInteger(n) {
     n = SN(n);
     if (!n.SN_isInteger())
         raise("&assertion", "not an integer", n);
+    return n;
+}
+
+function toInteger(n) {
+    n = SN(n);
+    n.SN_isInteger() || assertInteger(n);
     return n;
 }
 
@@ -491,6 +507,84 @@ function assertExact(z) {
         raise("&assertion", "inexact number", z);
     return z;
 }
+
+/*
+    Property: raise
+    Function that translates a Scheme exception to ECMAScript.
+
+    When a library function encounters a situation where the Scheme
+    specification requires it to raise an exception with a certain
+    condition type, the function calls <SchemeNumber.raise>.
+
+    Programs may assign a custom function to <SchemeNumber.raise> to
+    intercept such exceptions.
+
+    Parameters:
+
+        conditionType - The specified condition, for example, "&assertion".
+        message       - A string describing the error.
+        irritants...  - Zero or more erroneous data arguments.
+
+    Returns:
+
+        The default <SchemeNumber.raise> function simply throws an
+        *Error*.
+
+    See Also:
+
+        <fn>, <SchemeNumber>
+*/
+SchemeNumber.raise = defaultRaise;
+
+function defaultRaise(conditionType, message, irritant) {
+    var msg = "SchemeNumber: " + conditionType + ": " + message;
+    if (arguments.length > 2) {
+        if (isNumber(irritant))
+            irritant = irritant.SN_numberToString();
+        msg += ": " + irritant;
+    }
+    throw new Error(msg);
+}
+
+function raise() {
+    var len = arguments.length;
+    var args = new Array(len);
+    while (len--)
+        args[len] = arguments[len];
+
+    // Call the exception hook.
+    SN.raise.apply(SN, args);
+
+    // Oops, it returned.  Fall back to our known good raiser.
+    defaultRaise.apply(this, args);
+}
+
+/*
+    Property: maxIntegerDigits
+    Maximum size of integers created by the <expt> function.
+
+    To avoid using up all system memory, exact results of a call to
+    <SchemeNumber.fn.expt(z, z)> are capped at a configurable number of
+    digits, by default one million.  <SchemeNumber.maxIntegerDigits>
+    holds this limit.
+
+    The size limit does *not* currently protect against other means of
+    creating large exact integers.  For example, when passed
+    "#e1e9999999", the <SchemeNumber> function tries to allocate 10
+    million digits, regardless of <maxIntegerDigits>.
+
+    In a future release, cases such as the preceeding example may be
+    checked.  If there is any possibility of legitimately creating
+    such large integers, either as number objects or components
+    thereof, code should increase <maxIntegerDigits>.
+
+    Default Value:
+
+        - 1000000 (1e6 or 1 million)
+*/
+
+// Configurable maximum integer magnitude.
+SN.maxIntegerDigits = 1e6;  // 1 million digits.
 
 /*
     Property: fn
@@ -555,8 +649,8 @@ function assertExact(z) {
     Numerator and denominator of a floating-point value,
     hexadecimal:
 
-    > a5 = ns(sf.numerator(1/3), 16);    // "#i15555555555555"
-    > a6 = ns(sf.denominator(1/3), 16);  // "#i40000000000000"
+    > a5 = ns(sf.numerator(1/3), "16");    // "#i15555555555555"
+    > a6 = ns(sf.denominator(1/3), "16");  // "#i40000000000000"
 
     The *#i* prefix denotes an inexact number, as detailed in <R6RS at
     http://www.r6rs.org/>.  Since 1/3 is a native JavaScript number,
@@ -623,90 +717,247 @@ var fn = SchemeNumber.fn = {
     Refer to the argument type key under <Function list>.
 
     fn["number?"](obj)   - Returns true if *obj* is a Scheme number.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_440>.
+
     fn["complex?"](obj)  - Returns true if *obj* is a Scheme complex number.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_442>.
+
     fn["real?"](obj)     - Returns true if *obj* is a Scheme real number.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_444>.
+
     fn["rational?"](obj) - Returns true if *obj* is a Scheme rational number.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_446>.
+
     fn["integer?"](obj)  - Returns true if *obj* is a Scheme integer.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_448>.
+
     fn["real-valued?"](obj) - Returns true if *obj* is a Scheme complex number
                               and *fn["imag-part"](obj)* is zero.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_450>.
+
     fn["rational-valued?"](obj) - Returns true if *obj* is real-valued and
                                   *fn["real-part"](obj)* is rational.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_452>.
+
     fn["integer-valued?"](obj)  - Returns true if *obj* is real-valued and
                                   *fn["real-part"](obj)* is an integer.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_454>.
+
     fn["exact?"](z)   - Returns true if *z* is exact.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_456>.
+
     fn["inexact?"](z) - Returns true if *z* is inexact.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_458>.
+
+    fn.inexact(z) - Returns an inexact number equal to *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_460>.
+
+    fn.exact(z)   - Returns an exact number equal to *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_462>.
+
     fn["eqv?"](obj1, obj2) - Returns true if *obj1 === obj2* or both arguments
                              are Scheme numbers and behave identically.
+                             Specified by <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_428>.
+
     fn["="](z, z, z...) - Returns true if all arguments are mathematically
                           equal, though perhaps differing in exactness.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_464>.
+
     fn["<"](x, x, x...) - Returns true if arguments increase monotonically.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_466>.
+
     fn[">"](x, x, x...) - Returns true if arguments decrease monotonically.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_468>.
+
     fn["<="](x, x, x...) - Returns true if arguments are monotonically
                            nondecreasing.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_470>.
+
     fn[">="](x, x, x...) - Returns true if arguments are monotonically
                            nonincreasing.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_472>.
+
     fn["zero?"](z)      - Returns true if *z* equals zero.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_474>.
+
     fn["positive?"](x)  - Returns true if *x* is positive.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_476>.
+
     fn["negative?"](x)  - Returns true if *x* is negative.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_478>.
+
     fn["odd?"](n)       - Returns true if *n* is odd.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_480>.
+
     fn["even?"](n)      - Returns true if *n* is even.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_482>.
+
     fn["finite?"](x)    - Returns true if *x* is finite.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_484>.
+
     fn["infinite?"](x)  - Returns true if *x* is plus or minus infinity.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_486>.
+
     fn["nan?"](x)       - Returns true if *x* is a NaN.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_488>.
+
     fn.max(x, x...)     - Returns the greatest argument.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_490>.
+
     fn.min(x, x...)     - Returns the least argument.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_492>.
+
     fn["+"](z...)       - Returns the sum of the arguments.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_494>.
+
     fn["*"](z...)       - Returns the product of the arguments.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_496>.
+
     fn["-"](z)          - Returns the negation of *z* (-*z*).
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_498>.
+
     fn["-"](z1, z2...)  - Returns *z1* minus the sum of the *z2*(s).
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_500>.
+
     fn["/"](z)          - Returns the reciprocal of *z* (1 / *z*).
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_502>.
+
     fn["/"](z1, z2...)  - Returns *z1* divided by the product of the *z2*(s).
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_504>.
+
     fn.abs(x)           - Returns the absolute value of *x*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_506>.
+
     fn["div-and-mod"](x, y) - Returns *fn.div(x, y)* and *fn.mod(x, y)*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_508>.
+
     fn.div(x, y)        - Returns the greatest integer less than or equal to
                           *x* / *y*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_510>.
+
     fn.mod(x, y)        - Returns *x* - (*y* * fn.div(*x*, *y*)).
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_512>.
+
     fn["div0-and-mod0"](x, y) - Returns *fn.div0(x, y)* and *fn.mod0(x, y)*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_514>.
+
     fn.div0(x, y)       - Returns the integer nearest *x* / *y*, ties go lower.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_516>.
+
     fn.mod0(x, y)       - Returns *x* - (*y* * fn.div0(*x*, *y*)).
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_518>.
+
     fn.gcd(n...) - Returns the arguments' greatest common non-negative divisor.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_520>.
+
     fn.lcm(n...) - Returns the arguments' least common positive multiple.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_522>.
+
     fn.numerator(q)     - Returns *q* * *fn.denominator(q)*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_524>.
+
     fn.denominator(q)   - Returns the smallest positive integer which when
                           multiplied by *q* yields an integer.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_526>.
+
     fn.floor(x)         - Returns the greatest integer not greater than *x*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_528>.
+
     fn.ceiling(x)       - Returns the least integer not less than *x*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_530>.
+
     fn.truncate(x)      - Returns the closest integer between 0 and *x*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_532>.
+
     fn.round(x)         - Returns the closest integer to *x*, ties go even.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_534>.
+
     fn.rationalize(x, y) - Returns the simplest fraction within *y* of *x*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_536>.
+
     fn.exp(z)           - Returns e to the *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_540>.
+
     fn.log(z)           - Returns the natural logarithm of *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_542>.
+
     fn.log(z1, z2)      - Returns the base-*z2* logarithm of *z1*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_544>.
+
     fn.sin(z)           - Returns the sine of *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_546>.
+
     fn.cos(z)           - Returns the cosine of *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_548>.
+
     fn.tan(z)           - Returns the tangent of *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_550>.
+
     fn.asin(z)          - Returns a number whose sine is *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_552>.
+
     fn.acos(z)          - Returns a number whose cosine is *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_554>.
+
     fn.atan(z)          - Returns a number whose tangent is *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_556>.
+
     fn.atan(y, x)       - Returns the angle that passes through *(x,y)*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_558>.
+
     fn.sqrt(z)          - Returns the square root of *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_560>.
+
     fn["exact-integer-sqrt"](k) - Returns maximal exact s and non-negative r
                                   such that s*s + r = *k*.
-    fn["fn.expt"](z1, z2) - Returns *z1* to the power *z2*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_562>.
+
+    fn.expt(z1, z2) - Returns *z1* to the power *z2*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_564>.
+
     fn["make-rectangular"](x, y) - Returns the complex number *x + iy*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_566>.
+
     fn["make-polar"](r, theta) - Returns the complex number with magnitude *r*
                                  and angle *theta*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_568>.
+
     fn["real-part"](z) - Returns x such that *z* = x + iy.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_570>.
+
     fn["imag-part"](z) - Returns y such that *z* = x + iy.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_572>.
+
     fn.magnitude(z)    - Returns the magnitude of *z*.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_574>.
+
     fn.angle(z)        - Returns *fn.atan2(y,x)* where *z* = x + iy.
-    fn["number->string"](z) - Converts *z* to a string, base 10.
-    fn["number->string"](z, radix) - Converts *z* to a string, base *radix*.
-    fn["number->string"](z, radix, precision) - Converts and appends "|p" where
-                         p >= *precision* is the count of significant bits.
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_576>.
+
+    Function: fn["number->string"](z)
+    Converts *z* to a string, base 10.
+
+    Specified by: <R6RS at
+    http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_578>
+
+    Function: fn["number->string"](z, radix)
+    Converts *z* to a string, base *radix*.
+    *radix* must be exact 2, 8, 10, or 16.
+
+    Specified by: <R6RS at
+    http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_580>
+
+    Function: fn["number->string"](z, radix, precision)
+    Converts and suffixes *z* with a count of significant bits.
+    Appends "|p" to each inexact real component of *z* where p >=
+    *precision* is the smallest mantissa width needed to represent the
+    component exactly.
+
+    Specified by: <R6RS at
+    http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_582>
 
     Function: fn["string->number"](string)
-    Parses *string* as a Scheme number.
+    Parses *string* as a Scheme number.  Returns *false* if unable.
 
     Examples:
 
@@ -729,10 +980,17 @@ var fn = SchemeNumber.fn = {
     > "#i#b101" - inexact 5.0, same as "#b#i101".
     > "1.2345678|24" - rounded as if to single-precision (about 1.23456776).
 
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_584>
+
+    See Also: <R6RS section 4.2.8: Numbers at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-7.html#node_sec_4.2.8>
+
     Function: fn["string->number"](string, radix)
     Parses *string* as a Scheme number using *radix* as default radix.
 
-    If *string* contains a radix prefix, it takes precedence over *radix*.
+    *radix* must be exact 2, 8, 10, or 16.  If *string* contains a
+    radix prefix, it takes precedence over *radix*.
+
+    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_586>
 */
 
     "eqv?"      : fn_isEqv,
@@ -904,7 +1162,10 @@ var fn = SchemeNumber.fn = {
     "number->string" : function(z, radix, precision) {
         var r = radix;
         switch (arguments.length) {
-        case 3: assertExact(toInteger(precision));  // fall through
+        case 3:
+            precision = toInteger(precision);
+            assertExact(precision);
+            // fall through
         case 2:
             r = assertExact(toInteger(r)).valueOf();
             if (!uintegerPattern[r])
@@ -1000,7 +1261,7 @@ function fn_equals(a, b) {
     len > 1 || args2plus(arguments);
     a = SN(a);
     for (var i = 1; i < len; i++) {
-        if (!a.SN_eq(arguments[i]))
+        if (!a.SN_eq(SN(arguments[i])))
             return false;
     }
     return true;
@@ -1017,7 +1278,7 @@ function makeUnary(method) {
 function makeBinary(method) {
     function binary(a, b) {
         arguments.length === 2 || args2(arguments);
-        return SN(a)[method](b);
+        return SN(a)[method](SN(b));
     }
     return binary;
 }
@@ -1173,84 +1434,6 @@ function rationalize(x, delta) {
     return ret.SN_add(b);
 }
 
-/*
-    Property: raise
-    Function that translates a Scheme exception to ECMAScript.
-
-    When a library function encounters a situation where the Scheme
-    specification requires it to raise an exception with a certain
-    condition type, the function calls <SchemeNumber.raise>.
-
-    Programs may assign a custom function to <SchemeNumber.raise> to
-    intercept such exceptions.
-
-    Parameters:
-
-        conditionType - The specified condition, for example, "&assertion".
-        message       - A string describing the error.
-        irritants...  - Zero or more erroneous data arguments.
-
-    Returns:
-
-        The default <SchemeNumber.raise> function simply throws an
-        *Error*.
-
-    See Also:
-
-        <fn>, <SchemeNumber>
-*/
-SchemeNumber.raise = defaultRaise;
-
-function defaultRaise(conditionType, message, irritant) {
-    var msg = "SchemeNumber: " + conditionType + ": " + message;
-    if (arguments.length > 2) {
-        if (isNumber(irritant))
-            irritant = irritant.SN_numberToString();
-        msg += ": " + irritant;
-    }
-    throw new Error(msg);
-}
-
-function raise() {
-    var len = arguments.length;
-    var args = new Array(len);
-    while (len--)
-        args[len] = arguments[len];
-
-    // Call the exception hook.
-    SN.raise.apply(SN, args);
-
-    // Oops, it returned.  Fall back to our known good raiser.
-    defaultRaise.apply(this, args);
-}
-
-/*
-    Property: maxIntegerDigits
-    Maximum size of integers created by the <expt> function.
-
-    To avoid using up all system memory, exact results of a call to
-    <SchemeNumber.fn.expt(z, z)> are capped at a configurable number of
-    digits, by default one million.  <SchemeNumber.maxIntegerDigits>
-    holds this limit.
-
-    The size limit does *not* currently protect against other means of
-    creating large exact integers.  For example, when passed
-    "#e1e9999999", the <SchemeNumber> function tries to allocate 10
-    million digits, regardless of <maxIntegerDigits>.
-
-    In a future release, cases such as the preceeding example may be
-    checked.  If there is any possibility of legitimately creating
-    such large integers, either as number objects or components
-    thereof, code should increase <maxIntegerDigits>.
-
-    Default Value:
-
-        - 1000000 (1e6 or 1 million)
-*/
-
-// Configurable maximum integer magnitude.
-SN.maxIntegerDigits = 1e6;  // 1 million digits.
-
 //
 // Flonum: Inexact real as a native number.
 //
@@ -1392,15 +1575,15 @@ DISP.Flonum.SN_isOdd = function() {
     return (this & 1) === 1;
 };
 
-DISP.Flonum.SN_eq = function(z) { return SN(z).SN__eq_Flonum(this); };
-DISP.Flonum.SN_ne = function(z) { return SN(z).SN__ne_Flonum(this); };
-DISP.Flonum.SN_gt = function(x) { return toReal(x).SN__gt_Flonum(this); };
-DISP.Flonum.SN_lt = function(x) { return toReal(x).SN__lt_Flonum(this); };
-DISP.Flonum.SN_ge = function(x) { return toReal(x).SN__ge_Flonum(this); };
-DISP.Flonum.SN_le = function(x) { return toReal(x).SN__le_Flonum(this); };
+DISP.Flonum.SN_eq = function(z) { return z.SN__eq_Flonum(this); };
+DISP.Flonum.SN_ne = function(z) { return z.SN__ne_Flonum(this); };
+DISP.Flonum.SN_gt = function(x) { return assertReal(x).SN__gt_Flonum(this); };
+DISP.Flonum.SN_lt = function(x) { return assertReal(x).SN__lt_Flonum(this); };
+DISP.Flonum.SN_ge = function(x) { return assertReal(x).SN__ge_Flonum(this); };
+DISP.Flonum.SN_le = function(x) { return assertReal(x).SN__le_Flonum(this); };
 
 DISP.Flonum.SN_compare = function(x) {
-    return toReal(x).SN__compare_Flonum(this);
+    return assertReal(x).SN__compare_Flonum(this);
 };
 
 // Note operand order!
@@ -1457,16 +1640,16 @@ DISP.Flonum.SN_toExact = function() {
 DISP.Flonum.SN_toInexact = retThis;
 
 DISP.Flonum.SN_add = function(z) {
-    return SN(z).SN__add_Flonum(this);
+    return z.SN__add_Flonum(this);
 };
 DISP.Flonum.SN_subtract = function(z) {
-    return SN(z).SN__subtract_Flonum(this);
+    return z.SN__subtract_Flonum(this);
 };
 DISP.Flonum.SN_multiply = function(z) {
-    return SN(z).SN__multiply_Flonum(this);
+    return z.SN__multiply_Flonum(this);
 };
 DISP.Flonum.SN_divide = function(z) {
-    return SN(z).SN__divide_Flonum(this);
+    return z.SN__divide_Flonum(this);
 };
 
 DISP.Flonum.SN__add_R = function(x) {
@@ -1504,15 +1687,15 @@ function div_Flonum_R(x, y) {
     return NaN;
 }
 DISP.Flonum.SN_divAndMod = function(x) {
-    x = Number(toReal(x));
+    x = +x;
     var div = div_Flonum_R(this, x);
     return [toFlonum(div), toFlonum(this - (x * div))];
 };
 DISP.Flonum.SN_div = function(x) {
-    return div_Flonum_R(this, toReal(x));
+    return div_Flonum_R(this, x);
 };
 DISP.Flonum.SN_mod = function(x) {
-    return this - x * div_Flonum_R(this, toReal(x));
+    return this - x * div_Flonum_R(this, x);
 };
 
 DISP.Flonum.SN_square = function() {
@@ -1571,11 +1754,11 @@ DISP.Flonum.SN_log = function() {
 };
 
 DISP.Flonum.SN_atan2 = function(x) {
-    return atan2(this, toReal(x));
+    return atan2(this, x);
 };
 
 DISP.Flonum.SN_expt = function(z) {
-    return SN(z).SN__expt_Flonum(this);
+    return z.SN__expt_Flonum(this);
 };
 
 // Some famous flonums:
@@ -1613,6 +1796,14 @@ DISP.C.valueOf = function() {
     if (this.SN_imagPart().isZero())
         return this.SN_realPart().valueOf();
     return NaN;
+};
+
+DISP.C.toFixed = pureVirtual;
+DISP.C.toExponential = pureVirtual;
+DISP.C.toPrecision = pureVirtual;
+
+DISP.C.toLocaleString = function() {
+    return this.toString();
 };
 
 DISP.C.SN_debug = function() { return "C"; };
@@ -1727,22 +1918,22 @@ DISP.R.SN_ge = function(x) { return this.SN_compare(x) >= 0; };
 DISP.R.SN_le = function(x) { return this.SN_compare(x) <= 0; };
 
 DISP.R.SN_add = function(z) {
-    return SN(z).SN__add_R(this);
+    return z.SN__add_R(this);
 };
 DISP.R.SN__add_Flonum = DISP.Flonum.SN__add_R;
 
 DISP.R.SN_subtract = function(z) {
-    return SN(z).SN__subtract_R(this);
+    return z.SN__subtract_R(this);
 };
 DISP.R.SN__subtract_Flonum = DISP.Flonum.SN__subtract_R;
 
 DISP.R.SN_multiply = function(z) {
-    return SN(z).SN__multiply_R(this);
+    return z.SN__multiply_R(this);
 };
 DISP.R.SN__multiply_Flonum = DISP.Flonum.SN__multiply_R;
 
 DISP.R.SN_divide = function(z) {
-    return SN(z).SN__divide_R(this);
+    return z.SN__divide_R(this);
 };
 DISP.R.SN__divide_Flonum = DISP.Flonum.SN__divide_R;
 
@@ -1794,13 +1985,13 @@ function mod_R_R(x, y) {
 }
 
 DISP.R.SN_divAndMod = function(x) {
-    return divAndMod_R_R(this, toReal(x));
+    return divAndMod_R_R(this, x);
 };
 DISP.R.SN_div = function(x) {
-    return div_R_R(this, toReal(x));
+    return div_R_R(this, x);
 };
 DISP.R.SN_mod = function(x) {
-    return mod_R_R(this, toReal(x));
+    return mod_R_R(this, x);
 };
 
 DISP.R.SN__divAndMod_R = function(x) {
@@ -1927,7 +2118,7 @@ DISP.Rectangular.SN_angle = function() {
 
 DISP.C.SN__eq_Rectangular = pureVirtual;
 DISP.Rectangular.SN_eq = function(z) {
-    return SN(z).SN__eq_Rectangular(this);
+    return z.SN__eq_Rectangular(this);
 };
 DISP.Rectangular.SN__eq_Rectangular = function(z) {
     return z._x.SN_eq(this._x) && z._y.SN_eq(this._y);
@@ -1938,7 +2129,7 @@ DISP.Rectangular.SN__eq_R = function(x) {
 
 DISP.C.SN__ne_Rectangular = pureVirtual;
 DISP.Rectangular.SN_ne = function(z) {
-    return SN(z).SN__ne_Rectangular(this);
+    return z.SN__ne_Rectangular(this);
 };
 DISP.Rectangular.SN__ne_Rectangular = function(z) {
     return z._x.SN_ne(this._x) || z._y.SN_ne(this._y);
@@ -1989,7 +2180,7 @@ DISP.R.SN__divide_Rectangular = function(z) {
 
 DISP.C.SN__add_Rectangular = pureVirtual;
 DISP.Rectangular.SN_add = function(z) {
-    return SN(z).SN__add_Rectangular(this);
+    return z.SN__add_Rectangular(this);
 };
 DISP.Rectangular.SN__add_R = function(x) {
     return makeRectangular(x.SN_add(this._x), this._y);
@@ -2006,7 +2197,7 @@ DISP.Rectangular.SN_negate = function() {
 
 DISP.C.SN__subtract_Rectangular = pureVirtual;
 DISP.Rectangular.SN_subtract = function(z) {
-    return SN(z).SN__subtract_Rectangular(this);
+    return z.SN__subtract_Rectangular(this);
 };
 DISP.Rectangular.SN__subtract_R = function(x) {
     return makeRectangular(x.SN_subtract(this._x), this._y.SN_negate());
@@ -2019,7 +2210,7 @@ DISP.Rectangular.SN__subtract_Rectangular = function(z) {
 
 DISP.C.SN__multiply_Rectangular = pureVirtual;
 DISP.Rectangular.SN_multiply = function(z) {
-    return SN(z).SN__multiply_Rectangular(this);
+    return z.SN__multiply_Rectangular(this);
 };
 DISP.Rectangular.SN__multiply_R = function(x) {
     return toRectangular(x.SN_multiply(this._x), x.SN_multiply(this._y));
@@ -2045,7 +2236,7 @@ DISP.Rectangular.SN_reciprocal = function() {
 
 DISP.C.SN__divide_Rectangular = pureVirtual;
 DISP.Rectangular.SN_divide = function(z) {
-    return SN(z).SN__divide_Rectangular(this);
+    return z.SN__divide_Rectangular(this);
 };
 function complexDivide(x, y, z) {  // returns (x + iy) / z
     var m2 = rectMagnitude2(z);
@@ -2061,7 +2252,7 @@ DISP.Rectangular.SN__divide_Rectangular = function(z) {
 };
 
 DISP.Rectangular.SN_expt = function(z) {
-    return SN(z).SN__expt_Rectangular(this);
+    return z.SN__expt_Rectangular(this);
 };
 DISP.Rectangular.SN__expt_C = function(z) {
     return complexExpt(z, this);
@@ -2093,6 +2284,138 @@ DISP.ER.SN_isInfinite = retFalse;
 
 DISP.ER.SN_imagPart   = retZero;
 
+function zeroes(count) {
+    var ret = "000000000000000".substring(0, count & 15);
+    if (count > 15)
+        ret += new Array((count >> 4) + 1).join("0000000000000000");
+    return ret;
+}
+
+// Specified by ECMA-262, 5th edition, 15.7.4.5.
+DISP.ER.toFixed = function(fractionDigits) {
+    var f = (fractionDigits === undefined ? 0 : parseInt(fractionDigits));
+    // XXX Should reject huge values of f.
+    var x = this;
+    var s = "";
+    if (x.SN_isNegative()) {
+        x = x.SN_negate();
+        s = "-";
+    }
+
+    var dm = x.SN_divAndMod(ONE.SN__exp10(-f));
+    var n = dm[0];
+    if (dm[1].SN_add(dm[1]).SN_ge(ONE))
+        n = ONE.SN_add(n);
+    if (n.SN_isZero())
+        return 0;
+    n = n.SN_numberToString();
+    if (f === 0)
+        return s + n;
+
+    var z = f - n.length;
+    if (f > 0) {
+        if (z >= 0)
+            n = zeroes(z + 1) + n;
+        var point = n.length - f;
+        return s + n.substring(0, point) + "." + n.substring(point);
+    }
+    return s + n + zeroes(-f);
+};
+
+DISP.ER.toExponential = function(fractionDigits) {
+    var f = (fractionDigits === undefined ? 20 : parseInt(fractionDigits));
+    if (f < 0)
+        throw new RangeError("SchemeNumber toExponential: negative " +
+                             "argument: " + f);
+
+    // XXX Should reject huge values of f.
+    var x = this;
+    var s = "";
+    if (x.SN_isNegative()) {
+        x = x.SN_negate();
+        s = "-";
+    }
+    else if (x.SN_isZero())
+        return s + "0" + (f > 0 ? "." + zeroes(f) : "") + "e+0";
+
+    var e = floor(x.SN_log() / LN10);
+    var p = ONE.SN__exp10(e - f);
+    var dm = x.SN_divAndMod(p);
+    var n = dm[0];
+    if (dm[1].SN_add(dm[1]).SN_ge(p))
+        n = ONE.SN_add(n);
+    n = n.SN_numberToString();
+
+    // Adjust for inaccuracy in log().
+    if (n.length != f + 1) {
+        //print("Guessed wrong length: " + n.length + " != " + (f + 1));
+        e += n.length - (f + 1);
+        p = ONE.SN__exp10(e - f);
+        dm = x.SN_divAndMod(p);
+        n = dm[0];
+        if (dm[1].SN_add(dm[1]).SN_ge(p))
+            n = ONE.SN_add(n);
+        n = n.SN_numberToString();
+        if (n.length != f + 1)
+            throw new Error("Can not format as exponential: "
+                            + this.SN_numberToString());
+    }
+
+    if (fractionDigits === undefined)
+        n = n.replace(/(\d)0+$/, "$1");
+    if (n.length > 1)
+        n = n[0] + "." + n.substring(1);
+    return s + n + "e" + (e < 0 ? "" : "+") + e;
+};
+
+DISP.ER.toPrecision = function(precision) {
+    var p;
+    if (precision === undefined) {
+        var x = this.SN_toInexact();
+        if (x.SN_isFinite())
+            return x.toString();
+        p = 21;
+    }
+    else {
+        p = parseInt(precision);
+        if (p < 1)
+            throw new RangeError("SchemeNumber toPrecision: expected a " +
+                                 "positive precision, got: " + precision);
+    }
+
+    // XXX Should reject huge values of p.
+    var x = this;
+    var s = "";
+    if (x.SN_isNegative()) {
+        x = x.SN_negate();
+        s = "-";
+    }
+    else if (x.SN_isZero())
+        return s + "0" + (f > 0 ? "." + zeroes(f) : "") + "e+0";
+
+    var ret = x.toExponential(p - 1);
+    var eIndex = ret.indexOf('e');
+    var exponent = parseInt(ret.substring(eIndex));
+    if (exponent >= -6 && exponent < p) {
+        if (exponent === 0)
+            ret = ret.substring(0, eIndex);
+        else {
+            ret = ret.substring(0, 1) + ret.substring(2, eIndex);
+            if (exponent < 0)
+                ret = "0." + zeroes(-1 - exponent) + ret;
+            else if (exponent < p - 1)
+                ret = ret.substring(0, exponent + 1) + "." +
+                    ret.substring(exponent + 1);
+        }
+    }
+    else if (precision === undefined) {
+        ret = ret.substring(0, eIndex).replace(/\.?0+/, "")
+            + ret.substring(eIndex);
+    }
+
+    return s + ret;
+};
+
 //
 // EQ: Exact rational abstract base class.
 //
@@ -2103,42 +2426,42 @@ EQ.prototype = new ER();
 DISP.EQ.SN_isRational = retTrue;
 
 DISP.EQ.SN_eq = function(z) {
-    return SN(z).SN__eq_EQ(this);
+    return z.SN__eq_EQ(this);
 };
 DISP.EQ.SN__eq_EQ = pureVirtual;
 
 DISP.EQ.SN_ne = function(z) {
-    return SN(z).SN__ne_EQ(this);
+    return z.SN__ne_EQ(this);
 };
 DISP.EQ.SN__ne_EQ = pureVirtual;
 
 DISP.EQ.SN_compare = function(x) {
-    return toReal(x).SN__compare_EQ(this);
+    return x.SN__compare_EQ(this);
 };
 DISP.EQ.SN__compare_EQ = pureVirtual;
 
 DISP.EQ.SN_add = function(z) {
-    return SN(z).SN__add_EQ(this);
+    return z.SN__add_EQ(this);
 };
 DISP.EQ.SN__add_EQ = pureVirtual;
 
 DISP.EQ.SN_subtract = function(z) {
-    return SN(z).SN__subtract_EQ(this);
+    return z.SN__subtract_EQ(this);
 };
 DISP.EQ.SN__subtract_EQ = pureVirtual;
 
 DISP.EQ.SN_multiply = function(z) {
-    return SN(z).SN__multiply_EQ(this);
+    return z.SN__multiply_EQ(this);
 };
 DISP.EQ.SN__multiply_EQ = pureVirtual;
 
 DISP.EQ.SN_divide = function(z) {
-    return SN(z).SN__divide_EQ(this);
+    return z.SN__divide_EQ(this);
 };
 DISP.EQ.SN__divide_EQ = pureVirtual;
 
 DISP.EQ.SN_expt = function(z) {
-    return SN(z).SN__expt_EQ(this);
+    return z.SN__expt_EQ(this);
 };
 
 function reduceEQ(n, d) {
@@ -2358,7 +2681,7 @@ DISP.EI.SN_truncate    = retThis;
 DISP.EI.SN__toBigInteger = pureVirtual;
 
 DISP.EI.SN_eq = function(z) {
-    return SN(z).SN__eq_EI(this);
+    return z.SN__eq_EI(this);
 };
 DISP.EI.SN__eq_EI = function(n) {
     return n.SN__toBigInteger().compare(this.SN__toBigInteger()) === 0;
@@ -2368,7 +2691,7 @@ DISP.EI.SN__eq_EQ = function(q) {
 };
 
 DISP.EI.SN_ne = function(z) {
-    return SN(z).SN__ne_EI(this);
+    return z.SN__ne_EI(this);
 };
 DISP.EI.SN__ne_EI = function(n) {
     return n.SN__toBigInteger().compare(this.SN__toBigInteger()) !== 0;
@@ -2378,7 +2701,7 @@ DISP.EI.SN__ne_EQ = function(q) {
 };
 
 DISP.EI.SN_compare = function(x) {
-    return toReal(x).SN__compare_EI(this);
+    return x.SN__compare_EI(this);
 };
 DISP.EI.SN__compare_EQ = function(q) {
     return q.SN_numerator().SN_compare(q.SN_denominator().SN_multiply(this));
@@ -2388,16 +2711,16 @@ DISP.EI.SN__compare_EI = function(n) {
 };
 
 DISP.EI.SN_add = function(z) {
-    return SN(z).SN__add_EI(this);
+    return z.SN__add_EI(this);
 };
 DISP.EI.SN_subtract = function(z) {
-    return SN(z).SN__subtract_EI(this);
+    return z.SN__subtract_EI(this);
 };
 DISP.EI.SN_multiply = function(z) {
-    return SN(z).SN__multiply_EI(this);
+    return z.SN__multiply_EI(this);
 };
 //DISP.EI.SN_divide = function(z) {
-//    return SN(z).SN__divide_EI(this);
+//    return z.SN__divide_EI(this);
 //};
 
 DISP.EI.SN_reciprocal = function() {
@@ -2407,13 +2730,13 @@ DISP.EI.SN_reciprocal = function() {
 };
 
 DISP.EI.SN_divAndMod = function(x) {
-    return toReal(x).SN__divAndMod_EI(this);
+    return x.SN__divAndMod_EI(this);
 };
 DISP.EI.SN_div = function(x) {
-    return toReal(x).SN__div_EI(this);
+    return x.SN__div_EI(this);
 };
 DISP.EI.SN_mod = function(x) {
-    return toReal(x).SN__mod_EI(this);
+    return x.SN__mod_EI(this);
 };
 
 DISP.EI.SN__add_EI = function(n) {
@@ -2483,7 +2806,7 @@ function positiveIntegerExpt(b, p) {
 }
 
 DISP.EI.SN_expt = function(z) {
-    return SN(z).SN__expt_EI(this);
+    return z.SN__expt_EI(this);
 };
 
 DISP.EI.SN__expt_EI = function(n) {
@@ -2558,23 +2881,22 @@ ZERO.SN_compare = function(x) {
 ZERO.SN_add        = SN;
 ZERO.SN_negate     = retThis;
 ZERO.SN_abs        = retThis;
-ZERO.SN_multiply   = retThis;  // Should validate argument?  XXX
+ZERO.SN_multiply   = retThis;
 ZERO.SN_square     = retThis;
 ZERO.SN_reciprocal = divisionByExactZero;
 
 ZERO.SN_subtract = function(z) {
-    return SN(z).SN_negate();
+    return z.SN_negate();
 };
 
 ZERO.SN_divide   = function(z) {
-    z = SN(z);
     if (z.SN_isZero() && z.SN_isExact())
         divisionByExactZero();
     return this;
 };
 
 ZERO.SN_expt = function(z) {
-    switch (SN(z).SN_realPart().SN_sign()) {
+    switch (z.SN_realPart().SN_sign()) {
     case 1: return this;
     case 0: return ONE;
     case -1: default: divisionByExactZero();
@@ -2594,7 +2916,7 @@ ONE.SN_abs        = retThis;
 ONE.SN_multiply   = SN;
 ONE.SN_reciprocal = retThis;
 ONE.SN_square     = retThis;
-ONE.SN_expt       = retThis;  // Should validate argument?  XXX
+ONE.SN_expt       = ZERO.SN_multiply;
 ONE.SN_sqrt       = retThis;
 ONE.SN_log        = retZero;
 ONE.SN_acos       = retZero;
@@ -2607,7 +2929,6 @@ M_ONE.SN_square     = retOne;
 M_ONE.SN_sqrt       = function() { return I; };
 
 M_ONE.SN_expt = function(z) {
-    z = SN(z);
     if (!z.SN_isInteger())
         return complexExpt(this, z);
     var ret = (z.SN_isEven() ? ONE : M_ONE);
@@ -2684,21 +3005,21 @@ DISP.EINative.SN_isOdd = function() {
 };
 
 DISP.EINative.SN_eq = function(z) {
-    return SN(z).SN__eq_EINative(this);
+    return z.SN__eq_EINative(this);
 };
 DISP.EINative.SN__eq_EINative = function(n) {
     return n._ === this._;
 };
 
 DISP.EINative.SN_ne = function(z) {
-    return SN(z).SN__ne_EINative(this);
+    return z.SN__ne_EINative(this);
 };
 DISP.EINative.SN__ne_EINative = function(n) {
     return n._ !== this._;
 };
 
 DISP.EINative.SN_compare = function(x) {
-    return toReal(x).SN__compare_EINative(this);
+    return x.SN__compare_EINative(this);
 };
 DISP.EINative.SN__compare_EINative = function(n) {
     return (n._ === this._ ? 0 : (n._ > this._ ? 1 : -1));
@@ -2712,7 +3033,7 @@ function add_EINative_EINative(a, b) {
 }
 
 DISP.EINative.SN_add = function(z) {
-    return SN(z).SN__add_EINative(this);
+    return z.SN__add_EINative(this);
 };
 DISP.EINative.SN__add_EINative = function(n) {
     return add_EINative_EINative(n._, this._);
@@ -2727,14 +3048,14 @@ DISP.EINative.SN_abs = function() {
 };
 
 DISP.EINative.SN_subtract = function(z) {
-    return SN(z).SN__subtract_EINative(this);
+    return z.SN__subtract_EINative(this);
 };
 DISP.EINative.SN__subtract_EINative = function(n) {
     return add_EINative_EINative(n._, -this._);
 };
 
 DISP.EINative.SN_multiply = function(z) {
-    return SN(z).SN__multiply_EINative(this);
+    return z.SN__multiply_EINative(this);
 };
 DISP.EINative.SN__multiply_EINative = function(n) {
     var ret = n._ * this._;
@@ -2790,21 +3111,21 @@ function divAndMod_EINative(t, x, which) {
 };
 
 DISP.EINative.SN_div = function(x) {
-    return toReal(x).SN__div_EINative(this);
+    return x.SN__div_EINative(this);
 };
 DISP.EINative.SN__div_EINative = function(n) {
     return divAndMod_EINative(n._, this._, 0);
 };
 
 DISP.EINative.SN_mod = function(x) {
-    return toReal(x).SN__mod_EINative(this);
+    return x.SN__mod_EINative(this);
 };
 DISP.EINative.SN__mod_EINative = function(n) {
     return divAndMod_EINative(n._, this._, 1);
 };
 
 DISP.EINative.SN_divAndMod = function(x) {
-    return toReal(x).SN__divAndMod_EINative(this);
+    return x.SN__divAndMod_EINative(this);
 };
 DISP.EINative.SN__divAndMod_EINative = function(n) {
     return divAndMod_EINative(n._, this._, 2);
@@ -2902,7 +3223,7 @@ DISP.EIBig.SN__toBigInteger = function() {
 };
 
 DISP.EIBig.SN_add = function(z) {
-    return SN(z).SN__add_EIBig(this);
+    return z.SN__add_EIBig(this);
 };
 
 DISP.EIBig.SN_negate = function() {
@@ -2914,11 +3235,11 @@ DISP.EIBig.SN_abs = function() {
 };
 
 DISP.EIBig.SN_subtract = function(z) {
-    return SN(z).SN__subtract_EIBig(this);
+    return z.SN__subtract_EIBig(this);
 };
 
 DISP.EIBig.SN_multiply = function(z) {
-    return SN(z).SN__multiply_EIBig(this);
+    return z.SN__multiply_EIBig(this);
 };
 
 DISP.EIBig.SN_square = function() {
@@ -3092,7 +3413,6 @@ for (var methodName in DISP.C) {
 
 // Workaround for C inheriting from Flonum.
 for (var methodName in DISP.Flonum) {
-    //if (!DISP.C[methodName]) print("Nuking C." + methodName);
     if (!DISP.C[methodName])
         DISP.C[methodName] = unimpl;
 }

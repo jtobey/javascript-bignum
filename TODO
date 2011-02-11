@@ -1,17 +1,14 @@
 TODO:
 
-* ECMA Number.prototype methods: toLocaleString, toFixed,
-  toExponential, toPrecision.  Implement for fractions and big ints.
-
-* Apply Vitaly Magerya's BigInteger performance patch
-  (comp.lang.scheme thread circa 2011-02-09)
-
 * Consider providing the option not to tamper with Number.prototype.
 
 * BigInteger: Consider having pow() reject non-integer arguments.
 
 * Consider aliasing or renaming BigInteger.toString() so as not to
   conflict with the default toString().
+
+* BigInteger: Consider patching multiplySingleDigit to support
+  negative "this".
 
 * Consider a BigDecimal class like Java's BigDecimal.
 

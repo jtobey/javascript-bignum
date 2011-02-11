@@ -248,6 +248,14 @@ sub gen_js {
     print(qq/test("/ . join('", "', $fn, @args) . qq/");\n/);
 }
 
+sub epilog_js {
+    print(<<'END');
+for (var i in this) {
+    print(i);
+}
+END
+}
+
 sub gen {
     my ($gen_lang, $fn, $args, $level) = (@_);
     if ($level == scalar(@$args)) {
@@ -278,6 +286,7 @@ if ($lang eq 'scheme') {
 elsif ($lang eq 'js') {
     &prolog_js();
     &gen_all(\&gen_js);
+    &epilog_js();
 }
 else {
     die("Usage: $0 { scheme | js }\n");
