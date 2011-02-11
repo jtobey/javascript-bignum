@@ -603,12 +603,12 @@ SN.maxIntegerDigits = 1e6;  // 1 million digits.
 
     You may find it convenient to copy <SchemeNumber>, <fn>, and the
     output function <number->string> into short-named variables, by
-    convention *sn*, *sf*, and *ns*.  The rest of this section assumes
+    convention *sn*, *fn*, and *ns*.  The rest of this section assumes
     you have done this:
 
     > var sn = SchemeNumber;
-    > var sf = sn.fn;
-    > var ns = sf["number->string"];
+    > var fn = sn.fn;
+    > var ns = fn["number->string"];
 
     Functions that require a Scheme number argument automatically
     filter the argument through <SchemeNumber>.
@@ -616,12 +616,12 @@ SN.maxIntegerDigits = 1e6;  // 1 million digits.
     For example, *"2"* (string) would be exact (parsed as Scheme) but
     *2* (equal to *2.0*) would be inexact, as demonstrated:
 
-    > a1 = sf["exact?"]("2");       // a1 === true
-    > a1 = sf["exact?"](sn("2"));   // same
+    > a1 = fn["exact?"]("2");       // a1 === true
+    > a1 = fn["exact?"](sn("2"));   // same
     > 
-    > a2 = sf["exact?"](2);         // a2 === false
-    > a2 = sf["exact?"]("2.0");     // same
-    > a2 = sf["exact?"](sn("2.0")); // same
+    > a2 = fn["exact?"](2);         // a2 === false
+    > a2 = fn["exact?"]("2.0");     // same
+    > a2 = fn["exact?"](sn("2.0")); // same
 
     Note that the following functions accept arguments of any type and
     therefore do not apply <SchemeNumber> to their arguments:
@@ -639,18 +639,18 @@ SN.maxIntegerDigits = 1e6;  // 1 million digits.
     Here, for example, is 2 to the 1,024th power, as a decimal
     string:
 
-    > a3 = ns(sf.expt("2", "1024"));
+    > a3 = ns(fn.expt("2", "1024"));
 
     Fractional
     arithmetic:
 
-    > a4 = sf["+"]("1/3", "4/5");  // 17/15
+    > a4 = fn["+"]("1/3", "4/5");  // 17/15
 
     Numerator and denominator of a floating-point value,
     hexadecimal:
 
-    > a5 = ns(sf.numerator(1/3), "16");    // "#i15555555555555"
-    > a6 = ns(sf.denominator(1/3), "16");  // "#i40000000000000"
+    > a5 = ns(fn.numerator(1/3), "16");    // "#i15555555555555"
+    > a6 = ns(fn.denominator(1/3), "16");  // "#i40000000000000"
 
     The *#i* prefix denotes an inexact number, as detailed in <R6RS at
     http://www.r6rs.org/>.  Since 1/3 is a native JavaScript number,
