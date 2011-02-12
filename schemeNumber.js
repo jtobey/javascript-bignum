@@ -179,7 +179,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,0,3];
+SchemeNumber.VERSION = [1,0,4];
 
 function isNumber(x) {
     return x instanceof Number || typeof x === "number";
@@ -199,13 +199,13 @@ var HIERARCHY = {
     R: ["Flonum", "ER"],
     ER: ["EQ"],
     EQ: ["EQFraction", "EI"],
-    EI: ["EINative", "EIBig"],
+    EI: ["EINative", "EIBig"]
 };
 
 var CLASSES = {
     C:C, R:R, ER:ER, EQ:EQ, EI:EI,
     Rectangular:Rectangular, Flonum:Flonum,
-    EQFraction:EQFraction, EINative:EINative, EIBig:EIBig,
+    EQFraction:EQFraction, EINative:EINative, EIBig:EIBig
 };
 
 var DISP = {};
@@ -2391,7 +2391,7 @@ DISP.ER.toPrecision = function(precision) {
         s = "-";
     }
     else if (x.SN_isZero())
-        return s + "0" + (f > 0 ? "." + zeroes(f) : "") + "e+0";
+        return s + "0" + (p > 1 ? "." + zeroes(p - 1) : "") + "e+0";
 
     var ret = x.toExponential(p - 1);
     var eIndex = ret.indexOf('e');
@@ -2967,13 +2967,19 @@ DISP.EINative.SN_numberToString = function(radix, precision) {
 };
 
 DISP.EINative.toFixed = function(dig) {
-    return this._.toFixed(dig);
+    if (arguments.length)
+        return this._.toFixed(dig);
+    return this._.toFixed();
 };
 DISP.EINative.toExponential = function(dig) {
-    return this._.toExponential(dig);
+    if (arguments.length)
+        return this._.toExponential(dig);
+    return this._.toExponential();
 };
 DISP.EINative.toPrecision = function(prec) {
-    return this._.toPrecision(prec);
+    if (arguments.length)
+        return this._.toPrecision(prec);
+    return this._.toPrecision();
 };
 
 DISP.EINative.SN_debug = function() {
