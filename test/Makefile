@@ -10,7 +10,7 @@ JSDEP = ../biginteger.js ../schemeNumber.js
 default: r6rs ecma
 
 r6rs: js.raw.good test-sn.js $(JSDEP)
-	$(JSR6RS) test-sn.js | diff js.raw.good - | $(PAGER)
+	$(JSR6RS) test-sn.js | diff js.raw.good -
 
 ecma: jstest.js $(JSDEP)
 	$(JS) $<
