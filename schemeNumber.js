@@ -2294,7 +2294,11 @@ function zeroes(count) {
 // Specified by ECMA-262, 5th edition, 15.7.4.5.
 DISP.ER.toFixed = function(fractionDigits) {
     var f = (fractionDigits === undefined ? 0 : parseInt(fractionDigits));
-    // XXX Should reject huge values of f.
+    if (f > SN.maxIntegerDigits)
+        throw new RangeError("fractionDigits exceeds " +
+                             "SchemeNumber.maxIntegerDigits: " +
+                             fractionDigits);
+
     var x = this;
     var s = "";
     if (x.SN_isNegative()) {
@@ -2307,7 +2311,7 @@ DISP.ER.toFixed = function(fractionDigits) {
     if (dm[1].SN_add(dm[1]).SN_ge(ONE))
         n = ONE.SN_add(n);
     if (n.SN_isZero())
-        return 0;
+        return "0" + (fractionDigits > 0 ? "." + zeroes(fractionDigits) : "");
     n = n.SN_numberToString();
     if (f === 0)
         return s + n;
@@ -2327,8 +2331,11 @@ DISP.ER.toExponential = function(fractionDigits) {
     if (f < 0)
         throw new RangeError("SchemeNumber toExponential: negative " +
                              "argument: " + f);
+    if (f > SN.maxIntegerDigits)
+        throw new RangeError("fractionDigits exceeds " +
+                             "SchemeNumber.maxIntegerDigits: " +
+                             fractionDigits);
 
-    // XXX Should reject huge values of f.
     var x = this;
     var s = "";
     if (x.SN_isNegative()) {
@@ -2336,7 +2343,7 @@ DISP.ER.toExponential = function(fractionDigits) {
         s = "-";
     }
     else if (x.SN_isZero())
-        return s + "0" + (f > 0 ? "." + zeroes(f) : "") + "e+0";
+        return s + "0" + (fractionDigits > 0 ? "." + zeroes(f) : "") + "e+0";
 
     var e = floor(x.SN_log() / LN10);
     var p = ONE.SN__exp10(e - f);
@@ -2369,9 +2376,9 @@ DISP.ER.toExponential = function(fractionDigits) {
 };
 
 DISP.ER.toPrecision = function(precision) {
-    var p;
+    var p, x;
     if (precision === undefined) {
-        var x = this.SN_toInexact();
+        x = this.SN_toInexact();
         if (x.SN_isFinite())
             return x.toString();
         p = 21;
@@ -2381,26 +2388,30 @@ DISP.ER.toPrecision = function(precision) {
         if (p < 1)
             throw new RangeError("SchemeNumber toPrecision: expected a " +
                                  "positive precision, got: " + precision);
+        if (p > SN.maxIntegerDigits)
+            throw new RangeError("precision exceeds " +
+                                 "SchemeNumber.maxIntegerDigits: " +
+                                 precision);
     }
 
-    // XXX Should reject huge values of p.
-    var x = this;
+    x = this;
     var s = "";
     if (x.SN_isNegative()) {
         x = x.SN_negate();
         s = "-";
     }
     else if (x.SN_isZero())
-        return s + "0" + (p > 1 ? "." + zeroes(p - 1) : "") + "e+0";
+        return "0" + (p > 1 ? "." + zeroes(p - 1) : "");
 
     var ret = x.toExponential(p - 1);
     var eIndex = ret.indexOf('e');
-    var exponent = parseInt(ret.substring(eIndex));
+    var exponent = parseInt(ret.substring(eIndex + 1));
     if (exponent >= -6 && exponent < p) {
         if (exponent === 0)
             ret = ret.substring(0, eIndex);
         else {
-            ret = ret.substring(0, 1) + ret.substring(2, eIndex);
+            ret = ret.substring(0, 1)
+                + (ret.indexOf('.') === -1 ? "" : ret.substring(2, eIndex));
             if (exponent < 0)
                 ret = "0." + zeroes(-1 - exponent) + ret;
             else if (exponent < p - 1)
@@ -2964,22 +2975,6 @@ DISP.EINative.valueOf = function() {
 
 DISP.EINative.SN_numberToString = function(radix, precision) {
     return this._.toString(radix || 10);
-};
-
-DISP.EINative.toFixed = function(dig) {
-    if (arguments.length)
-        return this._.toFixed(dig);
-    return this._.toFixed();
-};
-DISP.EINative.toExponential = function(dig) {
-    if (arguments.length)
-        return this._.toExponential(dig);
-    return this._.toExponential();
-};
-DISP.EINative.toPrecision = function(prec) {
-    if (arguments.length)
-        return this._.toPrecision(prec);
-    return this._.toPrecision();
 };
 
 DISP.EINative.SN_debug = function() {
