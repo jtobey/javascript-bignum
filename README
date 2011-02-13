@@ -68,6 +68,10 @@ script in this directory.
 
 CHANGES
 
+1.0.5 - 2011-02-12
+
+    * Fixed a bug in toFixed affecting rounding.
+
 1.0.4 - 2011-02-11
 
     * Bugs fixed in SchemeNumber implementation of ECMAScript Number

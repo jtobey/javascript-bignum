@@ -89,7 +89,7 @@ if (!BigInteger) {
 
     See Also:
 
-        <fn>, <raise>
+        <fn>, <raise>, <R6RS Chapter 3: Numbers at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-6.html#node_chap_3>
 */
 var SchemeNumber = (function() {
 
@@ -179,7 +179,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,0,4];
+SchemeNumber.VERSION = [1,0,5];
 
 function isNumber(x) {
     return x instanceof Number || typeof x === "number";
@@ -561,12 +561,13 @@ function raise() {
 
 /*
     Property: maxIntegerDigits
-    Maximum size of integers created by the <expt> function.
+    Maximum size of integers created by the <fn.expt(z1, z2)>
+    function.
 
     To avoid using up all system memory, exact results of a call to
-    <SchemeNumber.fn.expt(z, z)> are capped at a configurable number of
-    digits, by default one million.  <SchemeNumber.maxIntegerDigits>
-    holds this limit.
+    <fn.expt(z1, z2)> are capped at a configurable number of digits,
+    by default one million.  <SchemeNumber.maxIntegerDigits> holds
+    this limit.
 
     The size limit does *not* currently protect against other means of
     creating large exact integers.  For example, when passed
@@ -585,6 +586,49 @@ function raise() {
 
 // Configurable maximum integer magnitude.
 SN.maxIntegerDigits = 1e6;  // 1 million digits.
+
+/*
+    Method: toString(radix)
+    Converts this Scheme number to a string.
+
+    The *toString* method converts inexact numbers as in JavaScript
+    and exact numbers as if by <fn["number->string"](z, radix)>.
+
+    Method: toFixed(fractionDigits)
+    Returns this Scheme number as a string with *fractionDigits*
+    digits after the decimal point.
+
+    Examples:
+
+    > SchemeNumber("#e1.2").toFixed(2)  // "1.20"
+    > SchemeNumber("1/7").toFixed(24)   // "0.142857142857142857142857"
+
+    Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
+
+    Method: toExponential(fractionDigits)
+    Converts this Scheme number to scientific "e" notation with
+    *fractionDigits* digits after the decimal point.
+
+    Examples:
+
+    > SchemeNumber("1/11").toExponential(3)  // "9.091e-2"
+    > SchemeNumber("1/2").toExponential(2)   // "5.00e-1"
+
+    Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
+
+    Method: toPrecision(precision)
+    Converts this Scheme number to decimal (possibly "e" notation)
+    with *precision* significant digits.
+
+    Examples:
+
+    > SchemeNumber("12300").toPrecision(2)  // "1.2e+4"
+    > SchemeNumber("12300").toPrecision(4)  // "1.230e+4"
+    > SchemeNumber("12300").toPrecision(5)  // "12300"
+    > SchemeNumber("12300").toPrecision(6)  // "12300.0"
+
+    Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
+ */
 
 /*
     Property: fn
@@ -816,13 +860,14 @@ var fn = SchemeNumber.fn = {
     fn["-"](z)          - Returns the negation of *z* (-*z*).
     Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_498>.
 
-    fn["-"](z1, z2...)  - Returns *z1* minus the sum of the *z2*(s).
+    fn["-"](z1, z2...)  - Returns *z1* minus the sum of the number(s) *z2*.
     Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_500>.
 
     fn["/"](z)          - Returns the reciprocal of *z* (1 / *z*).
     Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_502>.
 
-    fn["/"](z1, z2...)  - Returns *z1* divided by the product of the *z2*(s).
+    fn["/"](z1, z2...)  - Returns *z1* divided by the product of the number(s)
+    *z2*.
     Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_504>.
 
     fn.abs(x)           - Returns the absolute value of *x*.
@@ -937,21 +982,45 @@ var fn = SchemeNumber.fn = {
     Function: fn["number->string"](z)
     Converts *z* to a string, base 10.
 
+    For exact *z*, *number->string* retains full precision.  Exact
+    fractions are expressed as numerator + "/" + denominator.
+    Examples:
+
+    > fn["number->string"](fn["string->number"]("#e1.2"))  // "6/5"
+    > fn["number->string"](fn["/"]("12", "-8"))            // "-3/2"
+
+    Infinities are "+inf.0" and "-inf.0".  NaN is "+nan.0".
+
+    The result always yields a number equal to *z* (in the sense of
+    <fn["eqv?"](obj1, obj2)>) when passed to
+    <fn["string->number"](string)>.
+
     Specified by: <R6RS at
     http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_578>
+
+    See Also: <fn["string->number"](string)>.
 
     Function: fn["number->string"](z, radix)
     Converts *z* to a string, base *radix*.
     *radix* must be exact 2, 8, 10, or 16.
 
+    The output never contains an explicit radix prefix.
+
+    The result always yields a value equal to *z* (in the sense of
+    <fn["eqv?"](obj1, obj2)>) when converted back to a number by
+    <fn["string->number"](string, radix)>.
+
     Specified by: <R6RS at
     http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_580>
 
+    See Also: <fn["string->number"](string, radix)>.
+
     Function: fn["number->string"](z, radix, precision)
     Converts and suffixes *z* with a count of significant bits.
-    Appends "|p" to each inexact real component of *z* where p >=
-    *precision* is the smallest mantissa width needed to represent the
-    component exactly.
+
+    Appends "|p" to each inexact real component of *z* where p is the
+    smallest mantissa width not less than *precision* needed to
+    represent the component exactly.
 
     Specified by: <R6RS at
     http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_582>
@@ -973,24 +1042,31 @@ var fn = SchemeNumber.fn = {
     > "-inf.0"  - negative infinity.
     > "+nan.0"  - IEEE NaN (not-a-number).
     > "#e0.5"   - exact one-half, forced exact by prefix #e.
-    > "#i1/2"   - 0.5, inexact by prefix.
-    > "#x22"    - exact 34 (hexadecimal 22).
-    > "#o177"   - exact 127 (octal 177).
-    > "#b101"   - exact 5 (binary 101).
-    > "#i#b101" - inexact 5.0, same as "#b#i101".
+    > "#i1/2"   - 0.5, inexact by prefix #i.
+    > "#x22"    - exact 34; prefix #x hexadecimal.
+    > "#o177"   - exact 127; prefix #o octal.
+    > "#b101"   - exact 5; prefix #b binary.
+    > "#i#b101" - inexact 5.0.
+    > "#b#i101" - same.
     > "1.2345678|24" - rounded as if to single-precision (about 1.23456776).
 
-    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_584>
+    Specified by: <R6RS at
+    http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_584>
 
-    See Also: <R6RS section 4.2.8: Numbers at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-7.html#node_sec_4.2.8>
+    See Also: <fn["number->string"](z)>, <R6RS section 4.2.8: Lexical
+    syntax: Numbers at
+    http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-7.html#node_sec_4.2.8>
 
     Function: fn["string->number"](string, radix)
     Parses *string* as a Scheme number using *radix* as default radix.
 
     *radix* must be exact 2, 8, 10, or 16.  If *string* contains a
-    radix prefix, it takes precedence over *radix*.
+    radix prefix, the prefix takes precedence over *radix*.
 
-    Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_586>
+    Specified by: <R6RS at
+    http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_586>
+
+    See Also: <fn["number->string"](z, radix)>.
 */
 
     "eqv?"      : fn_isEqv,
@@ -1065,7 +1141,7 @@ var fn = SchemeNumber.fn = {
         switch (len) {
         case 0: args1plus(arguments);
         case 1: return SN(a).SN_reciprocal();
-        case 2: return SN(a).SN_divide(arguments[1]);
+        case 2: return SN(a).SN_divide(SN(arguments[1]));
         }
         var product = ONE;
         var i = 1;
@@ -2291,6 +2367,8 @@ function zeroes(count) {
     return ret;
 }
 
+var TEN_21 = new EIBig(BigInteger("1e21"));
+
 // Specified by ECMA-262, 5th edition, 15.7.4.5.
 DISP.ER.toFixed = function(fractionDigits) {
     var f = (fractionDigits === undefined ? 0 : parseInt(fractionDigits));
@@ -2306,9 +2384,16 @@ DISP.ER.toFixed = function(fractionDigits) {
         s = "-";
     }
 
-    var dm = x.SN_divAndMod(ONE.SN__exp10(-f));
+    // ECMA-262 5ed., 15.7.4.5:
+    // 7. If x >= 1e21, then
+    //       a. Let m = ToString(x).
+    /*if (x.SN_ge(TEN_21))
+        return this.toString();*/
+
+    var p = ONE.SN__exp10(-f);
+    var dm = x.SN_divAndMod(p);
     var n = dm[0];
-    if (dm[1].SN_add(dm[1]).SN_ge(ONE))
+    if (dm[1].SN_add(dm[1]).SN_ge(p))
         n = ONE.SN_add(n);
     if (n.SN_isZero())
         return "0" + (fractionDigits > 0 ? "." + zeroes(fractionDigits) : "");
