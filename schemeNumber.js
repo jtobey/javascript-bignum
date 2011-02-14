@@ -179,7 +179,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,0,5];
+SchemeNumber.VERSION = [1,0,6];
 
 function isNumber(x) {
     return x instanceof Number || typeof x === "number";
