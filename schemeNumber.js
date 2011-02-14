@@ -2367,8 +2367,6 @@ function zeroes(count) {
     return ret;
 }
 
-var TEN_21 = new EIBig(BigInteger("1e21"));
-
 // Specified by ECMA-262, 5th edition, 15.7.4.5.
 DISP.ER.toFixed = function(fractionDigits) {
     var f = (fractionDigits === undefined ? 0 : parseInt(fractionDigits));
@@ -2384,19 +2382,14 @@ DISP.ER.toFixed = function(fractionDigits) {
         s = "-";
     }
 
-    // ECMA-262 5ed., 15.7.4.5:
-    // 7. If x >= 1e21, then
-    //       a. Let m = ToString(x).
-    /*if (x.SN_ge(TEN_21))
-        return this.toString();*/
-
     var p = ONE.SN__exp10(-f);
     var dm = x.SN_divAndMod(p);
     var n = dm[0];
     if (dm[1].SN_add(dm[1]).SN_ge(p))
         n = ONE.SN_add(n);
     if (n.SN_isZero())
-        return "0" + (fractionDigits > 0 ? "." + zeroes(fractionDigits) : "");
+        return s + "0" +
+            (fractionDigits > 0 ? "." + zeroes(fractionDigits) : "");
     n = n.SN_numberToString();
     if (f === 0)
         return s + n;
@@ -2428,7 +2421,7 @@ DISP.ER.toExponential = function(fractionDigits) {
         s = "-";
     }
     else if (x.SN_isZero())
-        return s + "0" + (fractionDigits > 0 ? "." + zeroes(f) : "") + "e+0";
+        return "0" + (fractionDigits > 0 ? "." + zeroes(f) : "") + "e+0";
 
     var e = floor(x.SN_log() / LN10);
     var p = ONE.SN__exp10(e - f);
