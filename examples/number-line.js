@@ -482,7 +482,8 @@ Fractions.prototype.beginDraw = function(dc) {
         var maxMarkWidth = dc.nl.width / 2;
         var logD = fract.logD();
         if (logD > logBigDenom) {
-            opacity = 0.25;
+            if (logBigDenom > 0)
+                opacity = 0.25;
         }
         else {
             textSize *= Math.exp((logBigDenom - logD) / 4);
