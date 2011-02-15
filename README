@@ -68,6 +68,20 @@ script in this directory.
 
 CHANGES
 
+1.0.6 - 2011-02-13
+
+    * toFixed: bug fix: include leading "-" in negatives rounded to zero.
+
+1.0.5 - 2011-02-12
+
+    * Fixed a bug in toFixed affecting rounding.
+
+1.0.4 - 2011-02-11
+
+    * Bugs fixed in SchemeNumber implementation of ECMAScript Number
+      methods: toFixed, toPrecision, and toExponential.  Thanks to
+      theonesmiley.
+
 1.0.3 - 2011-02-10
 
     * Faster big integer arithmetic, courtesy of Vitaly Magerya.

@@ -1,14 +1,19 @@
-#JS = rhino -f
-JS = ( rhino 2>/dev/null | grep '^(' ) <
+JS = rhino -f
+JSR6RS = ( rhino 2>/dev/null | grep '^(' ) <
 SCHEME = mosh
 EDITOR = emacs
 PAGER = less
 JSDEP = ../biginteger.js ../schemeNumber.js
 
-.PHONY: default full clean
+.PHONY: default full clean r6rs ecma
 
-default: js.raw.good test-sn.js $(JSDEP)
-	$(JS) test-sn.js | diff js.raw.good - | $(PAGER)
+default: r6rs ecma
+
+r6rs: js.raw.good test-sn.js $(JSDEP)
+	$(JSR6RS) test-sn.js | diff js.raw.good -
+
+ecma: jstest.js $(JSDEP)
+	$(JS) $<
 
 full: test-sn.diff
 	$(EDITOR) $^
@@ -26,7 +31,7 @@ test-sn.%: gen-test.pl
 	mv $@.tmp $@
 
 js.raw: test-sn.js $(JSDEP)
-	$(JS) $< > $@.tmp
+	$(JSR6RS) $< > $@.tmp
 	mv $@.tmp $@
 
 scheme.raw: test-sn.scheme
