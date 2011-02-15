@@ -576,7 +576,6 @@ var ns = fn["number->string"];
 
 function Fractions(args) {
     if (!(this instanceof arguments.callee)) return new arguments.callee(args);
-    this.textSize = args.textSize;
     this.minTextPixels = args.minTextPixels;
     this.maxTextPixels = args.maxTextPixels;
 }

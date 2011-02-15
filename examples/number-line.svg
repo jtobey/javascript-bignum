@@ -15,9 +15,7 @@ function init(svg) {
     nl.addDrawable(StaticText({ text:"Number Line" }));
     nl.addDrawable(YearsSinceFiller({ time:0, fill:"blue" }));
     nl.addDrawable(BlackLeft({ x:0 }));
-    nl.addDrawable(Fractions({ textSize: 0.5,
-                               minTextPixels: 12.5,
-                               maxTextPixels: 96 }));
+    nl.addDrawable(Fractions({ minTextPixels: 12.5, maxTextPixels: 96 }));
     nl.activate(window);
 }
   </script>
