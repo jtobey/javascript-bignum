@@ -1,27 +1,20 @@
 /*  SVG scrollable, zoomable number line.
 
     Zoom out to a googol, and you can zoom in until the 100-digit
-    numbers are consecutive.
+    numbers are consecutive.  Zoom in to see all the fractions.
 
     This file is number-line.js.  It requires biginteger.js and
     schemeNumber.js from javascript-bignum
     (https://github.com/jtobey/javascript-bignum).
 
-    Refer to these files from SVG as follows, replacing the xlink:href
-    values with correct URLs to the named files:
-
-    <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-    <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
-    <svg xmlns="http://www.w3.org/2000/svg"
-         xmlns:xlink="http://www.w3.org/1999/xlink"
-         onload="init(this)">
-      <script type="application/ecmascript" xlink:href="biginteger.js" />
-      <script type="application/ecmascript" xlink:href="schemeNumber.js" />
-      <script type="application/ecmascript" xlink:href="number-line.js" />
-    </svg>
+    See number-line.svg in this directory for usage.
 
     Copyright (c) 2011 John Tobey <John.Tobey@gmail.com>
  */
+
+var NumberLine;
+
+(function() {
 
 // Arithmetic abstraction.
 var WHICH_MATH;
@@ -30,12 +23,12 @@ if (typeof SchemeNumber == "undefined")
 else
     WHICH_MATH = "Scheme";
 
-var sn, fn, ns, trimPos;
+var sn, trimPos;
 
 if (WHICH_MATH === "native") {
-    alert("Using native math");
+    alert("NumberLine: Using native math.  This is not well tested.");
     sn = function(s) { return Number(eval(s)); }
-    fn = {
+    sn.fn = {
         exact    : Number,
         "number->string" : function(p) { return "" + p; },
         "+"      : function(x, y) { return +x + +y; },
@@ -61,13 +54,10 @@ if (WHICH_MATH === "native") {
         abs      : Math.abs,
         // XXX more needed?
     };
-    ns = String;
     trimPos  = function(pos, len, h) { return pos; };
 }
 else {
     sn = SchemeNumber;
-    fn = sn.fn;
-    ns = fn["number->string"];
 
     trimPos = function(pos, len, h) {
         // Return pos, to within a pixel, simplified.
@@ -82,30 +72,15 @@ else {
         return fn["/"](fn.round(fn["*"](pos, d)), d);
     };
 }
-//var pos2text = fn["number->string"];
-function pos2text(pos) {
-    if (fn["negative?"](pos))
-        return "-" + pos2text(fn["-"](pos));
-    var n = fn.floor(pos);
-    var f = fn["-"](pos, n);
-    if (fn["zero?"](n))
-        return ns(f);
-    if (fn["zero?"](f))
-        return ns(n);
-    return ns(n) +  " " + ns(f);
-}
+
+var fn = sn.fn;
+var ns = fn["number->string"];
 
 var SVG_NS = "http://www.w3.org/2000/svg";
-var XLINK_NS = "http://www.w3.org/1999/xlink";
 var THIRTY = sn("30");
 var HALF = sn("1/2");
 var TWO = sn("2");
-var ONE = sn("1");
 
-function sync(f) {
-    while (f)
-        f = f();
-}
 function removeAllChildren(node) {
     while (node.firstChild != null)
         node.removeChild(node.firstChild);
@@ -141,6 +116,7 @@ function NL(args) {
     if (!(this instanceof arguments.callee)) return new arguments.callee(args);
     this._drawables = [];
     this._svg = args.svg;
+    this._svg.nl = this;
     this._drawn = this._svg.ownerDocument.createElementNS(SVG_NS, "g");
     this._svg.appendChild(this._drawn);
     var dim = getSvgPixelDimensions(this._svg);
@@ -149,6 +125,7 @@ function NL(args) {
     this._toDo = [];
     this.stats = {};
 }
+NL.sn = sn;
 
 NL.prototype = {
     loBound        : sn("0"),
@@ -312,6 +289,7 @@ function NL_work() {
 function AbstractDrawable() {
     if (!(this instanceof arguments.callee)) return new arguments.callee();
 }
+NL.AbstractDrawable = AbstractDrawable;
 AbstractDrawable.prototype = {};
 AbstractDrawable.prototype.beginDraw = function(dc) {
     //alert("Object doesn't override draw: " + this);
@@ -325,220 +303,21 @@ AbstractDrawable.prototype.beginZoom = AbstractDrawable.prototype.beginPan;
 AbstractDrawable.prototype.beginResize = AbstractDrawable.prototype.beginPan;
 AbstractDrawable.prototype.destroy = function() {};
 
-function StaticText(args) {
-    if (!(this instanceof arguments.callee)) return new arguments.callee(args);
-    this._text = args.text;
-}
-StaticText.prototype = new AbstractDrawable();
-
-StaticText.prototype.beginDraw = function(dc) {
-    dc.erase();  // XXX
-    var text = dc.createSvgElt("text");
-    text.setAttributeNS(null, "x", dc.nl.width);
-    text.setAttributeNS(null, "y", 0);
-    text.setAttributeNS(null, "text-anchor", "end");
-    text.setAttributeNS(null, "dominant-baseline", "text-before-edge");
-    text.setAttributeNS(null, "font-style", "italic");
-    //text.setAttributeNS(null, "font-size", intTextPixels);
-    //text.setAttributeNS(null, "fill-opacity", opacity);
-    text.appendChild(dc.createTextNode(this._text));
-    dc.out(text);
-}
-
-function YearsSinceFiller(args) {
-    if (!(this instanceof arguments.callee)) return new arguments.callee(args);
-    this._time = args.time;
-    this._fill = args.fill;
-}
-YearsSinceFiller.prototype = new AbstractDrawable();
-
-// Number of seconds per mean Gregorian year.
-var MILLIS_PER_YEAR = 365.2425 * 24 * 60 * 60 * 1000;
-
-YearsSinceFiller.prototype.beginDraw = function(dc) {
-    var ysf = this;
-    var group = dc.g;
-    var nl = dc.nl;
-    var lo, len, hi;
-
-    function advance() {
-        if (nl.loBound !== ysf.loBound || nl.length !== ysf.length) {
-            ysf.loBound = nl.loBound;
-            ysf.length  = nl.length;
-            lo  = fn.inexact(ysf.loBound);
-            len = fn.inexact(ysf.length);
-            hi  = fn.inexact(fn["+"](ysf.loBound, ysf.length));
-        }
-        if (hi <= 0) {
-            //alert("advance: nothing to do! lo="+lo+",len="+len);
-            dc.erase();
-            return;
-        }
-
-        var yearsSince = (new Date() - ysf._time) / MILLIS_PER_YEAR;
-        var rectTop = 0, rectBottom = 0;
-
-        if (yearsSince > lo) {
-            rectBottom = nl.height;
-            if (lo < 0 && len != 0)
-                rectBottom *= 1 + (lo / len);
-        }
-        if (yearsSince < hi)
-            rectTop = (hi - yearsSince) * (nl.height / len);
-
-        if (rectTop < rectBottom) {
-            //alert("group.firstChild="+group.firstChild);
-            var rect = ysf._rect;
-            if (!rect) {
-                rect = dc.createSvgElt("rect");
-                rect.setAttributeNS(null, "fill-opacity", 0.25);
-                rect.setAttributeNS(null, "fill", ysf._fill);
-            }
-            rect.setAttributeNS(null, "x", 0);
-            rect.setAttributeNS(null, "width", nl.width);
-            rect.setAttributeNS(null, "y", rectTop);
-            rect.setAttributeNS(null, "height", rectBottom - rectTop);
-            //alert("set y="+rectTop+"; fill="+rect.getAttributeNS(null, "fill"));
-            if (!ysf._rect) {
-                ysf._rect = rect;
-                //dc.out(rect);
-                group.appendChild(rect);
-            }
-        }
-
-        if (rectTop > 0) {
-            var waitYears = len / nl.height / 10;  // 0.1 pixel
-            var yearsToLo = lo - yearsSince;
-            if (yearsToLo > 0)
-                waitYears = yearsToLo;
-            var waitTime = waitYears * MILLIS_PER_YEAR;
-            if (waitTime < nl.restTimeslice)
-                waitTime = nl.restTimeslice;
-            //alert("waitTime=" + waitTime);
-            ysf._timeout = window.setTimeout(advance, waitTime);
-        }
-    }
-
-    ysf.stopDraw();
-    //dc.erase();  // XXX
-    advance();
-};
-
-YearsSinceFiller.prototype.stopDraw = function() {
-    if (this._timeout) {
-        window.clearTimeout(this._timeout);
-        this._timeout = null;
-    }
-};
-
-YearsSinceFiller.prototype.destroy = function() {
-    this.stopDraw();
-};
-
-function BlackLeft(args) {
-    if (!(this instanceof arguments.callee)) return new arguments.callee(args);
-    this._x = +args.x;
-}
-BlackLeft.prototype = new AbstractDrawable();
-
-BlackLeft.prototype.beginDraw = function(dc) {
-    dc.erase();
-    if (dc.nl.xshift > -this._x) {
-        rect = dc.createSvgElt("rect");
-        rect.setAttributeNS(null, "x", 0);
-        rect.setAttributeNS(null, "y", 0);
-        rect.setAttributeNS(null, "width", dc.nl.xshift + this._x);
-        rect.setAttributeNS(null, "height", dc.nl.height);
-        dc.out(rect);
-    }
-};
-
-function Fractions(args) {
-    if (!(this instanceof arguments.callee)) return new arguments.callee(args);
-    this.textSize = args.textSize;
-    this.minTextPixels = args.minTextPixels;
-    this.maxTextPixels = args.maxTextPixels;
-}
-Fractions.prototype = new AbstractDrawable();
-
-Fractions.prototype.beginDraw = function(dc) {
-    dc.erase();  // XXX Start stupid, optimize later.
-    var heightInLines = dc.nl.height / this.minTextPixels;
-    var count = Math.floor(heightInLines);
-    var list = getFractions(dc.nl.loBound, dc.nl.length, count);
-    var logBigDenom = (Math.log(heightInLines) - fn.log(dc.nl.length)) / 2;
-    while (true) {
-        var fract = list.shift();
-        if (!fract)
-            break;
-
-        var value = fn["/"](fract.n, fract.d);
-        var y = dc.nl.height * (1 - fn["/"](fn["-"](value, dc.nl.loBound),
-                                            dc.nl.length));
-
-        var opacity = 0.5;
-        var textSize = this.minTextPixels;
-        var markWidth = 2 * textSize;
-        var maxMarkWidth = dc.nl.width / 2;
-        var logD = fract.logD();
-        if (logD > logBigDenom) {
-            if (logBigDenom > 0)
-                opacity = 0.25;
-        }
-        else {
-            textSize *= Math.exp((logBigDenom - logD) / 4);
-            if (textSize > this.maxTextPixels)
-                textSize = this.maxTextPixels;
-        }
-        markWidth *= Math.exp((logBigDenom - logD) / 2);
-        if (markWidth > maxMarkWidth)
-            markWidth = maxMarkWidth;
-        markWidth = Math.floor(markWidth);
-        var x = markWidth + dc.nl.xshift;
-        rise = 0.2 * textSize;
-
-        var mark = dc.createSvgElt("polygon");
-        mark.setAttributeNS(null, "fill-opacity", opacity);
-        mark.setAttributeNS(null, "points", "" + dc.nl.xshift + "," + y +
-                            " " + x + "," +
-                            (y-rise) + " " + x + "," + (y+rise));
-        dc.out(mark);
-
-        var text = dc.createSvgElt("text");
-        text.setAttributeNS(null, "x", x);
-        text.setAttributeNS(null, "y", y);
-        text.setAttributeNS(null, "dominant-baseline", "middle");
-        text.setAttributeNS(null, "font-size", textSize);
-        text.setAttributeNS(null, "fill-opacity", opacity);
-        text.appendChild(dc.createTextNode(pos2text(value)));
-        dc.out(text);
-    }
-};
-
-function init(svg) {
+NL.prototype.activate = function(top) {
+    var nl = this;
     function resize() {
-        svg.nl.redraw();
+        nl.redraw();
     }
 
-    svg.nl = NL({ svg:svg });
-    // XXX This stuff belongs in number-line.svg, in XML format.
-    svg.nl.addDrawable(StaticText({text:"Number Line"}));
-    svg.nl.addDrawable(YearsSinceFiller({ time:0,
-                                          fill:"blue" }));
-    svg.nl.addDrawable(BlackLeft({ x:0 }));
-    svg.nl.addDrawable(Fractions({ textSize: 0.5,
-                                   minTextPixels: 12.5,
-                                   maxTextPixels: 96 }));
-
-    svg.nl.beginDraw();
-    //window.addEventListener('resize',         resize, false);
-    window.addEventListener('mousedown',      mousedown,   true);
-    window.addEventListener('mouseup',        mouseup,     true);
-    window.addEventListener('click',          click,       true);
-    window.addEventListener('mousemove',      mousemove,   true);
-    window.addEventListener('DOMMouseScroll', mousescroll, true);
-    svg.nl.work();
-}
+    nl.beginDraw();
+    top.addEventListener('resize',         resize, false);
+    top.addEventListener('mousedown',      mousedown,   true);
+    top.addEventListener('mouseup',        mouseup,     true);
+    top.addEventListener('click',          click,       true);
+    top.addEventListener('mousemove',      mousemove,   true);
+    top.addEventListener('DOMMouseScroll', mousescroll, true);
+    nl.work();
+};
 
 function evt2svg(evt) {
     var svg = evt.target;
@@ -651,87 +430,222 @@ function mousescroll(evt) {
     }
 }
 
-if (false) {
+NumberLine = NL;
 
-function draw(svg) {
-    var doc = svg.ownerDocument;
-    var hpx = getSvgHeight(svg);
-    var i, x, y, rise, text, mark, intPixels, step, intTextPixels;
-    var opacity, rect, count = 0;
-    var hiBound = fn["+"](loBound, length);
+})();
 
-    intPixels = fn["/"](fn.exact(hpx), length);
-    step = fn["+"](fn.div(fn.exact(minIntTextPixels), intPixels), ONE);
-    intTextPixels = textSize * intPixels;
-    if (intTextPixels < minIntTextPixels)
-        intTextPixels = minIntTextPixels;
-    if (intTextPixels > maxTextPixels)
-        intTextPixels = maxTextPixels;
-    i = fn["*"](step, fn.div(loBound, step));
-    var limit = 2 * hpx / intTextPixels;
-    for (; fn["<="](i, hiBound); i = fn["+"](i, step)) {
-        if (count++ > limit) {
-            alert("The numbers are getting too big! " + [count,
-    hpx, intTextPixels]);
+function StaticText(args) {
+    if (!(this instanceof arguments.callee)) return new arguments.callee(args);
+    this._text = args.text;
+}
+StaticText.prototype = new NumberLine.AbstractDrawable();
+
+StaticText.prototype.beginDraw = function(dc) {
+    dc.erase();  // XXX
+    var text = dc.createSvgElt("text");
+    text.setAttributeNS(null, "x", dc.nl.width);
+    text.setAttributeNS(null, "y", 0);
+    text.setAttributeNS(null, "text-anchor", "end");
+    text.setAttributeNS(null, "dominant-baseline", "text-before-edge");
+    text.setAttributeNS(null, "font-style", "italic");
+    //text.setAttributeNS(null, "font-size", intTextPixels);
+    //text.setAttributeNS(null, "fill-opacity", opacity);
+    text.appendChild(dc.createTextNode(this._text));
+    dc.out(text);
+};
+
+var YearsSinceFiller = (function() {
+
+function YSF(args) {
+    if (!(this instanceof arguments.callee)) return new arguments.callee(args);
+    this._time = args.time;
+    this._fill = args.fill;
+}
+YSF.prototype = new NumberLine.AbstractDrawable();
+
+// Number of seconds per mean Gregorian year.
+var MILLIS_PER_YEAR = 365.2425 * 24 * 60 * 60 * 1000;
+var fn = NumberLine.sn.fn;
+
+YSF.prototype.beginDraw = function(dc) {
+    var ysf = this;
+    var group = dc.g;
+    var nl = dc.nl;
+    var lo, len, hi;
+
+    function advance() {
+        if (nl.loBound !== ysf.loBound || nl.length !== ysf.length) {
+            ysf.loBound = nl.loBound;
+            ysf.length  = nl.length;
+            lo  = fn.inexact(ysf.loBound);
+            len = fn.inexact(ysf.length);
+            hi  = fn.inexact(fn["+"](ysf.loBound, ysf.length));
+        }
+        if (hi <= 0) {
+            //alert("advance: nothing to do! lo="+lo+",len="+len);
+            dc.erase();
             return;
         }
-        y = hpx - fn["*"](fn["-"](i, loBound), intPixels);
-        x = 2 * intTextPixels + xshift;
-        rise = 0.2 * intTextPixels;
-        opacity = 0.5;
 
-        if (!doc.createElementNS) {
-            print([i, xshift,x,y,rise]);
-            continue;
+        var yearsSince = (new Date() - ysf._time) / MILLIS_PER_YEAR;
+        var rectTop = 0, rectBottom = 0;
+
+        if (yearsSince > lo) {
+            rectBottom = nl.height;
+            if (lo < 0 && len != 0)
+                rectBottom *= 1 + (lo / len);
         }
-        mark = doc.createElementNS(SVG_NS, "polygon");
+        if (yearsSince < hi)
+            rectTop = (hi - yearsSince) * (nl.height / len);
+
+        if (rectTop < rectBottom) {
+            //alert("group.firstChild="+group.firstChild);
+            var rect = ysf._rect;
+            if (!rect) {
+                rect = dc.createSvgElt("rect");
+                rect.setAttributeNS(null, "fill-opacity", 0.25);
+                rect.setAttributeNS(null, "fill", ysf._fill);
+            }
+            rect.setAttributeNS(null, "x", 0);
+            rect.setAttributeNS(null, "width", nl.width);
+            rect.setAttributeNS(null, "y", rectTop);
+            rect.setAttributeNS(null, "height", rectBottom - rectTop);
+            //alert("set y="+rectTop+"; fill="+rect.getAttributeNS(null, "fill"));
+            if (!ysf._rect) {
+                ysf._rect = rect;
+                //dc.out(rect);
+                group.appendChild(rect);
+            }
+        }
+
+        if (rectTop > 0) {
+            var waitYears = len / nl.height / 10;  // 0.1 pixel
+            var yearsToLo = lo - yearsSince;
+            if (yearsToLo > 0)
+                waitYears = yearsToLo;
+            var waitTime = waitYears * MILLIS_PER_YEAR;
+            if (waitTime < nl.restTimeslice)
+                waitTime = nl.restTimeslice;
+            //alert("waitTime=" + waitTime);
+            ysf._timeout = window.setTimeout(advance, waitTime);
+        }
+    }
+
+    ysf.stopDraw();
+    //dc.erase();  // XXX
+    advance();
+};
+
+YSF.prototype.stopDraw = function() {
+    if (this._timeout) {
+        window.clearTimeout(this._timeout);
+        this._timeout = null;
+    }
+};
+
+YSF.prototype.destroy = function() {
+    this.stopDraw();
+};
+
+return YSF;
+})();
+
+function BlackLeft(args) {
+    if (!(this instanceof arguments.callee)) return new arguments.callee(args);
+    this._x = +args.x;
+}
+BlackLeft.prototype = new NumberLine.AbstractDrawable();
+
+BlackLeft.prototype.beginDraw = function(dc) {
+    dc.erase();
+    if (dc.nl.xshift > -this._x) {
+        rect = dc.createSvgElt("rect");
+        rect.setAttributeNS(null, "x", 0);
+        rect.setAttributeNS(null, "y", 0);
+        rect.setAttributeNS(null, "width", dc.nl.xshift + this._x);
+        rect.setAttributeNS(null, "height", dc.nl.height);
+        dc.out(rect);
+    }
+};
+
+var Fractions = (function() {
+
+var sn = NumberLine.sn;
+var fn = sn.fn;
+var ns = fn["number->string"];
+
+function Fractions(args) {
+    if (!(this instanceof arguments.callee)) return new arguments.callee(args);
+    this.textSize = args.textSize;
+    this.minTextPixels = args.minTextPixels;
+    this.maxTextPixels = args.maxTextPixels;
+}
+Fractions.prototype = new NumberLine.AbstractDrawable();
+
+Fractions.prototype.beginDraw = function(dc) {
+    dc.erase();  // XXX Start stupid, optimize later.
+    var heightInLines = dc.nl.height / this.minTextPixels;
+    var count = Math.floor(heightInLines);
+    var list = getFractions(dc.nl.loBound, dc.nl.length, count);
+    var logBigDenom = (Math.log(heightInLines) - fn.log(dc.nl.length)) / 2;
+    while (true) {
+        var fract = list.shift();
+        if (!fract)
+            break;
+
+        var value = fn["/"](fract.n, fract.d);
+        var y = dc.nl.height * (1 - fn["/"](fn["-"](value, dc.nl.loBound),
+                                            dc.nl.length));
+
+        var opacity = 0.5;
+        var textSize = this.minTextPixels;
+        var markWidth = 2 * textSize;
+        var maxMarkWidth = dc.nl.width / 2;
+        var logD = fract.logD();
+        if (logD > logBigDenom) {
+            if (logBigDenom > 0)
+                opacity = 0.25;
+        }
+        else {
+            textSize *= Math.exp((logBigDenom - logD) / 4);
+            if (textSize > this.maxTextPixels)
+                textSize = this.maxTextPixels;
+        }
+        markWidth *= Math.exp((logBigDenom - logD) / 2);
+        if (markWidth > maxMarkWidth)
+            markWidth = maxMarkWidth;
+        markWidth = Math.floor(markWidth);
+        var x = markWidth + dc.nl.xshift;
+        rise = 0.2 * textSize;
+
+        var mark = dc.createSvgElt("polygon");
         mark.setAttributeNS(null, "fill-opacity", opacity);
-        mark.setAttributeNS(null, "points", "" + xshift + "," + y +
+        mark.setAttributeNS(null, "points", "" + dc.nl.xshift + "," + y +
                             " " + x + "," +
                             (y-rise) + " " + x + "," + (y+rise));
-        svg.appendChild(mark);
+        dc.out(mark);
 
-        text = doc.createElementNS(SVG_NS, "text");
+        var text = dc.createSvgElt("text");
         text.setAttributeNS(null, "x", x);
         text.setAttributeNS(null, "y", y);
         text.setAttributeNS(null, "dominant-baseline", "middle");
-        text.setAttributeNS(null, "font-size", intTextPixels);
+        text.setAttributeNS(null, "font-size", textSize);
         text.setAttributeNS(null, "fill-opacity", opacity);
-        text.appendChild(doc.createTextNode(pos2text(i)));
-        svg.appendChild(text);
-
-        rect = doc.createElementNS(SVG_NS, "rect");
-        rect.setAttributeNS(null, "x", 0);
-        rect.setAttributeNS(null, "y", 0);
-        rect.setAttributeNS(null, "width", xshift);
-        rect.setAttributeNS(null, "height", hpx);
-        svg.appendChild(rect);
+        text.appendChild(dc.createTextNode(pos2text(value)));
+        dc.out(text);
     }
-}
+};
 
-function redraw(svg) {
-    if (!gobbling) {
-        var start = new Date().getTime();
-        clear(svg);
-        draw(svg);
-        redrawCount++;
-        redrawTime += new Date().getTime() - start;
-        gobbling = true;
-        window.setTimeout(stopGobbling, 100, loBound, length, xshift, svg);
-    }
-}
-
-function stopGobbling(lb, len, xs, svg) {
-    gobbling = false;
-    if (lb !== loBound || len !== length || xs !== xshift) {
-        log("gobble-redraw");
-        redraw(svg);
-    }
-    else {
-        log("empty-gobble");
-    }
-}
-
+function pos2text(pos) {
+    if (fn["negative?"](pos))
+        return "-" + pos2text(fn["-"](pos));
+    var n = fn.floor(pos);
+    var f = fn["-"](pos, n);
+    if (fn["zero?"](n))
+        return ns(f);
+    if (fn["zero?"](f))
+        return ns(n);
+    return ns(n) +  " " + ns(f);
 }
 
 function CF(args) {
@@ -976,3 +890,7 @@ function simpler(f, higher) {
     }
     return CF({n:n, d:d, c:c, l:l});
 }
+
+return Fractions;
+
+})();
