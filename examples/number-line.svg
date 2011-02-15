@@ -2,7 +2,7 @@
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
 <svg xmlns="http://www.w3.org/2000/svg"
      xmlns:xlink="http://www.w3.org/1999/xlink"
-     title="Ctrl-click zoom in, click zoom out"
+     title="Click to zoom in, Ctrl-click to zoom out"
      onload="init(this)">
   <script type="application/ecmascript" xlink:href="../biginteger.js" />
   <script type="application/ecmascript" xlink:href="../schemeNumber.js" />
