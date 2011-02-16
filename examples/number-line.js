@@ -12,7 +12,6 @@
     Copyright (c) 2011 John Tobey <John.Tobey@gmail.com>
  */
 
-var FillHalf;
 var NumberLine = (function() {
 
 // Arithmetic abstraction.
@@ -583,7 +582,7 @@ FTS.prototype.destroy = function() {
 return FTS;
 })();
 
-FillHalf = function(node) {
+function FillHalf(node) {
     if (!(this instanceof arguments.callee)) return new arguments.callee(node);
 
     // XXX Should validate params.
