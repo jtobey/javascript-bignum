@@ -1,22 +1,20 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
 <svg xmlns="http://www.w3.org/2000/svg"
      xmlns:xlink="http://www.w3.org/1999/xlink"
+     xmlns:nl="http://john-edwin-tobey.org/number-line"
      title="Click to zoom in, Ctrl-click to zoom out"
-     onload="init(this)">
+     onload="NumberLine({svg:this, windowTimers:window})">
   <script type="application/ecmascript" xlink:href="../biginteger.js" />
   <script type="application/ecmascript" xlink:href="../schemeNumber.js" />
-  <script type="application/ecmascript" xlink:href="number-line.js" />
+  <script type="application/ecmascript" xlink:href="number-line.js"/>
 
-  <!-- XXX This stuff belongs in XML format. -->
-  <script type="application/ecmascript">
-function init(svg) {
-    var nl = NumberLine({ svg:svg });
-    nl.addDrawable(StaticText({ text:"Number Line" }));
-    nl.addDrawable(YearsSinceFiller({ time:0, fill:"blue" }));
-    nl.addDrawable(BlackLeft({ x:0 }));
-    nl.addDrawable(Fractions({ minTextPixels: 12.5, maxTextPixels: 96 }));
-    nl.activate(window);
-}
-  </script>
+  <text style="text-anchor: end;
+               font-style: italic;
+               dominant-baseline: text-before-edge"
+        x="100%" y="0"
+        >Number Line</text>
+
+  <nl:fillHalf x="0" fill="black" nl:half="left"/>
+  <nl:fillTimeSince fill="red" fill-opacity="0.25" nl:unit="minute"/>
+  <nl:fractions nl:minTextPixels="12.5" nl:maxTextPixels="96"/>
 </svg>

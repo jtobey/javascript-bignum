@@ -12,9 +12,8 @@
     Copyright (c) 2011 John Tobey <John.Tobey@gmail.com>
  */
 
-var NumberLine;
-
-(function() {
+var FillHalf;
+var NumberLine = (function() {
 
 // Arithmetic abstraction.
 var WHICH_MATH;
@@ -77,6 +76,7 @@ var fn = sn.fn;
 var ns = fn["number->string"];
 
 var SVG_NS = "http://www.w3.org/2000/svg";
+var NL_NS = "http://john-edwin-tobey.org/number-line";
 var THIRTY = sn("30");
 var HALF = sn("1/2");
 var TWO = sn("2");
@@ -86,12 +86,14 @@ function removeAllChildren(node) {
         node.removeChild(node.firstChild);
 }
 
-// Please tell me if you know a reasonable way to get the <svg>
-// dimensions in pixels!
+// Please tell <John.Tobey@gmail.com> if you know a reasonable way to
+// get the <svg> dimensions in pixels!
 function getSvgPixelDimensions(svg) {
+
     //Tried: window.getComputedStyle(svg, null).getPropertyCSSValue("width")
     //Tried: svg.height.baseVal.value
     //Tried: svg.getBoundingClientRect()
+
     var tmp, w = 0, h = 0;
     if (svg.hasAttributeNS(null, "height")) {
         tmp = svg.getAttributeNS(null, "height");
@@ -116,16 +118,31 @@ function NL(args) {
     if (!(this instanceof arguments.callee)) return new arguments.callee(args);
     this._drawables = [];
     this._svg = args.svg;
-    this._svg.nl = this;
     this._drawn = this._svg.ownerDocument.createElementNS(SVG_NS, "g");
     this._svg.appendChild(this._drawn);
-    var dim = getSvgPixelDimensions(this._svg);
-    this.width = dim[0];
-    this.height = dim[1];
     this._toDo = [];
     this.stats = {};
+    this.updateDimensions();
+
+    var elts = this._svg.getElementsByTagNameNS(NL_NS, '*');
+    for (var i = 0; i < elts.length; i++) {
+        var node = elts.item(i);
+        var constructor = null;
+        switch (node.localName) {
+        case "fillHalf":       constructor = FillHalf;      break;
+        case "fillTimeSince":  constructor = FillTimeSince; break;
+        case "fractions":      constructor = Fractions;     break;
+        }
+        if (constructor) {
+            var drawable = constructor(node);
+            if (drawable)
+                this.addDrawable(drawable);
+        }
+    }
+    this.activate(args.windowTimers);
 }
 NL.sn = sn;
+NL.ns = NL_NS;
 
 NL.prototype = {
     loBound        : sn("0"),
@@ -145,6 +162,7 @@ NL.prototype = {
     redrawCount    : 0,
     redrawTime     : 0,
 
+    updateDimensions : NL_updateDimensions,
     addDrawable    : NL_addDrawable,
     removeDrawable : NL_removeDrawable,
 
@@ -159,6 +177,12 @@ NL.prototype = {
     workForMillis  : NL_workForMillis,
     work           : NL_work,
 };
+
+function NL_updateDimensions() {
+    var dim = getSvgPixelDimensions(this._svg);
+    this.width = dim[0];
+    this.height = dim[1];
+}
 
 function NL_addDrawable(drawable) {
     var group = this._svg.ownerDocument.createElementNS(SVG_NS, "g");
@@ -303,38 +327,56 @@ AbstractDrawable.prototype.beginZoom = AbstractDrawable.prototype.beginPan;
 AbstractDrawable.prototype.beginResize = AbstractDrawable.prototype.beginPan;
 AbstractDrawable.prototype.destroy = function() {};
 
-NL.prototype.activate = function(top) {
+var captureEvents = ['mousedown', 'mouseup', 'click', 'mousemove',
+                     'DOMMouseScroll'];
+var bubbleEvents = ['resize'];
+
+NL.prototype.activate = function(windowTimers) {
     var nl = this;
-    function resize() {
-        nl.redraw();
+    nl.setTimeout   = windowTimers.setTimeout;
+    nl.clearTimeout = windowTimers.clearTimeout;
+    nl._listeners = {};
+
+    function makeHandler(name) {
+        var methodName = "handle_" + name;
+        function handle(evt) {
+            nl[methodName](evt);
+        }
+        return handle;
+    }
+    function doCapture(name) {
+        nl._listeners[name] = makeHandler(name);
+        nl._svg.addEventListener(name, nl._listeners[name], true);
+    }
+    function doBubble(name) {
+        nl._listeners[name] = makeHandler(name);
+        nl._svg.addEventListener(name, nl._listeners[name], false);
     }
 
     nl.beginDraw();
-    top.addEventListener('resize',         resize, false);
-    top.addEventListener('mousedown',      mousedown,   true);
-    top.addEventListener('mouseup',        mouseup,     true);
-    top.addEventListener('click',          click,       true);
-    top.addEventListener('mousemove',      mousemove,   true);
-    top.addEventListener('DOMMouseScroll', mousescroll, true);
+    captureEvents.forEach(doCapture);
+    bubbleEvents.forEach(doBubble);
     nl.work();
 };
 
-function evt2svg(evt) {
-    var svg = evt.target;
-    while (!(svg.nl instanceof NL)) {
-        svg = svg.parentNode;
-        if (svg == null) {
-            alert("oops, no svg ancestor of " + evt.target.nodeName);
-            return null;
-        }
+NL.prototype.deactivate = function() {
+    function doCapture(name) {
+        nl._svg.removeEventListener(name, nl._listeners[name], true);
     }
-    return svg;
-}
-function evt2pos(evt, nl) {
+    function doBubble(name) {
+        nl._svg.removeEventListener(name, nl._listeners[name], false);
+    }
+    if (this._listeners) {
+        captureEvents.forEach(doCapture);
+        bubbleEvents.forEach(doBubble);
+    }
+};
+
+NL.prototype.evt2pos = function(evt) {
     var y = evt.clientY;
-    return fn["+"](nl.loBound, fn["/"](fn["*"](fn.exact(nl.height - y),
-                                               nl.length),
-                                       fn.exact(nl.height)));
+    return fn["+"](this.loBound, fn["/"](fn["*"](fn.exact(this.height - y),
+                                                 this.length),
+                                         fn.exact(this.height)));
 }
 
 NL.prototype.log = function(name, evt) {
@@ -351,25 +393,25 @@ NL.prototype.returnFromEvent = function() {
     this._evtPause = window.setTimeout(function() { nl.work(); }, 40);
 };
 
-function click(evt) {
-    var svg = evt2svg(evt);
-    svg.nl.log("click", evt);
+NL.prototype.handle_click = function(evt) {
+    this.log("click", evt);
     if (evt.shiftKey)
-        alert(svg.nl.statistics());
+        alert(this.statistics());
 
-    if (svg.nl.dragged || evt.shiftKey || evt.button == 2) {
-        svg.nl.dragged = false;
+    if (this.dragged || evt.shiftKey || evt.button == 2) {
+        this.dragged = false;
         return;
     }
     var zoomFactor = HALF;
     if (evt.button == 1 || evt.ctrlKey) {
         zoomFactor = TWO;
     }
-    svg.nl.beginZoom(zoomFactor, evt2pos(evt, svg.nl));
-    svg.nl.returnFromEvent();
-}
+    this.beginZoom(zoomFactor, this.evt2pos(evt));
+    this.returnFromEvent();
+};
 
 NL.prototype.statistics = function() {
+    alert("statistics");
     var ret = "";
     ret += "redraws: " + this.redrawCount + " avg " +
         (this.redrawTime / this.redrawCount / 1000).toFixed(3) + "s\n";
@@ -384,102 +426,91 @@ NL.prototype.statistics = function() {
     return ret;
 };
 
-function mousedown(evt) {
-    var svg = evt2svg(evt);
-    svg.nl.log("mousedown", evt);
-    svg.nl.dragging = true;
-    svg.nl.dragPos = evt2pos(evt, svg.nl);
-    svg.nl.dragX = evt.clientX;
-}
-function mousemove(evt) {
-    var svg = evt2svg(evt);
-    svg.nl.log("mousemove", evt);
-    if (svg.nl.dragging)
-        handleDragEvent(svg, evt);
-}
-function mouseup(evt) {
-    var svg = evt2svg(evt);
-    svg.nl.log("mouseup", evt);
-    if (svg.nl.dragging) {
-        handleDragEvent(svg, evt);
-        svg.nl.dragging = false;
+NL.prototype.handle_mousedown = function(evt) {
+    this.log("mousedown", evt);
+    this.dragging = true;
+    this.dragPos = this.evt2pos(evt);
+    this.dragX = evt.clientX;
+};
+NL.prototype.handle_mousemove = function(evt) {
+    this.log("mousemove", evt);
+    if (this.dragging)
+        this.handleDragEvent(evt);
+};
+NL.prototype.handle_mouseup = function(evt) {
+    this.log("mouseup", evt);
+    if (this.dragging) {
+        this.handleDragEvent(evt);
+        this.dragging = false;
     }
-}
-
-function handleDragEvent(svg, evt) {
-    var movePos = fn["-"](evt2pos(evt, svg.nl), svg.nl.dragPos);
-    var moveX = evt.clientX - svg.nl.dragX;
-    //dragging=false;alert("movePos " + movePos.debug());
-    if (!fn["zero?"](movePos) || moveX) {
-        svg.nl.beginPan(movePos, moveX);
-        svg.nl.dragX = evt.clientX;
-        svg.nl.dragged = true;
-        svg.nl.returnFromEvent();
-    }
-}
-
-function mousescroll(evt) {
-    var svg = evt2svg(evt);
-    svg.nl.log("mousescroll", evt);
-    if (evt.axis === evt.VERTICAL_AXIS) {
-        //alert("mousescroll vertical: " + evt.detail);
-        var movePos = fn["/"](fn["*"](fn.exact(evt.detail), svg.nl.length),
-                              THIRTY);
-        svg.nl.beginPan(movePos, 0);
-        svg.nl.returnFromEvent();
-    }
-}
-
-NumberLine = NL;
-
-})();
-
-function StaticText(args) {
-    if (!(this instanceof arguments.callee)) return new arguments.callee(args);
-    this._text = args.text;
-}
-StaticText.prototype = new NumberLine.AbstractDrawable();
-
-StaticText.prototype.beginDraw = function(dc) {
-    dc.erase();  // XXX
-    var text = dc.createSvgElt("text");
-    text.setAttributeNS(null, "x", dc.nl.width);
-    text.setAttributeNS(null, "y", 0);
-    text.setAttributeNS(null, "text-anchor", "end");
-    text.setAttributeNS(null, "dominant-baseline", "text-before-edge");
-    text.setAttributeNS(null, "font-style", "italic");
-    //text.setAttributeNS(null, "font-size", intTextPixels);
-    //text.setAttributeNS(null, "fill-opacity", opacity);
-    text.appendChild(dc.createTextNode(this._text));
-    dc.out(text);
 };
 
-var YearsSinceFiller = (function() {
-
-function YSF(args) {
-    if (!(this instanceof arguments.callee)) return new arguments.callee(args);
-    this._time = args.time;
-    this._fill = args.fill;
+NL.prototype.handleDragEvent = function(evt) {
+    var movePos = fn["-"](this.evt2pos(evt), this.dragPos);
+    var moveX = evt.clientX - this.dragX;
+    //dragging=false;alert("movePos " + movePos.debug());
+    if (!fn["zero?"](movePos) || moveX) {
+        this.beginPan(movePos, moveX);
+        this.dragX = evt.clientX;
+        this.dragged = true;
+        this.returnFromEvent();
+    }
 }
-YSF.prototype = new NumberLine.AbstractDrawable();
 
-// Number of seconds per mean Gregorian year.
-var MILLIS_PER_YEAR = 365.2425 * 24 * 60 * 60 * 1000;
+NL.prototype.handle_mousescroll = function(evt) {
+    this.log("mousescroll", evt);
+    if (evt.axis === evt.VERTICAL_AXIS) {
+        //alert("mousescroll vertical: " + evt.detail);
+        var movePos = fn["/"](fn["*"](fn.exact(evt.detail), this.length),
+                              THIRTY);
+        this.beginPan(movePos, 0);
+        this.returnFromEvent();
+    }
+};
+
+return NL;
+})();
+
+var FillTimeSince = (function() {
+
+function FTS(node) {
+    if (!(this instanceof arguments.callee)) return new arguments.callee(node);
+
+    // XXX Should validate params.
+    var unit = node.getAttributeNS(NumberLine.ns, "unit") || "minute";
+    this._ms = 1000;
+    switch (unit) {
+    case "year":   case "years":   this._ms *= 365.2425;
+    case "day":    case "days":    this._ms *= 24;
+    case "hour":   case "hours":   this._ms *= 60;
+    case "minute": case "minutes": this._ms *= 60;
+    case "second": case "seconds":
+        break;
+    default: this._ms = unit;
+    }
+    this._time = +(node.getAttributeNS(NumberLine.ns, "time") || new Date());
+    if (node.hasAttributeNS(null, "fill"))
+        this._fill = node.getAttributeNS(null, "fill");
+    if (node.hasAttributeNS(null, "fill-opacity"))
+        this._opacity = +node.getAttributeNS(null, "fill-opacity");
+}
+FTS.prototype = new NumberLine.AbstractDrawable();
+
 var fn = NumberLine.sn.fn;
 
-YSF.prototype.beginDraw = function(dc) {
-    var ysf = this;
+FTS.prototype.beginDraw = function(dc) {
+    var fts = this;
     var group = dc.g;
     var nl = dc.nl;
     var lo, len, hi;
 
     function advance() {
-        if (nl.loBound !== ysf.loBound || nl.length !== ysf.length) {
-            ysf.loBound = nl.loBound;
-            ysf.length  = nl.length;
-            lo  = fn.inexact(ysf.loBound);
-            len = fn.inexact(ysf.length);
-            hi  = fn.inexact(fn["+"](ysf.loBound, ysf.length));
+        if (nl.loBound !== fts.loBound || nl.length !== fts.length) {
+            fts.loBound = nl.loBound;
+            fts.length  = nl.length;
+            lo  = fn.inexact(fts.loBound);
+            len = fn.inexact(fts.length);
+            hi  = fn.inexact(fn["+"](fts.loBound, fts.length));
         }
         if (hi <= 0) {
             //alert("advance: nothing to do! lo="+lo+",len="+len);
@@ -487,7 +518,7 @@ YSF.prototype.beginDraw = function(dc) {
             return;
         }
 
-        var yearsSince = (new Date() - ysf._time) / MILLIS_PER_YEAR;
+        var yearsSince = (new Date() - fts._time) / fts._ms;
         var rectTop = 0, rectBottom = 0;
 
         if (yearsSince > lo) {
@@ -500,19 +531,21 @@ YSF.prototype.beginDraw = function(dc) {
 
         if (rectTop < rectBottom) {
             //alert("group.firstChild="+group.firstChild);
-            var rect = ysf._rect;
+            var rect = fts._rect;
             if (!rect) {
                 rect = dc.createSvgElt("rect");
-                rect.setAttributeNS(null, "fill-opacity", 0.25);
-                rect.setAttributeNS(null, "fill", ysf._fill);
+                if (fts._opacity != null)
+                    rect.setAttributeNS(null, "fill-opacity", fts._opacity);
+                if (fts._fill != null)
+                    rect.setAttributeNS(null, "fill", fts._fill);
             }
             rect.setAttributeNS(null, "x", 0);
             rect.setAttributeNS(null, "width", nl.width);
             rect.setAttributeNS(null, "y", rectTop);
             rect.setAttributeNS(null, "height", rectBottom - rectTop);
             //alert("set y="+rectTop+"; fill="+rect.getAttributeNS(null, "fill"));
-            if (!ysf._rect) {
-                ysf._rect = rect;
+            if (!fts._rect) {
+                fts._rect = rect;
                 //dc.out(rect);
                 group.appendChild(rect);
             }
@@ -523,45 +556,54 @@ YSF.prototype.beginDraw = function(dc) {
             var yearsToLo = lo - yearsSince;
             if (yearsToLo > 0)
                 waitYears = yearsToLo;
-            var waitTime = waitYears * MILLIS_PER_YEAR;
+            var waitTime = waitYears * fts._ms;
             if (waitTime < nl.restTimeslice)
                 waitTime = nl.restTimeslice;
             //alert("waitTime=" + waitTime);
-            ysf._timeout = window.setTimeout(advance, waitTime);
+            fts._timeout = window.setTimeout(advance, waitTime);
         }
     }
 
-    ysf.stopDraw();
+    fts.stopDraw();
     //dc.erase();  // XXX
     advance();
 };
 
-YSF.prototype.stopDraw = function() {
+FTS.prototype.stopDraw = function() {
     if (this._timeout) {
         window.clearTimeout(this._timeout);
         this._timeout = null;
     }
 };
 
-YSF.prototype.destroy = function() {
+FTS.prototype.destroy = function() {
     this.stopDraw();
 };
 
-return YSF;
+return FTS;
 })();
 
-function BlackLeft(args) {
-    if (!(this instanceof arguments.callee)) return new arguments.callee(args);
-    this._x = +args.x;
-}
-BlackLeft.prototype = new NumberLine.AbstractDrawable();
+FillHalf = function(node) {
+    if (!(this instanceof arguments.callee)) return new arguments.callee(node);
 
-BlackLeft.prototype.beginDraw = function(dc) {
+    // XXX Should validate params.
+    this._x = +(node.getAttributeNS(null, "x") || 0);
+    if (node.hasAttributeNS(null, "fill"))
+        this._fill = node.getAttributeNS(null, "fill");
+    this._half = node.getAttributeNS(NumberLine.ns, "half") || "left";
+};
+FillHalf.prototype = new NumberLine.AbstractDrawable();
+
+FillHalf.prototype.beginDraw = function(dc) {
     dc.erase();
+    if (this._half == "right")
+        alert("fillHalf: Sorry, only left halves are implemented");
     if (dc.nl.xshift > -this._x) {
         rect = dc.createSvgElt("rect");
         rect.setAttributeNS(null, "x", 0);
         rect.setAttributeNS(null, "y", 0);
+        if (this._fill != null)
+            rect.setAttributeNS(null, "fill", this._fill);
         rect.setAttributeNS(null, "width", dc.nl.xshift + this._x);
         rect.setAttributeNS(null, "height", dc.nl.height);
         dc.out(rect);
@@ -574,10 +616,14 @@ var sn = NumberLine.sn;
 var fn = sn.fn;
 var ns = fn["number->string"];
 
-function Fractions(args) {
-    if (!(this instanceof arguments.callee)) return new arguments.callee(args);
-    this.minTextPixels = args.minTextPixels;
-    this.maxTextPixels = args.maxTextPixels;
+function Fractions(node) {
+    if (!(this instanceof arguments.callee)) return new arguments.callee(node);
+
+    // XXX Should validate params.
+    this.minTextPixels = +(node.getAttributeNS(NumberLine.ns, "minTextPixels")
+                           || 12.5);
+    this.maxTextPixels = +(node.getAttributeNS(NumberLine.ns, "maxTextPixels")
+                           || 96);
 }
 Fractions.prototype = new NumberLine.AbstractDrawable();
 
