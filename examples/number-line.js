@@ -456,7 +456,7 @@ NL.prototype.handleDragEvent = function(evt) {
     }
 }
 
-NL.prototype.handle_mousescroll = function(evt) {
+NL.prototype.handle_DOMMouseScroll = function(evt) {
     this.log("mousescroll", evt);
     if (evt.axis === evt.VERTICAL_AXIS) {
         //alert("mousescroll vertical: " + evt.detail);
