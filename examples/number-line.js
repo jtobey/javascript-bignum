@@ -130,6 +130,7 @@ function NL(args) {
         switch (node.localName) {
         case "fractions":      constructor = Fractions;     break;
         case "line":           constructor = Line;          break;
+        case "decimals":       constructor = Decimals;      break;
         }
         if (constructor) {
             var drawable = constructor(node);
@@ -139,7 +140,7 @@ function NL(args) {
     }
     this.activate(args.windowTimers);
 }
-NL.sn = sn;
+NL.Number = sn;
 NL.ns = NL_NS;
 
 NL.prototype = {
@@ -409,7 +410,6 @@ NL.prototype.handle_click = function(evt) {
 };
 
 NL.prototype.statistics = function() {
-    alert("statistics");
     var ret = "";
     ret += "redraws: " + this.redrawCount + " avg " +
         (this.redrawTime / this.redrawCount / 1000).toFixed(3) + "s\n";
@@ -498,7 +498,7 @@ Line.prototype.beginDraw = function(dc) {
 
 var Fractions = (function() {
 
-var sn = NumberLine.sn;
+var sn = NumberLine.Number;
 var fn = sn.fn;
 var ns = fn["number->string"];
 
@@ -522,7 +522,6 @@ Fractions.prototype.beginDraw = function(dc) {
 
     var logLen = fn.log(dc.nl.length);
     var logBigDenom = (Math.log(heightInLines) - logLen) / 2;
-    //var logPixelLen = logLen - Math.log(dc.nl.height);
 
     dc.erase();  // XXX Start stupid, optimize later.
 
@@ -826,5 +825,133 @@ function simpler(f, higher) {
 }
 
 return Fractions;
+})();
 
+var Decimals = (function() {
+
+var sn = NumberLine.Number;
+var fn = sn.fn;
+var ns = fn["number->string"];
+
+function D(node) {
+    if (!(this instanceof arguments.callee)) return new arguments.callee(node);
+    this._node = node;
+}
+D.prototype = new NumberLine.AbstractDrawable();
+
+D.prototype.beginDraw = function(dc) {
+    var node = this._node;
+    var minScale = +(node.getAttributeNS(null, "min-scale") || 1.0);
+    var maxScale = +(node.getAttributeNS(null, "max-scale") || 8.0);
+    var scale5 = +(node.getAttributeNS(null, "scale-5") || 1.2);
+    var scale10 = +(node.getAttributeNS(null, "scale-10") || 1.6);
+    var numberSpacing = +(node.getAttributeNS(null, "line-spacing") || 20.0);
+    var markSpacing = +(node.getAttributeNS(null, "mark-spacing") || 3.0);
+    var x = +(node.getAttributeNS(null, "x") || 0) + dc.nl.xshift;
+
+    var heightInMarks = dc.nl.height / markSpacing;
+    var list = getDecimals(dc.nl.loBound, dc.nl.length,
+                           Math.floor(heightInMarks));
+
+    var logLen = fn.log(dc.nl.length);
+    var logPixelLen = logLen - Math.log(dc.nl.height);
+    var logMarkSpace = logPixelLen + Math.log(markSpacing);
+    var minTextScale = minScale * Math.pow(scale10, Math.ceil(Math.log(numberSpacing / markSpacing) / Math.LN10));
+
+    dc.erase();  // XXX Start stupid, optimize later.
+
+    while (true) {
+        var num = list.shift();
+        if (!num)
+            break;
+
+        // TODO: optimize.
+        var value = sn("#e" + num.m + "e" + num.e);
+        var y = dc.nl.height * (1 - fn["/"](fn["-"](value, dc.nl.loBound),
+                                            dc.nl.length));
+
+        var scale = minScale;
+        scale *= Math.pow(scale10, num.e - logMarkSpace / Math.LN10);
+        if (num.m[num.m.length - 1] == '5')
+            scale *= scale5;
+        if (scale > maxScale)
+            scale = maxScale;
+
+        var g = dc.createSvgElt("g");
+        g.setAttributeNS(null, "transform", "translate(" + x + "," + y +
+                         "),scale(" + scale + ")");
+
+        for (var child = node.firstChild; child != null;
+             child = child.nextSibling) {
+            g.appendChild(child.cloneNode(true));
+        }
+
+        var nodeList = g.getElementsByTagNameNS(NumberLine.ns, "output");
+        var elt, i, text = null;
+        for (i = 0; (elt = nodeList[i]) != null; i++) {
+            if (text == null)
+                text = num2text(num);
+            if (scale < minTextScale)
+                elt.parentNode.removeChild(elt);
+            else
+                elt.parentNode.replaceChild(dc.createTextNode(text), elt);
+        }
+        dc.out(g);
+    }
+};
+
+function num2text(num) {
+    var s = "";
+    var m = num.m;
+    var e = num.e;
+
+    if (num.m[0] == '-') {
+        m = m.substring(1);
+        s = "-";
+    }
+    if (e < 0) {
+        while (m.length <= -e)
+            m = "0" + m;
+        m = m.substring(0, m.length + e) + "." + m.substring(m.length + e);
+    }
+    if (m != 0) {
+        while (e > 0) {
+            m += "0";
+            e--;
+        }
+    }
+    return s + m;
+}
+
+function getDecimals(low, len, count) {
+    var logSpace = fn.log(len) - Math.log(count);
+
+    // Number of digits after the decimal point:
+    var numDigits = Math.floor(-logSpace / Math.LN10);
+    var p10 = fn.expt("10", fn.exact(numDigits));
+    var x = fn.ceiling(fn["*"](low, p10));
+    var end = fn["*"](fn["+"](low, len), p10);
+    var s, m, e, mLen, ret = [];
+
+    for (; fn["<="](x, end); x = fn["+"](x, "1")) {
+        if (fn["negative?"](x)) {
+            m = ns(fn.abs(x));
+            s = "-";
+        }
+        else {
+            m = ns(x);
+            s = "";
+        }
+        e = -numDigits;
+        for (mLen = m.length; mLen > 1 && m[mLen-1] == '0'; mLen--)
+            e++;
+        if (mLen != m.length)
+            m = m.substring(0, mLen);
+
+        ret.push({ e:e, m: s+m });
+    }
+    return ret;
+}
+
+return D;
 })();
