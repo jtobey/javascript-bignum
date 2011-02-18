@@ -976,7 +976,7 @@ var fn = SchemeNumber.fn = {
     fn.magnitude(z)    - Returns the magnitude of *z*.
     Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_574>.
 
-    fn.angle(z)        - Returns *fn.atan2(y,x)* where *z* = x + iy.
+    fn.angle(z)        - Returns *fn.atan(y,x)* where *z* = x + iy.
     Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_576>.
 
     Function: fn["number->string"](z)
