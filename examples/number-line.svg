@@ -14,7 +14,10 @@
         x="100%" y="0"
         >Number Line</text>
 
-  <nl:fillHalf x="0" fill="black" nl:half="left"/>
-  <nl:fillTimeSince fill="red" fill-opacity="0.25" nl:unit="minute"/>
-  <nl:fractions nl:minTextPixels="12.5" nl:maxTextPixels="96"/>
+  <nl:fractions min-scale="1.0" max-scale="8.0" line-spacing="12.0"
+                x="103" little-opacity="0.2">
+    <polygon points="0,0 30,-2 30,2"/>
+    <text x="32" y="0" dominant-baseline="middle"><nl:output/></text>
+  </nl:fractions>
+  <nl:line x="100" stroke-width="6" stroke="green"/>
 </svg>
