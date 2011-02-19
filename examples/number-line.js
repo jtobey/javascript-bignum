@@ -155,10 +155,6 @@ NL.prototype = {
     workTimeslice  : 100,
     restTimeslice  : 100,
 
-    //gobbling       : false,
-    redrawCount    : 0,
-    redrawTime     : 0,
-
     updateDimensions : NL_updateDimensions,
     addDrawable    : NL_addDrawable,
     removeDrawable : NL_removeDrawable,
@@ -276,7 +272,7 @@ function NL_beginZoom(zoomFactor, zoomPos) {
 }
 
 function NL_beginResize() {
-    var dim = getSvgDimensionPixels(this._svg);
+    var dim = getSvgPixelDimensions(this._svg);
     beginXform(this, "beginResize", this.loBound, this.length, this.xshift,
                dim[0], dim[1]);
 }
@@ -317,7 +313,7 @@ AbstractDrawable.prototype.beginDraw = function(dc) {
     //alert("Object doesn't override draw: " + this);
 };
 AbstractDrawable.prototype.beginPan = function(dc) {
-    //dc.erase();
+    dc.erase();
     //alert("AbstractDrawable.beginPan");
     return this.beginDraw(dc);
 };
@@ -327,7 +323,7 @@ AbstractDrawable.prototype.destroy = function() {};
 
 var captureEvents = ['mousedown', 'mouseup', 'click', 'mousemove',
                      'DOMMouseScroll'];
-var bubbleEvents = ['resize'];
+var bubbleEvents = ['SVGResize'];
 
 NL.prototype.activate = function(windowTimers) {
     var nl = this;
@@ -354,6 +350,10 @@ NL.prototype.activate = function(windowTimers) {
     nl.beginDraw();
     captureEvents.forEach(doCapture);
     bubbleEvents.forEach(doBubble);
+    // Resize ineffective in Firefox.  Am I doing it wrong?
+    try {
+        window.addEventListener("resize", nl._listeners.SVGResize, false);
+    } catch(e) {}
     nl.work();
 };
 
@@ -410,9 +410,6 @@ NL.prototype.handle_click = function(evt) {
 
 NL.prototype.statistics = function() {
     var ret = "";
-    ret += "redraws: " + this.redrawCount + " avg " +
-        (this.redrawTime / this.redrawCount / 1000).toFixed(3) + "s\n";
-    ret += "redrawTime: " + this.redrawTime + "\n";
     ret += "loBound=" + this.loBound.SN_debug() + "\n";
     ret += "length=" + this.length.SN_debug() + "\n";
     var stats = this.stats;
@@ -463,6 +460,12 @@ NL.prototype.handle_DOMMouseScroll = function(evt) {
         this.beginPan(movePos, 0);
         this.returnFromEvent();
     }
+};
+
+NL.prototype.handle_SVGResize = function(evt) {
+    this.log("resize", evt);
+    this.beginResize();
+    this.returnFromEvent();
 };
 
 return NL;
