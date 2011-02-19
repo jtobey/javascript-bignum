@@ -3,7 +3,7 @@
      xmlns:xlink="http://www.w3.org/1999/xlink"
      xmlns:nl="http://john-edwin-tobey.org/number-line"
      title="Click to zoom in, Ctrl-click to zoom out"
-     onload="NumberLine({svg:this, windowTimers:window})">
+     onload="NumberLine(this)">
   <script type="application/ecmascript" xlink:href="../biginteger.js" />
   <script type="application/ecmascript" xlink:href="../schemeNumber.js" />
   <script type="application/ecmascript" xlink:href="number-line.js"/>

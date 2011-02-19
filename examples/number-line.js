@@ -116,7 +116,7 @@ function getSvgPixelDimensions(svg) {
 function NL(args) {
     if (!(this instanceof arguments.callee)) return new arguments.callee(args);
     this._drawables = [];
-    this._svg = args.svg;
+    this._svg = args.svg || args;
     this._toDo = [];
     this.stats = {};
     this.updateDimensions();
@@ -136,7 +136,7 @@ function NL(args) {
                 this.addDrawable(drawable, node);
         }
     }
-    this.activate(args.windowTimers);
+    this.activate(args.windowTimers || window);
 }
 NL.Number = sn;
 NL.ns = NL_NS;
