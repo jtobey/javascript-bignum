@@ -876,7 +876,7 @@ D.prototype.beginDraw = function(dc) {
         scale *= Math.pow(scale10, num.e - logMarkSpace / Math.LN10);
         if (num.m[num.m.length - 1] == '5')
             scale *= scale5;
-        if (scale > maxScale)
+        if (scale > maxScale || num.m == "0")
             scale = maxScale;
 
         var g = dc.createSvgElt("g");
@@ -949,6 +949,8 @@ function getDecimals(low, len, count) {
             e++;
         if (mLen != m.length)
             m = m.substring(0, mLen);
+        if (m == "0")
+            e = 0;
 
         ret.push({ e:e, m: s+m });
     }
