@@ -140,7 +140,7 @@ function NL(args) {
     }
     this.activate(args.windowTimers);
 }
-NL.sn = sn;
+NL.Number = sn;
 NL.ns = NL_NS;
 
 NL.prototype = {
@@ -495,7 +495,7 @@ function FTS(node) {
 }
 FTS.prototype = new NumberLine.AbstractDrawable();
 
-var fn = NumberLine.sn.fn;
+var fn = NumberLine.Number.fn;
 
 FTS.prototype.beginDraw = function(dc) {
     var fts = this;
@@ -611,7 +611,7 @@ FillHalf.prototype.beginDraw = function(dc) {
 
 var Fractions = (function() {
 
-var sn = NumberLine.sn;
+var sn = NumberLine.Number;
 var fn = sn.fn;
 var ns = fn["number->string"];
 
