@@ -117,8 +117,6 @@ function NL(args) {
     if (!(this instanceof arguments.callee)) return new arguments.callee(args);
     this._drawables = [];
     this._svg = args.svg;
-    this._drawn = this._svg.ownerDocument.createElementNS(SVG_NS, "g");
-    this._svg.appendChild(this._drawn);
     this._toDo = [];
     this.stats = {};
     this.updateDimensions();
@@ -135,7 +133,7 @@ function NL(args) {
         if (constructor) {
             var drawable = constructor(node);
             if (drawable)
-                this.addDrawable(drawable);
+                this.addDrawable(drawable, node);
         }
     }
     this.activate(args.windowTimers);
@@ -183,9 +181,9 @@ function NL_updateDimensions() {
     this.height = dim[1];
 }
 
-function NL_addDrawable(drawable) {
+function NL_addDrawable(drawable, node) {
     var group = this._svg.ownerDocument.createElementNS(SVG_NS, "g");
-    this._drawn.appendChild(group);
+    node.parentNode.insertBefore(group, node);
     this._drawables.push({drawable:drawable, group:group});
 }
 
@@ -193,7 +191,8 @@ function NL_removeDrawable(drawable) {
     for (var i = 0; i < this._drawables.length; i++)
         if (this._drawables[i].drawable === drawable) {
             drawable.destroy();
-            this._drawn.removeChild(this._drawables[i].group);
+            this._drawables[i].group.parentNode
+                .removeChild(this._drawables[i].group);
             this._drawables.splice(i, 1);
             return true;
         }
