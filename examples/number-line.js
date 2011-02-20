@@ -105,23 +105,24 @@ function getSvgPixelDimensions(svg) {
             w = +tmp;
     }
     if ((!w || !h) && svg.ownerDocument && svg.ownerDocument.defaultView) {
-        w = w || svg.ownerDocument.defaultView.innerWidth;
-        h = h || svg.ownerDocument.defaultView.innerHeight;
+        w = w || svg.ownerDocument.defaultView.innerWidth  || 640;
+        h = h || svg.ownerDocument.defaultView.innerHeight || 480;
     }
-    w = w || 640;
-    h = h || 480;
     return [w, h];
 }
 
 function NL(args) {
     if (!(this instanceof arguments.callee)) return new arguments.callee(args);
     this._drawables = [];
-    this._svg = args.svg || args;
+    this._node = args.node || args;
     this._toDo = [];
     this.stats = {};
     this.updateDimensions();
 
-    var elts = this._svg.getElementsByTagNameNS(NL_NS, '*');
+    this.loBound = sn(this._node.getAttributeNS(NL_NS, "low-bound") || "0");
+    this.length = sn(this._node.getAttributeNS(NL_NS, "length") || "10");
+
+    var elts = this._node.getElementsByTagNameNS(NL_NS, '*');
     for (var i = 0; i < elts.length; i++) {
         var node = elts.item(i);
         var constructor = null;
@@ -140,11 +141,9 @@ function NL(args) {
 }
 NL.Number = sn;
 NL.ns = NL_NS;
+NL.WHICH_MATH = WHICH_MATH;
 
 NL.prototype = {
-    loBound        : sn("0"),
-    //length         : fn["*"]("10", fn.expt("2","329")),
-    length         : sn("10"),
     xshift         : 0,
 
     dragging       : false,
@@ -172,13 +171,13 @@ NL.prototype = {
 };
 
 function NL_updateDimensions() {
-    var dim = getSvgPixelDimensions(this._svg);
+    var dim = getSvgPixelDimensions(this._node);
     this.width = dim[0];
     this.height = dim[1];
 }
 
 function NL_addDrawable(drawable, node) {
-    var group = this._svg.ownerDocument.createElementNS(SVG_NS, "g");
+    var group = this._node.ownerDocument.createElementNS(SVG_NS, "g");
     node.parentNode.insertBefore(group, node);
     this._drawables.push({drawable:drawable, group:group});
 }
@@ -210,10 +209,10 @@ DC.prototype.out = function(elt) {
     this.g.appendChild(elt);
 };
 DC.prototype.createSvgElt = function(name) {
-    return this.nl._svg.ownerDocument.createElementNS(SVG_NS, name);
+    return this.nl._node.ownerDocument.createElementNS(SVG_NS, name);
 };
 DC.prototype.createTextNode = function(text) {
-    return this.nl._svg.ownerDocument.createTextNode(text);
+    return this.nl._node.ownerDocument.createTextNode(text);
 };
 
 function NL_beginDraw() {
@@ -272,7 +271,7 @@ function NL_beginZoom(zoomFactor, zoomPos) {
 }
 
 function NL_beginResize() {
-    var dim = getSvgPixelDimensions(this._svg);
+    var dim = getSvgPixelDimensions(this._node);
     beginXform(this, "beginResize", this.loBound, this.length, this.xshift,
                dim[0], dim[1]);
 }
@@ -288,7 +287,12 @@ function NL_doLast(f) {
 function NL_workUntil(end) {
     var ret = false;
     while (this._toDo.length > 0 && new Date() < end) {
-        this._toDo.shift()();
+        try {
+            this._toDo.shift()();
+        }
+        catch (e) {
+            //alert("Caught exception: " + e);
+        }
         ret = true;
     }
     return ret;
@@ -340,11 +344,11 @@ NL.prototype.activate = function(windowTimers) {
     }
     function doCapture(name) {
         nl._listeners[name] = makeHandler(name);
-        nl._svg.addEventListener(name, nl._listeners[name], true);
+        nl._node.addEventListener(name, nl._listeners[name], true);
     }
     function doBubble(name) {
         nl._listeners[name] = makeHandler(name);
-        nl._svg.addEventListener(name, nl._listeners[name], false);
+        nl._node.addEventListener(name, nl._listeners[name], false);
     }
 
     nl.beginDraw();
@@ -359,10 +363,10 @@ NL.prototype.activate = function(windowTimers) {
 
 NL.prototype.deactivate = function() {
     function doCapture(name) {
-        nl._svg.removeEventListener(name, nl._listeners[name], true);
+        nl._node.removeEventListener(name, nl._listeners[name], true);
     }
     function doBubble(name) {
-        nl._svg.removeEventListener(name, nl._listeners[name], false);
+        nl._node.removeEventListener(name, nl._listeners[name], false);
     }
     if (this._listeners) {
         captureEvents.forEach(doCapture);
@@ -454,7 +458,6 @@ NL.prototype.handleDragEvent = function(evt) {
 NL.prototype.handle_DOMMouseScroll = function(evt) {
     this.log("mousescroll", evt);
     if (evt.axis === evt.VERTICAL_AXIS) {
-        //alert("mousescroll vertical: " + evt.detail);
         var movePos = fn["/"](fn["*"](fn.exact(evt.detail), this.length),
                               THIRTY);
         this.beginPan(movePos, 0);
@@ -546,8 +549,9 @@ Fractions.prototype.beginDraw = function(dc) {
         }
         else {
             scale *= Math.exp((logBigDenom - logD) / 4);
-            if (scale > maxScale)
+            if (scale > maxScale) {
                 scale = maxScale;
+            }
         }
 
         var g = dc.createSvgElt("g");
@@ -600,6 +604,8 @@ CF.prototype.logD = function() {
     return fn.log(this.d);
 };
 CF.prototype.getC = function() {
+    if (this.c !== undefined)
+        return this.c;
     var q = fn["/"](this.n, this.d);
     //print(this.n+"/"+this.d+"="+q);
     var cf = [];
@@ -615,7 +621,7 @@ CF.prototype.getC = function() {
         //print("frac(q)=" + q);
         if (fn["zero?"](q))
             return cf;
-        if (WHICH_MATH === "native" && q < 1e-10) {
+        if (NumberLine.WHICH_MATH === "native" && q < 1e-10) {
             if (cf[cf.length - 1] == 1) {
                 cf[cf.length - 2]++;
                 cf.length--;
@@ -772,15 +778,19 @@ function getFractions(low, len, count) {
                 xSide = between(x, mid, xgty);
             }
         }
-        return (xgty ?
+       return (xgty ?
                 ySide.concat([mid]).concat(xSide) :
                 xSide.concat([mid]).concat(ySide));
     }
 
-    //print("mid=" + mid);
+    try {
     return (between(bottom, mid, false, low, false)
             .concat([mid])
             .concat(between(top, mid, true, high, true)));
+    }
+    catch (e) {
+        alert("depth=" + depth + ", " + e);
+    }
 }
 
 // Return the nearest fraction to *f* that is simpler than *f* and

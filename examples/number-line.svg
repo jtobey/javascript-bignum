@@ -3,7 +3,7 @@
      xmlns:xlink="http://www.w3.org/1999/xlink"
      xmlns:nl="http://john-edwin-tobey.org/number-line"
      title="Click to zoom in, Ctrl-click to zoom out"
-     onload="NumberLine(this)">
+     onload="NumberLine(this)" nl:low-bound="0" nl:length="10">
   <script type="application/ecmascript" xlink:href="../biginteger.js" />
   <script type="application/ecmascript" xlink:href="../schemeNumber.js" />
   <script type="application/ecmascript" xlink:href="number-line.js"/>
@@ -17,7 +17,7 @@
   <g transform="translate(400,0)">
     <nl:line x="0" stroke-width="6" stroke="green"/>
 
-    <nl:fractions min-scale="1.0" max-scale="8.0" line-spacing="12.0"
+    <nl:fractions min-scale="1.0" max-scale="8.0" line-spacing="14.0"
                   x="3" little-opacity="0.2">
       <polygon points="0,0 30,-2 30,2"/>
       <text x="32" y="0" dominant-baseline="middle"><nl:output/></text>
