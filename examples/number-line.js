@@ -641,6 +641,7 @@ function arrayToList(a) {
 }
 
 function getFractions(low, len, count) {
+    //alert("getFractions(" + ns(low) + "," + ns(len) + "," + count + ")");
     low = sn(low);
     len = sn(len);
 
@@ -765,6 +766,30 @@ function getFractions(low, len, count) {
             //print("midSn=" + midSn + ", bound=" + bound + ", " + boundIsUpper);
             if (fn[boundIsUpper ? ">" : "<"](midSn, bound)) {
                 //print("range does not include mid, xgty=" + xgty);
+                var midToBound = fn.abs(fn["-"](midSn, bound));
+                var logMidToBound = fn.log(midToBound);
+                var q = (boundIsUpper === xgty ? y : x);
+                var logQd = q.logD();
+                var logMidD = mid.logD();
+                /* Find smallest N such that z = {n:N*q.n+mid.n, d:N*q.d+mid.d}
+                   differs from mid by at least exp(logMidToBound).
+                */
+                logSpXdYd = logMidToBound + logQd + logMidD;
+                //assert(logSpXdYd < 0);
+                logN = logMidToBound + (2 * logMidD) - Math.log(1 - Math.exp(logSpXdYd));
+                if (isFinite(logN)) {
+                    N = Math.exp(logN);
+                    if (isFinite(N))
+                        N = fn.exact(Math.ceil(N));
+                    else {
+                        log10N = logN / Math.LN10;
+                        exp = Math.floor(log10N);
+                        N = sn("#e" + Math.exp(exp - log10N) + "e" + exp);
+                    }
+                    midN = fn["+"](fn["*"](N, q.n), mid.n);
+                    midD = fn["+"](fn["*"](N, q.d), mid.d);
+                    mid = CF({n:midN, d:midD});
+                }
                 return (boundIsUpper === xgty ?
                         between(y, mid, !xgty, bound, boundIsUpper) :
                         between(x, mid, xgty, bound, boundIsUpper))
@@ -783,14 +808,9 @@ function getFractions(low, len, count) {
                 xSide.concat([mid]).concat(ySide));
     }
 
-    try {
     return (between(bottom, mid, false, low, false)
             .concat([mid])
             .concat(between(top, mid, true, high, true)));
-    }
-    catch (e) {
-        alert("depth=" + depth + ", " + e);
-    }
 }
 
 // Return the nearest fraction to *f* that is simpler than *f* and
@@ -836,6 +856,7 @@ function simpler(f, higher) {
     return CF({n:n, d:d, c:c, l:l});
 }
 
+//this.getFractions = getFractions; // testing
 return Fractions;
 })();
 
