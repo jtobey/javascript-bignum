@@ -325,9 +325,8 @@ AbstractDrawable.prototype.beginZoom = AbstractDrawable.prototype.beginPan;
 AbstractDrawable.prototype.beginResize = AbstractDrawable.prototype.beginPan;
 AbstractDrawable.prototype.destroy = function() {};
 
-var captureEvents = ['mousedown', 'mouseup', 'click', 'mousemove',
-                     'DOMMouseScroll'];
-var bubbleEvents = ['SVGResize'];
+var events = ['SVGResize', 'mousedown', 'mouseup', 'click', 'mousemove',
+              'DOMMouseScroll'];
 
 NL.prototype.activate = function(windowTimers) {
     var nl = this;
@@ -342,18 +341,13 @@ NL.prototype.activate = function(windowTimers) {
         }
         return handle;
     }
-    function doCapture(name) {
-        nl._listeners[name] = makeHandler(name);
-        nl._node.addEventListener(name, nl._listeners[name], true);
-    }
-    function doBubble(name) {
+    function listen(name) {
         nl._listeners[name] = makeHandler(name);
         nl._node.addEventListener(name, nl._listeners[name], false);
     }
 
     nl.beginDraw();
-    captureEvents.forEach(doCapture);
-    bubbleEvents.forEach(doBubble);
+    events.forEach(listen);
     // Resize ineffective in Firefox.  Am I doing it wrong?
     try {
         window.addEventListener("resize", nl._listeners.SVGResize, false);
@@ -362,15 +356,15 @@ NL.prototype.activate = function(windowTimers) {
 };
 
 NL.prototype.deactivate = function() {
-    function doCapture(name) {
-        nl._node.removeEventListener(name, nl._listeners[name], true);
-    }
-    function doBubble(name) {
+    function unlisten(name) {
         nl._node.removeEventListener(name, nl._listeners[name], false);
     }
     if (this._listeners) {
-        captureEvents.forEach(doCapture);
-        bubbleEvents.forEach(doBubble);
+        events.forEach(unlisten);
+        try {
+            window.removeEventListener("resize", nl._listeners.SVGResize,
+                                       false);
+        } catch(e) {}
     }
 };
 
