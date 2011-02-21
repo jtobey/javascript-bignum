@@ -111,6 +111,21 @@ function getSvgPixelDimensions(svg) {
     return [w, h];
 }
 
+function attrProperty(object, property, node, ns, attr, deser, ser, dflt) {
+    function handle_DOMAttrModified(evt) {
+        var attrVal = node.getAttributeNS(ns, attr);
+        if (attrVal == null || attrVal == "")
+            attrVal = dflt;
+        object[property] = deser(attrVal);
+    }
+    function set(value) {
+        node.setAttributeNS(ns, attr, ser(value));
+    }
+    handle_DOMAttrModified(null);
+    node.addEventListener("DOMAttrModified", handle_DOMAttrModified, false);
+    object["set" + property[0].toUpperCase() + property.substring(1)] = set;
+}
+
 function NL(args) {
     if (!(this instanceof arguments.callee)) return new arguments.callee(args);
     this._drawables = [];
@@ -119,8 +134,13 @@ function NL(args) {
     this.stats = {};
     this.updateDimensions();
 
-    this.loBound = sn(this._node.getAttributeNS(NL_NS, "low-bound") || "0");
-    this.length = sn(this._node.getAttributeNS(NL_NS, "length") || "10");
+    attrProperty(this, "loBound", this._node, NL_NS, "low-bound", sn, ns, "0");
+    attrProperty(this, "length", this._node, NL_NS, "length", sn, ns, "2");
+    attrProperty(this, "xshift", this._node, NL_NS, "dx", Number, String, "0");
+    attrProperty(this, "workTimeslice", this._node, NL_NS, "work-timeslice",
+                 Number, String, 100);
+    attrProperty(this, "restTimeslice", this._node, NL_NS, "work-timeslice",
+                 Number, String, 100);
 
     var elts = this._node.getElementsByTagNameNS(NL_NS, '*');
     for (var i = 0; i < elts.length; i++) {
@@ -144,15 +164,10 @@ NL.ns = NL_NS;
 NL.WHICH_MATH = WHICH_MATH;
 
 NL.prototype = {
-    xshift         : 0,
-
     dragging       : false,
     dragPos        : undefined,
     dragX          : undefined,
     dragged        : false,
-
-    workTimeslice  : 100,
-    restTimeslice  : 100,
 
     updateDimensions : NL_updateDimensions,
     addDrawable    : NL_addDrawable,
@@ -177,8 +192,14 @@ function NL_updateDimensions() {
 }
 
 function NL_addDrawable(drawable, node) {
-    var group = this._node.ownerDocument.createElementNS(SVG_NS, "g");
-    node.parentNode.insertBefore(group, node);
+    var group = node.previousSibling;
+    if (group == null || !group.getAttributeNS ||
+        group.getAttributeNS(NL_NS, "drawn") != "true")
+    {
+        group = this._node.ownerDocument.createElementNS(SVG_NS, "g");
+        group.setAttributeNS(NL_NS, "drawn", "true");
+        node.parentNode.insertBefore(group, node);
+    }
     this._drawables.push({drawable:drawable, group:group});
 }
 
@@ -237,9 +258,9 @@ function beginXform(nl, xform, loBound, length, xshift, width, height) {
     old.xshift  = nl.xshift;
     old.width   = nl.width;
     old.height  = nl.height;
-    nl.loBound = loBound;
-    nl.length  = length;
-    nl.xshift  = xshift;
+    nl.setLoBound(loBound);
+    nl.setLength(length);
+    nl.setXshift(xshift);
     nl.width   = width;
     nl.height  = height;
 
