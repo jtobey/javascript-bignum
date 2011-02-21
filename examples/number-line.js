@@ -347,7 +347,7 @@ AbstractDrawable.prototype.beginResize = AbstractDrawable.prototype.beginPan;
 AbstractDrawable.prototype.destroy = function() {};
 
 var events = ['SVGResize', 'mousedown', 'mouseup', 'click', 'mousemove',
-              'DOMMouseScroll'];
+              'DOMMouseScroll', 'mousewheel'];
 
 NL.prototype.activate = function(windowTimers) {
     var nl = this;
@@ -470,9 +470,16 @@ NL.prototype.handleDragEvent = function(evt) {
     }
 }
 
+NL.prototype.handle_mousewheel = function(evt) {
+    this.log("mousewheel", evt);
+    var movePos = fn["/"](fn["*"](fn.exact(evt.detail), this.length), "-3600");
+    this.beginPan(movePos, 0);
+    this.returnFromEvent();
+};
+
 NL.prototype.handle_DOMMouseScroll = function(evt) {
-    this.log("mousescroll", evt);
-    if (evt.axis === evt.VERTICAL_AXIS) {
+    this.log("mousewheel", evt);
+    if (evt.axis === undefined || evt.axis === evt.VERTICAL_AXIS) {
         var movePos = fn["/"](fn["*"](fn.exact(evt.detail), this.length),
                               THIRTY);
         this.beginPan(movePos, 0);
