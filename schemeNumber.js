@@ -179,7 +179,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,0,6];
+SchemeNumber.VERSION = [1,0,7];
 
 function isNumber(x) {
     return x instanceof Number || typeof x === "number";
@@ -233,8 +233,6 @@ var PARSE_ERROR = new Object();
 
 // Scheme number syntaxes, e.g. #e1.1@-2d19, 2/3
 function stringToNumber(s, radix, exact) {
-    var i = 0;
-
     function lose() {
         throw PARSE_ERROR;
     }
@@ -422,7 +420,16 @@ function stringToNumber(s, radix, exact) {
         return x;
     }
 
-    radix = radix || 10;
+    // Common cases first.
+    if (!radix || radix == 10) {
+        if (/^-?[0-9]{1,15}$/.test(s)) {
+            return (exact === false ? toFlonum : toEINative)(parseInt(s));
+        }
+        radix = 10;
+    }
+
+    var i = 0;
+
     try {
         while (s[i] === "#") {
             switch (s[i+1]) {
@@ -976,7 +983,7 @@ var fn = SchemeNumber.fn = {
     fn.magnitude(z)    - Returns the magnitude of *z*.
     Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_574>.
 
-    fn.angle(z)        - Returns *fn.atan2(y,x)* where *z* = x + iy.
+    fn.angle(z)        - Returns *fn.atan(y,x)* where *z* = x + iy.
     Specified by: <R6RS at http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_idx_576>.
 
     Function: fn["number->string"](z)
