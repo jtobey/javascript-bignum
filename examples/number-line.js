@@ -85,32 +85,6 @@ function removeAllChildren(node) {
         node.removeChild(node.firstChild);
 }
 
-// Please tell <John.Tobey@gmail.com> if you know a reasonable way to
-// get the <svg> dimensions in pixels!
-function getSvgPixelDimensions(svg) {
-
-    //Tried: window.getComputedStyle(svg, null).getPropertyCSSValue("width")
-    //Tried: svg.height.baseVal.value
-    //Tried: svg.getBoundingClientRect()
-
-    var tmp, w = 0, h = 0;
-    if (svg.hasAttributeNS(null, "height")) {
-        tmp = svg.getAttributeNS(null, "height");
-        if (/^[1-9][0-9]*$/.test(tmp))
-            h = +tmp;
-    }
-    if (svg.hasAttributeNS(null, "width")) {
-        tmp = svg.getAttributeNS(null, "width");
-        if (/^[1-9][0-9]*$/.test(tmp))
-            w = +tmp;
-    }
-    if ((!w || !h) && svg.ownerDocument && svg.ownerDocument.defaultView) {
-        w = w || svg.ownerDocument.defaultView.innerWidth  || 640;
-        h = h || svg.ownerDocument.defaultView.innerHeight || 480;
-    }
-    return [w, h];
-}
-
 function attrProperty(object, property, node, ns, attr, deser, ser, dflt) {
     function handle_DOMAttrModified(evt) {
         var attrVal = node.getAttributeNS(ns, attr);
@@ -132,7 +106,9 @@ function NL(args) {
     this._node = args.node || args;
     this._toDo = [];
     this.stats = {};
-    this.updateDimensions();
+    var dim = this.getDimensions();
+    this.width = dim[0];
+    this.height = dim[1];
 
     attrProperty(this, "loBound", this._node, NL_NS, "low-bound", sn, ns, "0");
     attrProperty(this, "length", this._node, NL_NS, "length", sn, ns, "2");
@@ -169,7 +145,7 @@ NL.prototype = {
     dragX          : undefined,
     dragged        : false,
 
-    updateDimensions : NL_updateDimensions,
+    getDimensions  : NL_getDimensions,
     addDrawable    : NL_addDrawable,
     removeDrawable : NL_removeDrawable,
 
@@ -185,10 +161,17 @@ NL.prototype = {
     work           : NL_work,
 };
 
-function NL_updateDimensions() {
-    var dim = getSvgPixelDimensions(this._node);
-    this.width = dim[0];
-    this.height = dim[1];
+function NL_getDimensions() {
+    var nl = this;
+    if (!nl._bbox) {
+        nl._bbox = nl._node.ownerDocument.createElementNS(SVG_NS, "rect");
+        nl._bbox.setAttributeNS(null, "width", "100%");
+        nl._bbox.setAttributeNS(null, "height", "100%");
+        nl._bbox.setAttributeNS(null, "opacity", "0");
+        nl._node.appendChild(nl._bbox);
+    }
+    var bbox = nl._bbox.getBBox();
+    return [bbox.width, bbox.height];
 }
 
 function NL_addDrawable(drawable, node) {
@@ -292,7 +275,7 @@ function NL_beginZoom(zoomFactor, zoomPos) {
 }
 
 function NL_beginResize() {
-    var dim = getSvgPixelDimensions(this._node);
+    var dim = this.getDimensions();
     beginXform(this, "beginResize", this.loBound, this.length, this.xshift,
                dim[0], dim[1]);
 }
