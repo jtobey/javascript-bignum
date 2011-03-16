@@ -68,6 +68,10 @@ script in this directory.
 
 CHANGES
 
+1.0.8 - 2011-03-16
+
+    * Make sn("#e1@2") equivalent to fn.exact("1@2").
+
 1.0.7 - 2011-03-04
 
     * parser: optimize simple integer parsing.

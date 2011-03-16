@@ -179,7 +179,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,0,7];
+SchemeNumber.VERSION = [1,0,8];
 
 function isNumber(x) {
     return x instanceof Number || typeof x === "number";
@@ -339,9 +339,13 @@ function stringToNumber(s, radix, exact) {
     }
     function parseComplex(s) {
         var a = s.indexOf('@');
-        if (a !== -1)
-            return makePolar(parseReal(s.substring(0, a)),
-                             parseReal(s.substring(a + 1)));
+        if (a !== -1) {
+            var ret = makePolar(parseReal(s.substring(0, a)),
+                                parseReal(s.substring(a + 1)));
+            if (exact && ret.SN_isInexact())
+                ret = ret.SN_toExact();  // XXX is this right?
+            return ret;
+        }
 
         if (s[s.length - 1] !== "i")
             return parseReal(s);
@@ -1555,12 +1559,6 @@ function nativeDenominator(x) {
     // The result will be a power of 2.
     //assert(isFinite(x));
     return pow(2, nativeDenominatorLog2(x));
-}
-
-function exactNativeIntegerToString(n, radix) {
-    if (n > -9007199254740992 && n < 9007199254740992)
-        return n.toString(radix);
-    return numberToBigInteger(n).toString(radix);
 }
 
 DISP.Flonum.SN_numberToString = function(radix, precision) {
