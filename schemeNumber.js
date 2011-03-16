@@ -168,7 +168,10 @@ function pureVirtual() {
 function SN(obj) {
     if (obj instanceof Number || typeof obj === "number")
         return obj;
-    return parseNumber(String(obj));
+    var ret = stringToNumber(String(obj));
+    if (ret === false)
+        raise("&assertion", "not a number", s);
+    return ret;
 }
 // For NaturalDocs:
 var SchemeNumber = SN;
@@ -256,10 +259,7 @@ function stringToNumber(s, radix, exact) {
         if (n < 9007199254740992)
             return toEINative(sign * n);
 
-        n = BigInteger.parse(s, radix);
-        if (sign < 0)
-            n = n.negate();
-        return new EIBig(n);
+        return parseEIBig(s, sign, radix);
     }
     function parseReal(s) {
         if (nanInfPattern.test(s)) {
@@ -456,13 +456,6 @@ function stringToNumber(s, radix, exact) {
             raise("&assertion", "missing argument");
         throw e;
     }
-}
-
-function parseNumber(s, exact, radix) {
-    var ret = stringToNumber(s, radix, exact);
-    if (ret === false)
-        raise("&assertion", "not a number", s);
-    return ret;
 }
 
 function makeRectangular(x, y) {
@@ -3277,6 +3270,13 @@ function EIBig(n) {
 }
 
 EIBig.prototype = new EI();
+
+function parseEIBig(s, sign, radix) {
+    n = BigInteger.parse(s, radix);
+    if (sign < 0)
+        n = n.negate();
+    return new EIBig(n);
+}
 
 DISP.EIBig.SN_numberToString = function(radix) {
     return this._.toString(radix);
