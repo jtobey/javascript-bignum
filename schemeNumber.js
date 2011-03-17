@@ -168,7 +168,10 @@ function pureVirtual() {
 function SN(obj) {
     if (obj instanceof Number || typeof obj === "number")
         return obj;
-    return parseNumber(String(obj));
+    var ret = stringToNumber(String(obj));
+    if (ret === false)
+        raise("&assertion", "not a number", s);
+    return ret;
 }
 // For NaturalDocs:
 var SchemeNumber = SN;
@@ -179,7 +182,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,0,6];
+SchemeNumber.VERSION = [1,0,8];
 
 function isNumber(x) {
     return x instanceof Number || typeof x === "number";
@@ -233,8 +236,6 @@ var PARSE_ERROR = new Object();
 
 // Scheme number syntaxes, e.g. #e1.1@-2d19, 2/3
 function stringToNumber(s, radix, exact) {
-    var i = 0;
-
     function lose() {
         throw PARSE_ERROR;
     }
@@ -258,10 +259,7 @@ function stringToNumber(s, radix, exact) {
         if (n < 9007199254740992)
             return toEINative(sign * n);
 
-        n = BigInteger.parse(s, radix);
-        if (sign < 0)
-            n = n.negate();
-        return new EIBig(n);
+        return parseEIBig(s, sign, radix);
     }
     function parseReal(s) {
         if (nanInfPattern.test(s)) {
@@ -341,9 +339,13 @@ function stringToNumber(s, radix, exact) {
     }
     function parseComplex(s) {
         var a = s.indexOf('@');
-        if (a !== -1)
-            return makePolar(parseReal(s.substring(0, a)),
-                             parseReal(s.substring(a + 1)));
+        if (a !== -1) {
+            var ret = makePolar(parseReal(s.substring(0, a)),
+                                parseReal(s.substring(a + 1)));
+            if (exact && ret.SN_isInexact())
+                ret = ret.SN_toExact();  // XXX is this right?
+            return ret;
+        }
 
         if (s[s.length - 1] !== "i")
             return parseReal(s);
@@ -422,7 +424,16 @@ function stringToNumber(s, radix, exact) {
         return x;
     }
 
-    radix = radix || 10;
+    // Common cases first.
+    if (!radix || radix == 10) {
+        if (/^-?[0-9]{1,15}$/.test(s)) {
+            return (exact === false ? toFlonum : toEINative)(parseInt(s));
+        }
+        radix = 10;
+    }
+
+    var i = 0;
+
     try {
         while (s[i] === "#") {
             switch (s[i+1]) {
@@ -445,13 +456,6 @@ function stringToNumber(s, radix, exact) {
             raise("&assertion", "missing argument");
         throw e;
     }
-}
-
-function parseNumber(s, exact, radix) {
-    var ret = stringToNumber(s, radix, exact);
-    if (ret === false)
-        raise("&assertion", "not a number", s);
-    return ret;
 }
 
 function makeRectangular(x, y) {
@@ -1548,12 +1552,6 @@ function nativeDenominator(x) {
     // The result will be a power of 2.
     //assert(isFinite(x));
     return pow(2, nativeDenominatorLog2(x));
-}
-
-function exactNativeIntegerToString(n, radix) {
-    if (n > -9007199254740992 && n < 9007199254740992)
-        return n.toString(radix);
-    return numberToBigInteger(n).toString(radix);
 }
 
 DISP.Flonum.SN_numberToString = function(radix, precision) {
@@ -3272,6 +3270,13 @@ function EIBig(n) {
 }
 
 EIBig.prototype = new EI();
+
+function parseEIBig(s, sign, radix) {
+    n = BigInteger.parse(s, radix);
+    if (sign < 0)
+        n = n.negate();
+    return new EIBig(n);
+}
 
 DISP.EIBig.SN_numberToString = function(radix) {
     return this._.toString(radix);

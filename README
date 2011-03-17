@@ -68,34 +68,19 @@ script in this directory.
 
 CHANGES
 
+1.0.8 - 2011-03-16
+
+    * Make sn("#e1@2") equivalent to fn.exact("1@2").
+
+1.0.7 - 2011-03-04
+
+    * parser: optimize simple integer parsing.
+
 1.0.6 - 2011-02-13
 
     * toFixed: bug fix: include leading "-" in negatives rounded to zero.
 
-1.0.5 - 2011-02-12
-
-    * Fixed a bug in toFixed affecting rounding.
-
-1.0.4 - 2011-02-11
-
-    * Bugs fixed in SchemeNumber implementation of ECMAScript Number
-      methods: toFixed, toPrecision, and toExponential.  Thanks to
-      theonesmiley.
-
-1.0.3 - 2011-02-10
-
-    * Faster big integer arithmetic, courtesy of Vitaly Magerya.
-      Approximately 20% test suite speedup.
-
-1.0.2 - 2011-02-10
-
-    * Moved argument conversion from internal methods to public
-      functions.  Approximately 10% test suite speedup.
-
-1.0.1 - 2011-02-10
-
-    * Support ECMA standard formatting methods: toFixed,
-      toExponential, toPrecision.
+See file CHANGES for more.
 
 [1] R6RS Scheme specification.  See http://www.r6rs.org/ (I recommend
 the PDF, not the HTML version.  http://www.r6rs.org/final/r6rs.pdf),

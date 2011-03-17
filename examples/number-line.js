@@ -85,45 +85,40 @@ function removeAllChildren(node) {
         node.removeChild(node.firstChild);
 }
 
-// Please tell <John.Tobey@gmail.com> if you know a reasonable way to
-// get the <svg> dimensions in pixels!
-function getSvgPixelDimensions(svg) {
-
-    //Tried: window.getComputedStyle(svg, null).getPropertyCSSValue("width")
-    //Tried: svg.height.baseVal.value
-    //Tried: svg.getBoundingClientRect()
-
-    var tmp, w = 0, h = 0;
-    if (svg.hasAttributeNS(null, "height")) {
-        tmp = svg.getAttributeNS(null, "height");
-        if (/^[1-9][0-9]*$/.test(tmp))
-            h = +tmp;
+function attrProperty(object, property, node, ns, attr, deser, ser, dflt) {
+    function handle_DOMAttrModified(evt) {
+        var attrVal = node.getAttributeNS(ns, attr);
+        if (attrVal == null || attrVal == "")
+            attrVal = dflt;
+        object[property] = deser(attrVal);
     }
-    if (svg.hasAttributeNS(null, "width")) {
-        tmp = svg.getAttributeNS(null, "width");
-        if (/^[1-9][0-9]*$/.test(tmp))
-            w = +tmp;
+    function set(value) {
+        node.setAttributeNS(ns, attr, ser(value));
     }
-    if ((!w || !h) && svg.ownerDocument && svg.ownerDocument.defaultView) {
-        w = w || svg.ownerDocument.defaultView.innerWidth;
-        h = h || svg.ownerDocument.defaultView.innerHeight;
-    }
-    w = w || 640;
-    h = h || 480;
-    return [w, h];
+    handle_DOMAttrModified(null);
+    node.addEventListener("DOMAttrModified", handle_DOMAttrModified, false);
+    object["set" + property[0].toUpperCase() + property.substring(1)] = set;
 }
 
 function NL(args) {
     if (!(this instanceof arguments.callee)) return new arguments.callee(args);
     this._drawables = [];
-    this._svg = args.svg;
-    this._drawn = this._svg.ownerDocument.createElementNS(SVG_NS, "g");
-    this._svg.appendChild(this._drawn);
+    this._node = args.node || args;
     this._toDo = [];
     this.stats = {};
-    this.updateDimensions();
+    var dim = this.getDimensions();
+    this.width = dim[0];
+    this.height = dim[1];
 
-    var elts = this._svg.getElementsByTagNameNS(NL_NS, '*');
+    attrProperty(this, "loBound", this._node, NL_NS, "low-bound", sn, ns, "0");
+    attrProperty(this, "length", this._node, NL_NS, "length", sn, ns, "2");
+    attrProperty(this, "xshift", this._node, NL_NS, "dx", Number, String, "0");
+    attrProperty(this, "workTimeslice", this._node, NL_NS, "work-timeslice",
+                 Number, String, 100);
+    attrProperty(this, "restTimeslice", this._node, NL_NS, "work-timeslice",
+                 Number, String, 100);
+
+    var elts = this._node.getElementsByTagNameNS(NL_NS, '*');
     for (var i = 0; i < elts.length; i++) {
         var node = elts.item(i);
         var constructor = null;
@@ -135,33 +130,22 @@ function NL(args) {
         if (constructor) {
             var drawable = constructor(node);
             if (drawable)
-                this.addDrawable(drawable);
+                this.addDrawable(drawable, node);
         }
     }
-    this.activate(args.windowTimers);
+    this.activate(args.windowTimers || window);
 }
 NL.Number = sn;
 NL.ns = NL_NS;
+NL.WHICH_MATH = WHICH_MATH;
 
 NL.prototype = {
-    loBound        : sn("0"),
-    //length         : fn["*"]("10", fn.expt("2","329")),
-    length         : sn("10"),
-    xshift         : 0,
-
     dragging       : false,
     dragPos        : undefined,
     dragX          : undefined,
     dragged        : false,
 
-    workTimeslice  : 100,
-    restTimeslice  : 100,
-
-    //gobbling       : false,
-    redrawCount    : 0,
-    redrawTime     : 0,
-
-    updateDimensions : NL_updateDimensions,
+    getDimensions  : NL_getDimensions,
     addDrawable    : NL_addDrawable,
     removeDrawable : NL_removeDrawable,
 
@@ -177,15 +161,28 @@ NL.prototype = {
     work           : NL_work,
 };
 
-function NL_updateDimensions() {
-    var dim = getSvgPixelDimensions(this._svg);
-    this.width = dim[0];
-    this.height = dim[1];
+function NL_getDimensions() {
+    var nl = this;
+    if (!nl._bbox) {
+        nl._bbox = nl._node.ownerDocument.createElementNS(SVG_NS, "rect");
+        nl._bbox.setAttributeNS(null, "width", "100%");
+        nl._bbox.setAttributeNS(null, "height", "100%");
+        nl._bbox.setAttributeNS(null, "opacity", "0");
+        nl._node.appendChild(nl._bbox);
+    }
+    var bbox = nl._bbox.getBBox();
+    return [bbox.width, bbox.height];
 }
 
-function NL_addDrawable(drawable) {
-    var group = this._svg.ownerDocument.createElementNS(SVG_NS, "g");
-    this._drawn.appendChild(group);
+function NL_addDrawable(drawable, node) {
+    var group = node.previousSibling;
+    if (group == null || !group.getAttributeNS ||
+        group.getAttributeNS(NL_NS, "drawn") != "true")
+    {
+        group = this._node.ownerDocument.createElementNS(SVG_NS, "g");
+        group.setAttributeNS(NL_NS, "drawn", "true");
+        node.parentNode.insertBefore(group, node);
+    }
     this._drawables.push({drawable:drawable, group:group});
 }
 
@@ -193,7 +190,8 @@ function NL_removeDrawable(drawable) {
     for (var i = 0; i < this._drawables.length; i++)
         if (this._drawables[i].drawable === drawable) {
             drawable.destroy();
-            this._drawn.removeChild(this._drawables[i].group);
+            this._drawables[i].group.parentNode
+                .removeChild(this._drawables[i].group);
             this._drawables.splice(i, 1);
             return true;
         }
@@ -215,10 +213,10 @@ DC.prototype.out = function(elt) {
     this.g.appendChild(elt);
 };
 DC.prototype.createSvgElt = function(name) {
-    return this.nl._svg.ownerDocument.createElementNS(SVG_NS, name);
+    return this.nl._node.ownerDocument.createElementNS(SVG_NS, name);
 };
 DC.prototype.createTextNode = function(text) {
-    return this.nl._svg.ownerDocument.createTextNode(text);
+    return this.nl._node.ownerDocument.createTextNode(text);
 };
 
 function NL_beginDraw() {
@@ -243,9 +241,9 @@ function beginXform(nl, xform, loBound, length, xshift, width, height) {
     old.xshift  = nl.xshift;
     old.width   = nl.width;
     old.height  = nl.height;
-    nl.loBound = loBound;
-    nl.length  = length;
-    nl.xshift  = xshift;
+    nl.setLoBound(loBound);
+    nl.setLength(length);
+    nl.setXshift(xshift);
     nl.width   = width;
     nl.height  = height;
 
@@ -277,7 +275,7 @@ function NL_beginZoom(zoomFactor, zoomPos) {
 }
 
 function NL_beginResize() {
-    var dim = getSvgDimensionPixels(this._svg);
+    var dim = this.getDimensions();
     beginXform(this, "beginResize", this.loBound, this.length, this.xshift,
                dim[0], dim[1]);
 }
@@ -293,7 +291,12 @@ function NL_doLast(f) {
 function NL_workUntil(end) {
     var ret = false;
     while (this._toDo.length > 0 && new Date() < end) {
-        this._toDo.shift()();
+        try {
+            this._toDo.shift()();
+        }
+        catch (e) {
+            //alert("Caught exception: " + e);
+        }
         ret = true;
     }
     return ret;
@@ -318,7 +321,7 @@ AbstractDrawable.prototype.beginDraw = function(dc) {
     //alert("Object doesn't override draw: " + this);
 };
 AbstractDrawable.prototype.beginPan = function(dc) {
-    //dc.erase();
+    dc.erase();
     //alert("AbstractDrawable.beginPan");
     return this.beginDraw(dc);
 };
@@ -326,9 +329,8 @@ AbstractDrawable.prototype.beginZoom = AbstractDrawable.prototype.beginPan;
 AbstractDrawable.prototype.beginResize = AbstractDrawable.prototype.beginPan;
 AbstractDrawable.prototype.destroy = function() {};
 
-var captureEvents = ['mousedown', 'mouseup', 'click', 'mousemove',
-                     'DOMMouseScroll'];
-var bubbleEvents = ['resize'];
+var events = ['SVGResize', 'mousedown', 'mouseup', 'click', 'mousemove',
+              'DOMMouseScroll', 'mousewheel'];
 
 NL.prototype.activate = function(windowTimers) {
     var nl = this;
@@ -343,31 +345,30 @@ NL.prototype.activate = function(windowTimers) {
         }
         return handle;
     }
-    function doCapture(name) {
+    function listen(name) {
         nl._listeners[name] = makeHandler(name);
-        nl._svg.addEventListener(name, nl._listeners[name], true);
-    }
-    function doBubble(name) {
-        nl._listeners[name] = makeHandler(name);
-        nl._svg.addEventListener(name, nl._listeners[name], false);
+        nl._node.addEventListener(name, nl._listeners[name], false);
     }
 
     nl.beginDraw();
-    captureEvents.forEach(doCapture);
-    bubbleEvents.forEach(doBubble);
+    events.forEach(listen);
+    // Resize ineffective in Firefox.  Am I doing it wrong?
+    try {
+        window.addEventListener("resize", nl._listeners.SVGResize, false);
+    } catch(e) {}
     nl.work();
 };
 
 NL.prototype.deactivate = function() {
-    function doCapture(name) {
-        nl._svg.removeEventListener(name, nl._listeners[name], true);
-    }
-    function doBubble(name) {
-        nl._svg.removeEventListener(name, nl._listeners[name], false);
+    function unlisten(name) {
+        nl._node.removeEventListener(name, nl._listeners[name], false);
     }
     if (this._listeners) {
-        captureEvents.forEach(doCapture);
-        bubbleEvents.forEach(doBubble);
+        events.forEach(unlisten);
+        try {
+            window.removeEventListener("resize", nl._listeners.SVGResize,
+                                       false);
+        } catch(e) {}
     }
 };
 
@@ -411,9 +412,6 @@ NL.prototype.handle_click = function(evt) {
 
 NL.prototype.statistics = function() {
     var ret = "";
-    ret += "redraws: " + this.redrawCount + " avg " +
-        (this.redrawTime / this.redrawCount / 1000).toFixed(3) + "s\n";
-    ret += "redrawTime: " + this.redrawTime + "\n";
     ret += "loBound=" + this.loBound.SN_debug() + "\n";
     ret += "length=" + this.length.SN_debug() + "\n";
     var stats = this.stats;
@@ -455,15 +453,27 @@ NL.prototype.handleDragEvent = function(evt) {
     }
 }
 
+NL.prototype.handle_mousewheel = function(evt) {
+    this.log("mousewheel", evt);
+    var movePos = fn["/"](fn["*"](fn.exact(evt.detail), this.length), "-3600");
+    this.beginPan(movePos, 0);
+    this.returnFromEvent();
+};
+
 NL.prototype.handle_DOMMouseScroll = function(evt) {
-    this.log("mousescroll", evt);
-    if (evt.axis === evt.VERTICAL_AXIS) {
-        //alert("mousescroll vertical: " + evt.detail);
+    this.log("mousewheel", evt);
+    if (evt.axis === undefined || evt.axis === evt.VERTICAL_AXIS) {
         var movePos = fn["/"](fn["*"](fn.exact(evt.detail), this.length),
                               THIRTY);
         this.beginPan(movePos, 0);
         this.returnFromEvent();
     }
+};
+
+NL.prototype.handle_SVGResize = function(evt) {
+    this.log("resize", evt);
+    this.beginResize();
+    this.returnFromEvent();
 };
 
 return NL;
@@ -544,8 +554,9 @@ Fractions.prototype.beginDraw = function(dc) {
         }
         else {
             scale *= Math.exp((logBigDenom - logD) / 4);
-            if (scale > maxScale)
+            if (scale > maxScale) {
                 scale = maxScale;
+            }
         }
 
         var g = dc.createSvgElt("g");
@@ -598,6 +609,8 @@ CF.prototype.logD = function() {
     return fn.log(this.d);
 };
 CF.prototype.getC = function() {
+    if (this.c !== undefined)
+        return this.c;
     var q = fn["/"](this.n, this.d);
     //print(this.n+"/"+this.d+"="+q);
     var cf = [];
@@ -613,7 +626,7 @@ CF.prototype.getC = function() {
         //print("frac(q)=" + q);
         if (fn["zero?"](q))
             return cf;
-        if (WHICH_MATH === "native" && q < 1e-10) {
+        if (NumberLine.WHICH_MATH === "native" && q < 1e-10) {
             if (cf[cf.length - 1] == 1) {
                 cf[cf.length - 2]++;
                 cf.length--;
@@ -633,6 +646,7 @@ function arrayToList(a) {
 }
 
 function getFractions(low, len, count) {
+    //alert("getFractions(" + ns(low) + "," + ns(len) + "," + count + ")");
     low = sn(low);
     len = sn(len);
 
@@ -757,6 +771,32 @@ function getFractions(low, len, count) {
             //print("midSn=" + midSn + ", bound=" + bound + ", " + boundIsUpper);
             if (fn[boundIsUpper ? ">" : "<"](midSn, bound)) {
                 //print("range does not include mid, xgty=" + xgty);
+                var midToBound = fn.abs(fn["-"](midSn, bound));
+                var logMidToBound = fn.log(midToBound);
+                var q = (boundIsUpper === xgty ? y : x);
+                var logQd = q.logD();
+                var logMidD = mid.logD();
+                /*
+                   Find largest N such that z = {n:N*q.n+mid.n, d:N*q.d+mid.d}
+                   differs from mid by at most exp(logMidToBound).
+                */
+                logSpXdYd = logMidToBound + logQd + logMidD;
+                logN = logMidToBound + (2 * logMidD) - Math.log(1 - Math.exp(logSpXdYd));
+                if (isFinite(logN)) {
+                    N = Math.exp(logN);
+                    if (isFinite(N))
+                        N = fn.exact(Math.floor(N));
+                    else {
+                        log10N = logN / Math.LN10;
+                        exp = Math.floor(log10N);
+                        N = sn("#e" + Math.exp(exp - log10N - 1e-17)
+                               + "e" + exp);
+                    }
+                    midN = fn["+"](fn["*"](N, q.n), mid.n);
+                    midD = fn["+"](fn["*"](N, q.d), mid.d);
+                    mid = CF({n:midN, d:midD});
+                    //print("new mid=" + mid);
+                }
                 return (boundIsUpper === xgty ?
                         between(y, mid, !xgty, bound, boundIsUpper) :
                         between(x, mid, xgty, bound, boundIsUpper))
@@ -770,12 +810,11 @@ function getFractions(low, len, count) {
                 xSide = between(x, mid, xgty);
             }
         }
-        return (xgty ?
+       return (xgty ?
                 ySide.concat([mid]).concat(xSide) :
                 xSide.concat([mid]).concat(ySide));
     }
 
-    //print("mid=" + mid);
     return (between(bottom, mid, false, low, false)
             .concat([mid])
             .concat(between(top, mid, true, high, true)));
@@ -824,6 +863,7 @@ function simpler(f, higher) {
     return CF({n:n, d:d, c:c, l:l});
 }
 
+//this.getFractions = getFractions; // testing
 return Fractions;
 })();
 
@@ -874,7 +914,7 @@ D.prototype.beginDraw = function(dc) {
         scale *= Math.pow(scale10, num.e - logMarkSpace / Math.LN10);
         if (num.m[num.m.length - 1] == '5')
             scale *= scale5;
-        if (scale > maxScale)
+        if (scale > maxScale || num.m == "0")
             scale = maxScale;
 
         var g = dc.createSvgElt("g");
@@ -947,6 +987,8 @@ function getDecimals(low, len, count) {
             e++;
         if (mLen != m.length)
             m = m.substring(0, mLen);
+        if (m == "0")
+            e = 0;
 
         ret.push({ e:e, m: s+m });
     }
