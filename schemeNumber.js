@@ -1459,8 +1459,8 @@ function rationalize(x, delta) {
 
     // Handle weird cases first.
     if (!x.SN_isFinite() || !delta.SN_isFinite()) {
-        toReal(x);
-        toReal(delta);
+        assertReal(x);
+        assertReal(delta);
         if (delta.SN_isInfinite())
             return (x.SN_isFinite() ? INEXACT_ZERO : NAN);
         if (delta.SN_isNaN())
@@ -2909,6 +2909,8 @@ DISP.EI.SN__expt_EI = function(n) {
 function expt_E_EI(z, n) {
     // Return z raised to the power of this integer.
     // We don't get here if either z or this is 0, 1, or -1.
+    //assert(this.SN_abs().SN_gt(ONE));
+    //assert(z.SN_magnitude().SN_gt(ONE) || !z.SN_isInteger());
     var bits = n.SN_abs();
     var squarer = z;
     var ret = ONE;
