@@ -1,3 +1,9 @@
+1.1.0 - 2011-03-17
+
+    * Unstable branch.
+    * Wrap all(?) inexact real results with toFlonum.
+    * Bug fix: Convert fn.atan second argument.
+
 1.0.8 - 2011-03-16
 
     * Make sn("#e1@2") equivalent to fn.exact("1@2").

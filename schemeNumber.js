@@ -104,6 +104,10 @@ var sqrt     = Math.sqrt;
 var atan2    = Math.atan2;
 var log      = Math.log;
 var exp      = Math.exp;
+var atan     = Math.atan;
+var cos      = Math.cos;
+var sin      = Math.sin;
+var tan      = Math.tan;
 var LN2      = Math.LN2;
 var LN10     = Math.LN10;
 var isFinite = this.isFinite;
@@ -182,18 +186,28 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,0,8];
+SchemeNumber.VERSION = [1,1,0];
 
 function isNumber(x) {
     return x instanceof Number || typeof x === "number";
 }
 
-// These three little abstractions are vestiges of a plan for an
-// alternative implementation not affecting Number.prototype.  Maybe
-// in some kind of sandbox environment we'll need it.
+// These abstractions are vestiges of a plan for an alternative
+// implementation not affecting Number.prototype.  Maybe in some kind
+// of sandbox environment we'll need it.
 var toFlonum = Number;
-var floPow = pow;
-var floLog = log;
+var floPow   = pow;
+var floLog   = log;
+var floFloor = floor;
+var floCeil  = ceil;
+var floSqrt  = sqrt;
+var floAtan2 = atan2;
+var floAbs   = abs;
+var floAtan  = atan;
+var floCos   = cos;
+var floSin   = sin;
+var floTan   = tan;
+var floExp   = exp;
 
 var Flonum = Number;  // See comment about internal class hierarchy.
 
@@ -1215,7 +1229,7 @@ var fn = SchemeNumber.fn = {
     atan : function(y, x) {
         switch (arguments.length) {
         case 1: return SN(y).SN_atan();
-        case 2: return SN(y).SN_atan2(x);
+        case 2: return toReal(y).SN_atan2(toReal(x));
         default: wrongArgCount("1-2", arguments);
         }
     },
@@ -1595,11 +1609,11 @@ DISP.Flonum.SN_imagPart = function() {
 };
 
 DISP.Flonum.SN_denominator = function() {
-    return nativeDenominator(assertRational(this));
+    return floPow(2, nativeDenominatorLog2(assertRational(this)));
 };
 
 DISP.Flonum.SN_numerator = function() {
-    return this * nativeDenominator(assertRational(this));
+    return toFlonum(this * nativeDenominator(assertRational(this)));
 };
 
 DISP.Flonum.SN_isInteger = function() {
@@ -1627,6 +1641,7 @@ DISP.Flonum.SN_sign = function() {
     return (this == 0 ? 0 : (this > 0 ? 1 : -1));
 };
 
+// XXX I think we can do without SN_isUnit.
 DISP.Flonum.SN_isUnit = function() {
     return this == 1 || this == -1;
 };
@@ -1656,6 +1671,7 @@ DISP.Flonum.SN_lt = function(x) { return assertReal(x).SN__lt_Flonum(this); };
 DISP.Flonum.SN_ge = function(x) { return assertReal(x).SN__ge_Flonum(this); };
 DISP.Flonum.SN_le = function(x) { return assertReal(x).SN__le_Flonum(this); };
 
+// XXX I think we can do without SN_compare and SN__compare_*.
 DISP.Flonum.SN_compare = function(x) {
     return assertReal(x).SN__compare_Flonum(this);
 };
@@ -1727,28 +1743,28 @@ DISP.Flonum.SN_divide = function(z) {
 };
 
 DISP.Flonum.SN__add_R = function(x) {
-    return x + this;
+    return toFlonum(x + this);
 };
 DISP.Flonum.SN__subtract_R = function(x) {
-    return x - this;
+    return toFlonum(x - this);
 };
 DISP.Flonum.SN__multiply_R = function(x) {
-    return x * this;
+    return toFlonum(x * this);
 };
 DISP.Flonum.SN__divide_R = function(x) {
-    return x / this;
+    return toFlonum(x / this);
 };
 
 DISP.Flonum.SN_negate = function() {
-    return -this;
+    return toFlonum(-this);
 };
 
 DISP.Flonum.SN_abs = function() {
-    return (this < 0 ? -this : this);
+    return (this < 0 ? toFlonum(-this) : this);
 };
 
 DISP.Flonum.SN_reciprocal = function() {
-    return 1 / this;
+    return toFlonum(1 / this);
 };
 
 function div_Flonum_R(x, y) {
@@ -1766,60 +1782,55 @@ DISP.Flonum.SN_divAndMod = function(x) {
     return [toFlonum(div), toFlonum(this - (x * div))];
 };
 DISP.Flonum.SN_div = function(x) {
-    return div_Flonum_R(this, x);
+    return toFlonum(div_Flonum_R(this, x));
 };
 DISP.Flonum.SN_mod = function(x) {
-    return this - x * div_Flonum_R(this, x);
+    return toFlonum(this - x * div_Flonum_R(this, x));
 };
 
 DISP.Flonum.SN_square = function() {
-    return this * this;
+    return toFlonum(this * this);
 };
 
 DISP.Flonum.SN_round = function() {
     var ret = floor(this);
     var diff = this - ret;
-    if (diff < 0.5) return ret;
-    if (diff > 0.5) return ret + 1;
-    return 2 * round(this / 2);
+    if (diff < 0.5) return toFlonum(ret);
+    if (diff > 0.5) return toFlonum(ret + 1);
+    return toFlonum(2 * round(this / 2));
 };
 
 DISP.Flonum.SN_truncate = function() {
-    return (this < 0 ? ceil(this) : floor(this));
+    return this < 0 ? floCeil(this) : floFloor(this);
 };
 
 DISP.Flonum.SN_ceiling = function() {
-    return ceil(this);
+    return floCeil(this);
 };
 
-["abs", "atan", "cos", "exp", "floor", "sin", "tan"]
-    .forEach(function(name) {
-            var fn = Math[name];
-            DISP.Flonum["SN_" + name] = function() {
-                return fn(this);
-            };
-        });
+function funcToMeth(fn) {
+    return function() {
+        return fn(this);
+    };
+}
+DISP.Flonum.SN_abs   = funcToMeth(floAbs);
+DISP.Flonum.SN_atan  = funcToMeth(floAtan);
+DISP.Flonum.SN_cos   = funcToMeth(floCos);
+DISP.Flonum.SN_exp   = funcToMeth(floExp);
+DISP.Flonum.SN_floor = funcToMeth(floFloor);
+DISP.Flonum.SN_sin   = funcToMeth(floSin);
+DISP.Flonum.SN_tan   = funcToMeth(floTan);
 
-["acos", "asin", "log"]
-    .forEach(function(name) {
-            var math = Math[name];
-            var cplx = {acos:complexAcos, asin:complexAsin, log:complexLog}
-                [name];
-            DISP.Flonum["SN_" + name] = function() {
-                var ret = math(this);
-                if (isNaN(ret))
-                    return cplx(this);
-                return ret;
-            };
-        });
-
-DISP.Flonum.SN_sqrt = function() {
-    if (this >= 0)
-        return toFlonum(sqrt(this));
-    if (isNaN(this))
-        return this;
-    return inexactRectangular(INEXACT_ZERO, toFlonum(sqrt(-this)));
-};
+function cplxFuncToMeth(mathFunc, complexFunc) {
+    return function() {
+        var ret = mathFunc(this);
+        if (isNaN(ret))
+            return complexFunc(this);
+        return toFlonum(ret);
+    };
+}
+DISP.Flonum.SN_acos = cplxFuncToMeth(Math.acos, complexAcos);
+DISP.Flonum.SN_asin = cplxFuncToMeth(Math.asin, complexAsin);
 
 DISP.Flonum.SN_log = function() {
     if (this < 0)
@@ -1827,8 +1838,16 @@ DISP.Flonum.SN_log = function() {
     return floLog(this);
 };
 
+DISP.Flonum.SN_sqrt = function() {
+    if (this >= 0)
+        return toFlonum(sqrt(this));
+    if (isNaN(this))
+        return this;
+    return inexactRectangular(INEXACT_ZERO, floSqrt(-this));
+};
+
 DISP.Flonum.SN_atan2 = function(x) {
-    return atan2(this, x);
+    return floAtan2(this, x);
 };
 
 DISP.Flonum.SN_expt = function(z) {
@@ -1838,6 +1857,7 @@ DISP.Flonum.SN_expt = function(z) {
 // Some famous flonums:
 
 var INEXACT_ZERO = toFlonum(0);
+// XXX specialize methods for INEXACT_ZERO?
 
 var INFINITY     = toFlonum(Number.POSITIVE_INFINITY);
 var M_INFINITY   = toFlonum(Number.NEGATIVE_INFINITY);

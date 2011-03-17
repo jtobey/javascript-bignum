@@ -2,6 +2,9 @@ TODO:
 
 * Consider providing the option not to tamper with Number.prototype.
 
+* Consider avoiding "for (x in y)" out of concern for Object.prototype
+  use.
+
 * BigInteger: Consider having pow() reject non-integer arguments.
 
 * Consider aliasing or renaming BigInteger.toString() so as not to
