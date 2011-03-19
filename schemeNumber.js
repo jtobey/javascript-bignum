@@ -141,7 +141,7 @@ function EI() {} EI.prototype = new EQ();      // Exact integers.
 
 var Flonum;
 
-if (true) {
+if (false) {  // XXX Should expose a way to choose this branch.
     // Flonum is Number.
     Flonum = Number;
 }
@@ -268,7 +268,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,1,1];
+SchemeNumber.VERSION = [1,1,2];
 
 var floPow   = flo.pow;
 var floLog   = flo.log;
