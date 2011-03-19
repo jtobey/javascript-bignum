@@ -1,6 +1,6 @@
 TODO:
 
-* Consider providing the option not to tamper with Number.prototype.
+* Create an API to control whether or not we use Number.prototype.
 
 * Consider avoiding "for (x in y)" out of concern for Object.prototype
   use.

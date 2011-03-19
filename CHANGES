@@ -1,3 +1,7 @@
+1.1.1 - 2011-03-19
+
+    * Made code work without affecting Number.prototype (no API yet).
+
 1.1.0 - 2011-03-17
 
     * Unstable branch.

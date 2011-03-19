@@ -130,6 +130,80 @@ function pureVirtual() {
     throw new Error("BUG: Abstract method not overridden");
 }
 
+function C() {}   C.prototype = new Number();  // Complex numbers.
+function R() {}   R.prototype = new C();       // Reals.
+function ER() {} ER.prototype = new R();       // Exact reals.
+function EQ() {} EQ.prototype = new ER();      // Exact rationals.
+function EI() {} EI.prototype = new EQ();      // Exact integers.
+
+// Is the Flonum class simply the native Number?  In that case we will
+// add methods to Number.prototype...
+
+var Flonum;
+
+if (true) {
+    // Flonum is Number.
+    Flonum = Number;
+}
+else {
+    // Flonum is a regular class in the hierarchy.
+    Flonum = function(x) {
+        this._ = x;
+    };
+}
+
+var toFlonum, INEXACT_ZERO, isNumber;
+var flo = {};
+var FLO_FUNCS = [[],
+                 ["log", "floor", "ceil", "sqrt", "abs", "atan",
+                  "cos", "sin", "tan", "exp"],
+                 ["pow", "atan2"]];
+
+if (Flonum === Number) {
+    toFlonum = Number;
+    INEXACT_ZERO = 0;
+
+    isNumber = function(x) {
+        return x instanceof Number || typeof x === "number";
+    };
+    FLO_FUNCS[1].concat(FLO_FUNCS[2]).forEach(function(name) {
+            flo[name] = Math[name];
+        });
+}
+else {
+    Flonum.prototype = new R();
+    INEXACT_ZERO = new Flonum(0);
+
+    toFlonum = function(x) {
+        //assert(typeof x === "number");
+        return (x === 0 ? INEXACT_ZERO : new Flonum(x));
+    };
+    isNumber = function(x) {
+        return x instanceof C;
+    };
+    FLO_FUNCS[1].forEach(function(name) {
+            var math = Math[name];
+            flo[name] = function(a) {
+                return toFlonum(math(a));
+            };
+        });
+    FLO_FUNCS[2].forEach(function(name) {
+            var math = Math[name];
+            flo[name] = function(a, b) {
+                return toFlonum(math(a, b));
+            };
+        });
+    ["toFixed", "toExponential", "toPrecision"].forEach(function(name) {
+            var number = Number.prototype[name];
+            Flonum.prototype[name] = function(a) {
+                return number.call(this._, a);
+            };
+        });
+    Flonum.prototype.valueOf = function() {
+        return this._;
+    };
+}
+
 /* Internal class hierarchy:
 
    Number  <----  C  <----  Rectangular
@@ -170,11 +244,19 @@ function pureVirtual() {
 
 // SN: private alias for the public SchemeNumber object.
 function SN(obj) {
-    if (obj instanceof Number || typeof obj === "number")
+    if (obj instanceof C) {
         return obj;
+    }
+    if (obj instanceof Number || typeof obj === "number") {
+        return toFlonum(+obj);
+    }
+
+    // XXX Should we try obj.valueOf()?
+
     var ret = stringToNumber(String(obj));
-    if (ret === false)
-        raise("&assertion", "not a number", s);
+    if (ret === false) {
+        raise("&assertion", "not a number", obj);
+    }
     return ret;
 }
 // For NaturalDocs:
@@ -186,30 +268,20 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,1,0];
+SchemeNumber.VERSION = [1,1,1];
 
-function isNumber(x) {
-    return x instanceof Number || typeof x === "number";
-}
-
-// These abstractions are vestiges of a plan for an alternative
-// implementation not affecting Number.prototype.  Maybe in some kind
-// of sandbox environment we'll need it.
-var toFlonum = Number;
-var floPow   = pow;
-var floLog   = log;
-var floFloor = floor;
-var floCeil  = ceil;
-var floSqrt  = sqrt;
-var floAtan2 = atan2;
-var floAbs   = abs;
-var floAtan  = atan;
-var floCos   = cos;
-var floSin   = sin;
-var floTan   = tan;
-var floExp   = exp;
-
-var Flonum = Number;  // See comment about internal class hierarchy.
+var floPow   = flo.pow;
+var floLog   = flo.log;
+var floFloor = flo.floor;
+var floCeil  = flo.ceil;
+var floSqrt  = flo.sqrt;
+var floAtan2 = flo.atan2;
+var floAbs   = flo.abs;
+var floAtan  = flo.atan;
+var floCos   = flo.cos;
+var floSin   = flo.sin;
+var floTan   = flo.tan;
+var floExp   = flo.exp;
 
 var HIERARCHY = {
     C: ["Rectangular", "R"],
@@ -1545,14 +1617,15 @@ DISP.Flonum.SN_debug = function() {
 // and possibly a leading "-", that in base 2 equals x.  This works by
 // calling Number.prototype.toString with a radix of 2.  Specification
 // ECMA-262 Edition 5 (December 2009) does not strongly assert that
-// this works.  As an alternative, should this prove non-portable
-// (translation: fails in IE), nativeDenominator could instead do:
+// this works.  As an alternative, should this prove non-portable,
+// nativeDenominator could instead do:
 // for (d = 1; x !== floor(x); d *= 2) { x *= 2; } return d;
 function numberToBinary(x) {
     return x.toString(2);
 }
 
 function nativeDenominatorLog2(x) {
+    //assert(typeof x === "number");
     //assert(isFinite(x));
     var s = numberToBinary(abs(x));
     var i = s.indexOf(".");
@@ -1578,7 +1651,7 @@ DISP.Flonum.SN_numberToString = function(radix, precision) {
         return (this > 0 ? "+inf.0" : "-inf.0");
     }
 
-    var s = this.toString();
+    var s = (+this).toString();
 
     if (s.indexOf('.') === -1) {
         // Force the result to contain a decimal point as per R6RS.
@@ -1591,7 +1664,7 @@ DISP.Flonum.SN_numberToString = function(radix, precision) {
 
     if (precision != undefined) {
         if (precision < 53) {
-            var bits = numberToBinary(this).replace(/[-+.]/g, "")
+            var bits = numberToBinary(+this).replace(/[-+.]/g, "")
                 .replace(/^0+/, "").replace(/0+$/, "").length;
             if (precision < bits)
                 precision = bits;
@@ -1609,11 +1682,11 @@ DISP.Flonum.SN_imagPart = function() {
 };
 
 DISP.Flonum.SN_denominator = function() {
-    return floPow(2, nativeDenominatorLog2(assertRational(this)));
+    return floPow(2, nativeDenominatorLog2(+assertRational(this)));
 };
 
 DISP.Flonum.SN_numerator = function() {
-    return toFlonum(this * nativeDenominator(assertRational(this)));
+    return toFlonum(this * nativeDenominator(+assertRational(this)));
 };
 
 DISP.Flonum.SN_isInteger = function() {
@@ -1856,7 +1929,6 @@ DISP.Flonum.SN_expt = function(z) {
 
 // Some famous flonums:
 
-var INEXACT_ZERO = toFlonum(0);
 // XXX specialize methods for INEXACT_ZERO?
 
 var INFINITY     = toFlonum(Number.POSITIVE_INFINITY);
@@ -1868,10 +1940,6 @@ var PI           = toFlonum(Math.PI);
 //
 // C: Complex abstract base class.
 //
-
-function C() {}
-
-C.prototype = new Flonum();  // See comment about internal class hierarchy.
 
 DISP.C.SN_isReal     = retFalse;
 DISP.C.SN_isRational = retFalse;
@@ -1887,7 +1955,7 @@ DISP.C.toString = function(radix) {
     return this.SN_numberToString(radix);
 };
 DISP.C.valueOf = function() {
-    if (this.SN_imagPart().isZero())
+    if (this.SN_imagPart().SN_isZero())
         return this.SN_realPart().valueOf();
     return NaN;
 };
@@ -1957,9 +2025,6 @@ DISP.C.SN_tan = function() {
 // R: Real abstract base class.
 //
 
-function R() {}
-
-R.prototype = new C();
 DISP.R.SN_isReal = retTrue;
 
 DISP.R.SN_debug = function() { return "R"; };
@@ -2363,14 +2428,11 @@ DISP.Rectangular.SN_exp = function() {
 // ER: Exact real abstract base class.
 //
 
-function ER() {}
-
-ER.prototype = new R();
 DISP.ER.SN_isExact    = retTrue;
 DISP.ER.SN_isInexact  = retFalse;
 
 DISP.ER.SN_toExact    = retThis;
-DISP.ER.SN_toInexact  = function() { return toFlonum(this); };
+DISP.ER.SN_toInexact  = function() { return toFlonum(+this); };
 
 DISP.ER.SN_isNaN      = retFalse;
 DISP.ER.SN_isFinite   = retTrue;
@@ -2476,7 +2538,7 @@ DISP.ER.toPrecision = function(precision) {
     if (precision === undefined) {
         x = this.SN_toInexact();
         if (x.SN_isFinite())
-            return x.toString();
+            return (+x).toString();
         p = 21;
     }
     else {
@@ -2527,9 +2589,6 @@ DISP.ER.toPrecision = function(precision) {
 // EQ: Exact rational abstract base class.
 //
 
-function EQ() {}
-
-EQ.prototype = new ER();
 DISP.EQ.SN_isRational = retTrue;
 
 DISP.EQ.SN_eq = function(z) {
@@ -2771,9 +2830,6 @@ DISP.EQFraction.SN_log = function() {
 // EI: Exact integer abstract base class.
 //
 
-function EI() {}
-
-EI.prototype = new EQ();
 DISP.EI.SN_isInteger = retTrue;
 
 DISP.EI.SN_debug = function() { return "EI"; };
@@ -3316,7 +3372,7 @@ DISP.EIBig.valueOf = function() {
         });
 
 DISP.EIBig.SN_log = function() {
-    var x = this._.abs().log();
+    var x = toFlonum(this._.abs().log());
     return this._.isPositive() ? x : makeRectangular(x, PI);
 };
 
@@ -3505,22 +3561,24 @@ function resolveOverload(className) {
 for (var className in CLASSES)
     resolveOverload(className);
 
-// Workaround for Flonum not inheriting from R.
-for (var methodName in DISP.R) {
-    if (/^SN_/.test(methodName) && !DISP.Flonum[methodName])
-        DISP.Flonum[methodName] = DISP.R[methodName];
-}
+if (Flonum === Number) {
+    // Workaround for Flonum not inheriting from R.
+    for (var methodName in DISP.R) {
+        if (/^SN_/.test(methodName) && !DISP.Flonum[methodName])
+            DISP.Flonum[methodName] = DISP.R[methodName];
+    }
 
-// Workaround for Flonum not inheriting from C.
-for (var methodName in DISP.C) {
-    if (/^SN_/.test(methodName) && !DISP.Flonum[methodName])
-        DISP.Flonum[methodName] = DISP.C[methodName];
-}
+    // Workaround for Flonum not inheriting from C.
+    for (var methodName in DISP.C) {
+        if (/^SN_/.test(methodName) && !DISP.Flonum[methodName])
+            DISP.Flonum[methodName] = DISP.C[methodName];
+    }
 
-// Workaround for C inheriting from Flonum.
-for (var methodName in DISP.Flonum) {
-    if (!DISP.C[methodName])
-        DISP.C[methodName] = unimpl;
+    // Workaround for C inheriting from Flonum.
+    for (var methodName in DISP.Flonum) {
+        if (!DISP.C[methodName])
+            DISP.C[methodName] = unimpl;
+    }
 }
 
 // Install methods.
@@ -3554,3 +3612,5 @@ if (typeof exports !== "undefined") {
     for (var name in SchemeNumber.fn)
         exports[name] = SchemeNumber.fn[name];
 }
+
+// load for testing: load("biginteger.js");load("schemeNumber.js");sn=SchemeNumber;fn=sn.fn;ns=fn["number->string"];1
