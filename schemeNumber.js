@@ -160,7 +160,7 @@ var FLO_FUNCS = [[],
                  ["pow", "atan2"]];
 
 if (Flonum === Number) {
-    toFlonum = Number;
+    toFlonum = retFirst;
     INEXACT_ZERO = 0;
 
     isNumber = function(x) {
@@ -3588,7 +3588,8 @@ for (var className in CLASSES) {
     }
 }
 
-function checkPureVirtual() {
+function checkPureVirtual(handler) {
+    var e = "";
     for (var className in CLASSES) {
         if (!/[a-z]/.test(className)) {
             // Not a concrete class.
@@ -3597,11 +3598,14 @@ function checkPureVirtual() {
         var proto = CLASSES[className].prototype;
         for (methodName in proto) {
             if (proto[methodName] === pureVirtual)
-                print("Pure virtual: " + className + "." + methodName);
+                e += "Pure virtual: " + className + "." + methodName;
         }
     }
+    if (e) {
+        handler(e);
+    }
 }
-checkPureVirtual();
+checkPureVirtual(this.alert || this.print || function(e) {throw e;});
 
 return SN;
 
