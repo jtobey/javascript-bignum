@@ -197,13 +197,13 @@ sub prolog_js {
     print(<<'END');
 load("../biginteger.js");
 load("../schemeNumber.js");
-var sf = SchemeNumber.fn;
-var isNumber = sf["number?"];
-var ns = sf["number->string"];
+var fn = SchemeNumber.fn;
+var isNumber = fn["number?"];
+var ns = fn["number->string"];
 var nums = {
 END
     for my $num (@{$DATA{'o'}}) {
-        print(qq/    "$num":sf["string->number"]("$num"),\n/);
+        print(qq/    "$num":fn["string->number"]("$num"),\n/);
     }
     print(<<'END');
 };
@@ -223,10 +223,10 @@ function test(fname, a, b, c) {
     var x;
     try {
         switch(len) {
-        case 1: x = sf[fname]();        break;
-        case 2: x = sf[fname](a);       break;
-        case 3: x = sf[fname](a, b);    break;
-        case 4: x = sf[fname](a, b, c); break;
+        case 1: x = fn[fname]();        break;
+        case 2: x = fn[fname](a);       break;
+        case 3: x = fn[fname](a, b);    break;
+        case 4: x = fn[fname](a, b, c); break;
         default: x = "Error - unhandled case " + len + " arguments";
         }
         if (isNumber(x)) line += ns(x);

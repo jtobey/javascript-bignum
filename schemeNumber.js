@@ -169,8 +169,9 @@ function SN(obj) {
     if (obj instanceof Number || typeof obj === "number")
         return obj;
     var ret = stringToNumber(String(obj));
-    if (ret === false)
-        raise("&assertion", "not a number", s);
+    if (ret === false) {
+        raise("&assertion", "not a number", obj);
+    }
     return ret;
 }
 // For NaturalDocs:
@@ -182,7 +183,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,0,8];
+SchemeNumber.VERSION = [1,0,9];
 
 function isNumber(x) {
     return x instanceof Number || typeof x === "number";
@@ -1215,7 +1216,7 @@ var fn = SchemeNumber.fn = {
     atan : function(y, x) {
         switch (arguments.length) {
         case 1: return SN(y).SN_atan();
-        case 2: return SN(y).SN_atan2(x);
+        case 2: return toReal(y).SN_atan2(toReal(x));
         default: wrongArgCount("1-2", arguments);
         }
     },
@@ -1531,14 +1532,15 @@ DISP.Flonum.SN_debug = function() {
 // and possibly a leading "-", that in base 2 equals x.  This works by
 // calling Number.prototype.toString with a radix of 2.  Specification
 // ECMA-262 Edition 5 (December 2009) does not strongly assert that
-// this works.  As an alternative, should this prove non-portable
-// (translation: fails in IE), nativeDenominator could instead do:
+// this works.  As an alternative, should this prove non-portable,
+// nativeDenominator could instead do:
 // for (d = 1; x !== floor(x); d *= 2) { x *= 2; } return d;
 function numberToBinary(x) {
     return x.toString(2);
 }
 
 function nativeDenominatorLog2(x) {
+    //assert(typeof x === "number");
     //assert(isFinite(x));
     var s = numberToBinary(abs(x));
     var i = s.indexOf(".");
@@ -1867,7 +1869,7 @@ DISP.C.toString = function(radix) {
     return this.SN_numberToString(radix);
 };
 DISP.C.valueOf = function() {
-    if (this.SN_imagPart().isZero())
+    if (this.SN_imagPart().SN_isZero())
         return this.SN_realPart().valueOf();
     return NaN;
 };

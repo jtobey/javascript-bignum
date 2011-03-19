@@ -68,6 +68,13 @@ script in this directory.
 
 CHANGES
 
+1.0.9 - 2011-03-19
+
+    * Fixes backported from 1.1 branch:
+    * Make sn("garbage") raise an appropriate exception.
+    * Convert fn.atan second argument.
+    * Avoid no-such-method in x.valueOf() for complex x.
+
 1.0.8 - 2011-03-16
 
     * Make sn("#e1@2") equivalent to fn.exact("1@2").
