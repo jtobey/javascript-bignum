@@ -137,9 +137,13 @@ function EQ() {} EQ.prototype = new ER();      // Exact rationals.
 function EI() {} EI.prototype = new EQ();      // Exact integers.
 
 // Is the Flonum class simply the native Number?  In that case we will
-// add methods to Number.prototype...
+// add methods to Number.prototype.
 
 var Flonum;
+
+// Users who wish to optimize the library by stripping support for
+// Number.prototype cleanliness may simply replace "toFlonum("
+// globally with "(" and change false to true here.
 
 if (false) {  // XXX Should expose a way to choose this branch.
     // Flonum is Number.
@@ -513,7 +517,9 @@ function stringToNumber(s, radix, exact) {
     // Common cases first.
     if (!radix || radix == 10) {
         if (/^-?[0-9]{1,15}$/.test(s)) {
-            return (exact === false ? toFlonum : toEINative)(parseInt(s));
+            if (exact === false)
+                return toFlonum(parseInt(s));
+            return toEINative(parseInt(s));
         }
         radix = 10;
     }
@@ -3598,7 +3604,7 @@ function checkPureVirtual(handler) {
         var proto = CLASSES[className].prototype;
         for (methodName in proto) {
             if (proto[methodName] === pureVirtual)
-                e += "Pure virtual: " + className + "." + methodName;
+                e += "Pure virtual: " + className + "." + methodName + "\n";
         }
     }
     if (e) {
