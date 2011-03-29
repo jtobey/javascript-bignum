@@ -1,6 +1,15 @@
 TODO:
 
-* Consider providing the option not to tamper with Number.prototype.
+* Give users control over whether or not we use Number.prototype.
+
+* Make it easy to choose among different implementations of exact
+  integers, exact rationals, and complex numbers.
+
+* Consider supporting a configuration where inexact reals are returned
+  as primitive numbers but Number.prototype is not used.
+
+* Consider avoiding "for (x in y)" out of concern for Object.prototype
+  use.
 
 * BigInteger: Consider having pow() reject non-integer arguments.
 

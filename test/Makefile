@@ -30,6 +30,10 @@ test-sn.%: gen-test.pl
 	./float-filter.pl < $< > $@.tmp
 	mv $@.tmp $@
 
+js.raw.good: test-sn.js
+	$(JSR6RS) $< > $@.tmp
+	mv $@.tmp $@
+
 js.raw: test-sn.js $(JSDEP)
 	$(JSR6RS) $< > $@.tmp
 	mv $@.tmp $@

@@ -32,17 +32,21 @@ to precision.
 
 IMPLEMENTATION DETAILS
 
-The schemeNumber.js library adds properties to the standard
-Number.prototype object using names prefixed by "SN_".  These are
-private to the library and should not be used by applications.  The
-same warning appies to all Scheme number properties whose names begin
-with "_" or "SN_".
+Inexact real numbers are represented as native numbers.  (Versions
+1.0.x of this library returned primitive values and augmented the
+standard Number.prototype with new methods.  The current version wraps
+every number in an object and does not affect Number.prototype.)
 
-Inexact real numbers are represented as native numbers.
+Number objects may contain properties and methods other than the
+standard toString, toFixed, etc.  Such properties have names beginning
+with "_" or "SN_".  They are private to the library, and applications
+should not use them.  The Scheme functions are *not* methods of number
+objects.
 
-Exact integers of absolute value less than 2 to the 53rd power are
-represented as native numbers.  Outside this range, exact integers are
-represented as BigInteger objects.
+Exact integers of absolute value less than 2 to the 53rd power
+(9,007,199,254,740,992 or about 9e15) are represented as native
+numbers.  Outside this range, exact integers are represented as
+BigInteger objects.
 
 Exact rationals are represented as pairs of exact integers (numerator,
 denominator) in lowest terms.
@@ -68,17 +72,13 @@ script in this directory.
 
 CHANGES
 
-1.0.8 - 2011-03-16
+1.1.2 (unstable) - 2011-03-19
 
-    * Make sn("#e1@2") equivalent to fn.exact("1@2").
+    * Do not modify the standard Number.prototype object.
 
-1.0.7 - 2011-03-04
+1.0.9 - 2011-03-19 - Current stable release.
 
-    * parser: optimize simple integer parsing.
-
-1.0.6 - 2011-02-13
-
-    * toFixed: bug fix: include leading "-" in negatives rounded to zero.
+1.0.1 - 2011-02-10 - First numbered release.
 
 See file CHANGES for more.
 
