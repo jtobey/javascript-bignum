@@ -110,8 +110,8 @@ var sin      = Math.sin;
 var tan      = Math.tan;
 var LN2      = Math.LN2;
 var LN10     = Math.LN10;
-var isFinite = this.isFinite;
-var isNaN    = this.isNaN;
+var _isFinite = isFinite;
+var _isNaN    = isNaN;
 
 function retFalse()   { return false; }
 function retTrue()    { return true;  }
@@ -1632,7 +1632,7 @@ function numberToBinary(x) {
 
 function nativeDenominatorLog2(x) {
     //assert(typeof x === "number");
-    //assert(isFinite(x));
+    //assert(_isFinite(x));
     var s = numberToBinary(abs(x));
     var i = s.indexOf(".");
     if (i === -1)
@@ -1643,16 +1643,16 @@ function nativeDenominatorLog2(x) {
 function nativeDenominator(x) {
     // Get the "denominator" of a floating point value.
     // The result will be a power of 2.
-    //assert(isFinite(x));
+    //assert(_isFinite(x));
     return pow(2, nativeDenominatorLog2(x));
 }
 
 DISP.Flonum.SN_numberToString = function(radix, precision) {
-    if (radix && radix != 10 && isFinite(this))
+    if (radix && radix != 10 && _isFinite(this))
         return "#i" + this.SN_toExact().SN_numberToString(radix);
 
-    if (!isFinite(this)) {
-        if (isNaN(this))
+    if (!_isFinite(this)) {
+        if (_isNaN(this))
             return("+nan.0");
         return (this > 0 ? "+inf.0" : "-inf.0");
     }
@@ -1696,11 +1696,11 @@ DISP.Flonum.SN_numerator = function() {
 };
 
 DISP.Flonum.SN_isInteger = function() {
-    return isFinite(this) && this == floor(this);
+    return _isFinite(this) && this == floor(this);
 };
 
 DISP.Flonum.SN_isFinite = function() {
-    return isFinite(this);
+    return _isFinite(this);
 };
 DISP.Flonum.SN_isRational = DISP.Flonum.SN_isFinite;
 
@@ -1726,11 +1726,11 @@ DISP.Flonum.SN_isUnit = function() {
 };
 
 DISP.Flonum.SN_isInfinite = function() {
-    return !isFinite(this) && !isNaN(this);
+    return !_isFinite(this) && !_isNaN(this);
 };
 
 DISP.Flonum.SN_isNaN = function() {
-    return isNaN(this);
+    return _isNaN(this);
 };
 
 DISP.Flonum.SN_isEven = function() {
@@ -1777,7 +1777,7 @@ function numberToEI(n) {
 }
 
 function nativeToExact(x) {
-    if (!isFinite(x))
+    if (!_isFinite(x))
         raise("&implementation-violation",
               "inexact argument has no reasonably close exact equivalent", x);
 
@@ -1787,7 +1787,7 @@ function nativeToExact(x) {
     if (d === 1)
         return numberToEI(x);
 
-    if (isFinite(d)) {
+    if (_isFinite(d)) {
         n = x * d;
         d = numberToEI(d);
     }
@@ -1798,7 +1798,7 @@ function nativeToExact(x) {
         n *= pow(2, dl2 - 53);
         d = positiveIntegerExpt(TWO, dl2);
     }
-    //assert(isFinite(n));
+    //assert(_isFinite(n));
     return canonicalEQ(numberToEI(n), d);
 }
 
@@ -1903,7 +1903,7 @@ DISP.Flonum.SN_tan   = funcToMeth(floTan);
 function cplxFuncToMeth(mathFunc, complexFunc) {
     return function() {
         var ret = mathFunc(this);
-        if (isNaN(ret))
+        if (_isNaN(ret))
             return complexFunc(this);
         return toFlonum(ret);
     };
@@ -1920,7 +1920,7 @@ DISP.Flonum.SN_log = function() {
 DISP.Flonum.SN_sqrt = function() {
     if (this >= 0)
         return toFlonum(sqrt(this));
-    if (isNaN(this))
+    if (_isNaN(this))
         return this;
     return inexactRectangular(INEXACT_ZERO, floSqrt(-this));
 };
@@ -2677,7 +2677,7 @@ DISP.EQFraction.valueOf = function() {
     var n = this._n;
     var d = this._d;
     var ret = n / d;
-    if (!isNaN(ret))
+    if (!_isNaN(ret))
         return ret;
     if (n.SN_isNegative())
         return -exp(n.SN_negate().SN_log() - d.SN_log());
