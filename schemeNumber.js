@@ -213,21 +213,24 @@ else {
 
 /* Internal class hierarchy:
 
-   Number  <----  C  <----  Rectangular
-                       |
-                       `--  R  <----  Flonum[1]
-                                 |
-                                 `--  ER  <---  EQ  <----  EQFraction
-                                                      |
-                                                      `--  EI  <----  EINative
-                                                                 |
-                                                                 `--  EIBig
+   Number
+     ^
+     N
+     ^
+     C  <----  Rectangular
+                   |
+                   `--  R  <----  Flonum[1]
+                             |
+                             `--  ER  <---  EQ  <----  EQFraction
+                                                  |
+                                                  `--  EI  <----  EINative
+                                                             |
+                                                             `--  EIBig
 
-   [1] The Flonum class actually equals Number for reasons of
-   efficiency and interoperability with native numbers.  Logically,
-   Flonum should be a direct subclass of R.  Code at the bottom of
-   this file populates missing slots in Flonum.prototype as if that
-   were the case.
+   [1] In some configurations, the Flonum class actually equals Number
+   for reasons of efficiency.  Logically, Flonum should be a direct
+   subclass of R.  Initialization code populates missing slots in
+   Flonum.prototype as if that were the case.
 
    The concrete classes are:
 
@@ -251,7 +254,7 @@ else {
 
 // SN: private alias for the public SchemeNumber object.
 function SN(obj) {
-    if (obj instanceof C) {
+    if (obj instanceof N) {
         return obj;
     }
     if (obj instanceof Number || typeof obj === "number") {
@@ -275,7 +278,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,1,2];
+SchemeNumber.VERSION = [1,1,3];
 
 var floPow   = flo.pow;
 var floLog   = flo.log;
