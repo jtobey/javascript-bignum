@@ -832,7 +832,7 @@ SN.maxIntegerDigits = 1e6;  // 1 million digits.
 
         <Scheme functions>
 */
-var fn = SchemeNumber.fn = {
+SchemeNumber.fn = {
 
 /*
     About: Function list
