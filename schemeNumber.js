@@ -132,6 +132,18 @@ function ER() {} ER.prototype = new R();       // Exact reals.
 function EQ() {} EQ.prototype = new ER();      // Exact rationals.
 function EI() {} EI.prototype = new EQ();      // Exact integers.
 
+// How to split a rectangular literal into real and imaginary components:
+var decimalComplex = /^(.*[^a-zA-Z]|)([-+].*)i$/;
+var radixComplex = /^(.*)([-+].*)i$/;
+
+var nanInfPattern = /^[-+](nan|inf)\.0$/;
+var exponentMarkerPattern = /[eEsSfFdDlL]/;
+var decimal10Pattern = /^([0-9]+\.?|[0-9]*\.[0-9]+)([eEsSfFdDlL][-+]?[0-9]+)?$/;
+
+var uintegerPattern = {
+    2: /^[01]+$/, 8: /^[0-7]+$/, 10: /^[0-9]+$/, 16: /^[0-9a-fA-F]+$/
+};
+
 function retZero()    { return ZERO; }
 function retOne()     { return ONE; }
 
@@ -315,18 +327,6 @@ for (var className in CLASSES) {
 //
 // Input functions.
 //
-
-// How to split a rectangular literal into real and imaginary components:
-var decimalComplex = /^(.*[^a-zA-Z]|)([-+].*)i$/;
-var radixComplex = /^(.*)([-+].*)i$/;
-
-var nanInfPattern = /^[-+](nan|inf)\.0$/;
-var exponentMarkerPattern = /[eEsSfFdDlL]/;
-var decimal10Pattern = /^([0-9]+\.?|[0-9]*\.[0-9]+)([eEsSfFdDlL][-+]?[0-9]+)?$/;
-
-var uintegerPattern = {
-    2: /^[01]+$/, 8: /^[0-7]+$/, 10: /^[0-9]+$/, 16: /^[0-9a-fA-F]+$/
-};
 
 var PARSE_ERROR = new Object();
 
