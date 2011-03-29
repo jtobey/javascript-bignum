@@ -117,12 +117,7 @@ function retFalse()   { return false; }
 function retTrue()    { return true;  }
 function retFirst(a)  { return a; }
 function retThis()    { return this; }
-function retZero()    { return ZERO; }
-function retOne()     { return ONE; }
 
-function divisionByExactZero() {
-    raise("&assertion", "division by exact zero");
-}
 function unimpl() {
     throw new Error("BUG: unimplemented");
 }
@@ -130,11 +125,19 @@ function pureVirtual() {
     throw new Error("BUG: Abstract method not overridden");
 }
 
-function C() {}   C.prototype = new Number();  // Complex numbers.
+function N() {}   N.prototype = new Number();  // Scheme numbers.
+function C() {}   C.prototype = new N();       // Complex numbers.
 function R() {}   R.prototype = new C();       // Reals.
 function ER() {} ER.prototype = new R();       // Exact reals.
 function EQ() {} EQ.prototype = new ER();      // Exact rationals.
 function EI() {} EI.prototype = new EQ();      // Exact integers.
+
+function retZero()    { return ZERO; }
+function retOne()     { return ONE; }
+
+function divisionByExactZero() {
+    raise("&assertion", "division by exact zero");
+}
 
 // Is the Flonum class simply the native Number?  In that case we will
 // add methods to Number.prototype.
