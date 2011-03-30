@@ -269,13 +269,29 @@ function SN(obj) {
     if (obj instanceof N) {
         return obj;
     }
-    if (obj instanceof Number || typeof obj === "number") {
-        return toFlonum(+obj);
+
+    var ret = obj;
+
+    if (typeof ret !== "string") {
+        if (typeof ret === "number") {
+            return toFlonum(ret);
+        }
+        if (ret instanceof Number) {
+            return toFlonum(+ret);
+        }
+
+        if (ret == null) {
+            // XXX Rethink this.
+            return (ret === null ? INEXACT_ZERO : NAN);
+        }
+
+        ret = ret.valueOf();
+        if (typeof ret === "number") {
+            return toFlonum(ret);
+        }
+        ret = String(ret);
     }
-
-    // XXX Should we try obj.valueOf()?
-
-    var ret = stringToNumber(String(obj));
+    ret = stringToNumber(ret);
     if (ret === false) {
         raise("&assertion", "not a number", obj);
     }
@@ -290,7 +306,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,1,3];
+SchemeNumber.VERSION = [1,1,4];
 
 var floPow   = flo.pow;
 var floLog   = flo.log;

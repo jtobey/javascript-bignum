@@ -1,3 +1,7 @@
+1.1.4 (unstable) - 2011-03-29
+
+    * ECMAScript-like conversions: sn(new Date()) means sn(+new Date()).
+
 1.1.2 (unstable) - 2011-03-19
 
     * Do not modify the standard Number.prototype object.
