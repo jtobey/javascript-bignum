@@ -112,6 +112,7 @@ var LN2      = Math.LN2;
 var LN10     = Math.LN10;
 var _isFinite = isFinite;
 var _isNaN    = isNaN;
+var _parseInt = parseInt;
 
 function retFalse()   { return false; }
 function retTrue()    { return true;  }
@@ -363,7 +364,7 @@ function stringToNumber(s, radix, exact) {
         if (!uintegerPattern[radix].test(s))
             lose();
 
-        var n = parseInt(s, radix);
+        var n = _parseInt(s, radix);
 
         if (exact === false)
             return toFlonum(sign * n);
@@ -410,7 +411,7 @@ function stringToNumber(s, radix, exact) {
                 lose();
 
             s = s.substring(0, pipe);
-            var precision = parseInt(afterPipe);
+            var precision = _parseInt(afterPipe);
 
             if (precision === 0)
                 s = "0.0";
@@ -443,7 +444,7 @@ function stringToNumber(s, radix, exact) {
                 fraction = "";
             else
                 fraction = s.substring(dot + 1, e);
-            exponent = parseInt(s.substring(e + 1));
+            exponent = _parseInt(s.substring(e + 1));
         }
 
         return parseUinteger(integer + fraction, sign)
@@ -540,8 +541,8 @@ function stringToNumber(s, radix, exact) {
     if (!radix || radix == 10) {
         if (/^-?[0-9]{1,15}$/.test(s)) {
             if (exact === false)
-                return toFlonum(parseInt(s));
-            return toEINative(parseInt(s));
+                return toFlonum(_parseInt(s));
+            return toEINative(_parseInt(s));
         }
         radix = 10;
     }
@@ -2477,7 +2478,7 @@ function zeroes(count) {
 
 // Specified by ECMA-262, 5th edition, 15.7.4.5.
 DISP.ER.toFixed = function(fractionDigits) {
-    var f = (fractionDigits === undefined ? 0 : parseInt(fractionDigits));
+    var f = (fractionDigits === undefined ? 0 : _parseInt(fractionDigits));
     if (f > SN.maxIntegerDigits)
         throw new RangeError("fractionDigits exceeds " +
                              "SchemeNumber.maxIntegerDigits: " +
@@ -2513,7 +2514,7 @@ DISP.ER.toFixed = function(fractionDigits) {
 };
 
 DISP.ER.toExponential = function(fractionDigits) {
-    var f = (fractionDigits === undefined ? 20 : parseInt(fractionDigits));
+    var f = (fractionDigits === undefined ? 20 : _parseInt(fractionDigits));
     if (f < 0)
         throw new RangeError("SchemeNumber toExponential: negative " +
                              "argument: " + f);
@@ -2570,7 +2571,7 @@ DISP.ER.toPrecision = function(precision) {
         p = 21;
     }
     else {
-        p = parseInt(precision);
+        p = _parseInt(precision);
         if (p < 1)
             throw new RangeError("SchemeNumber toPrecision: expected a " +
                                  "positive precision, got: " + precision);
@@ -2591,7 +2592,7 @@ DISP.ER.toPrecision = function(precision) {
 
     var ret = x.toExponential(p - 1);
     var eIndex = ret.indexOf('e');
-    var exponent = parseInt(ret.substring(eIndex + 1));
+    var exponent = _parseInt(ret.substring(eIndex + 1));
     if (exponent >= -6 && exponent < p) {
         if (exponent === 0)
             ret = ret.substring(0, eIndex);
@@ -3345,7 +3346,7 @@ DISP.EINative.SN__exp10 = function(n) {
     }
     if (n < 16) {
         // Could make substring+parseInt an array lookup.
-        var result = parseInt("1000000000000000".substring(0, n + 1)) * this._;
+        var result = _parseInt("1000000000000000".substring(0, n + 1)) * this._;
         if (result > -9007199254740992 && result < 9007199254740992)
             return toEINative(result);
     }
