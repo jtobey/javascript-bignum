@@ -172,7 +172,7 @@ else {
     };
 }
 
-var toFlonum, INEXACT_ZERO, isNumber;
+var toFlonum, isNumber;
 var flo = {};
 var FLO_FUNCS = [[],
                  ["log", "floor", "ceil", "sqrt", "abs", "atan",
@@ -181,7 +181,6 @@ var FLO_FUNCS = [[],
 
 if (Flonum === Number) {
     toFlonum = retFirst;
-    INEXACT_ZERO = 0;
 
     isNumber = function(x) {
         return x instanceof Number || typeof x === "number";
@@ -192,14 +191,17 @@ if (Flonum === Number) {
 }
 else {
     Flonum.prototype = new R();
-    INEXACT_ZERO = new Flonum(0);
 
-    toFlonum = function(x) {
-        //assert(typeof x === "number");
-        return (x === 0 ? INEXACT_ZERO : new Flonum(x));
-    };
+    (function() {
+        var inexactZero = new Flonum(0);
+        toFlonum = function(x) {
+            //assert(typeof x === "number");
+            return (x === 0 ? inexactZero : new Flonum(x));
+        };
+    })();
+
     isNumber = function(x) {
-        return x instanceof C;
+        return x instanceof N;
     };
     FLO_FUNCS[1].forEach(function(name) {
             var math = Math[name];
@@ -1958,7 +1960,7 @@ DISP.Flonum.SN_expt = function(z) {
 
 // Some famous flonums:
 
-// XXX specialize methods for INEXACT_ZERO?
+var INEXACT_ZERO = toFlonum(0);
 
 var INFINITY     = toFlonum(Number.POSITIVE_INFINITY);
 var M_INFINITY   = toFlonum(Number.NEGATIVE_INFINITY);
