@@ -113,6 +113,7 @@ var LN10     = Math.LN10;
 var _isFinite = isFinite;
 var _isNaN    = isNaN;
 var _parseInt = parseInt;
+var _parseFloat = parseFloat;
 
 function retFalse()   { return false; }
 function retTrue()    { return true;  }
@@ -366,15 +367,10 @@ function stringToNumber(s, radix, exact) {
         if (!uintegerPattern[radix].test(s))
             lose();
 
-        var n = _parseInt(s, radix);
-
         if (exact === false)
-            return toFlonum(sign * n);
+            return toFlonum(sign * _parseInt(s, radix));
 
-        if (n < 9007199254740992)
-            return toEINative(sign * n);
-
-        return parseEIBig(s, sign, radix);
+        return parseEI(sign, s, radix);
     }
     function parseReal(s) {
         if (nanInfPattern.test(s)) {
@@ -433,7 +429,7 @@ function stringToNumber(s, radix, exact) {
             lose();
 
         if (!exact)
-            return toFlonum(sign * parseFloat(s));
+            return toFlonum(sign * _parseFloat(s));
 
         var integer = s.substring(0, dot === -1 ? e : dot);
         var exponent = 0;
@@ -449,8 +445,8 @@ function stringToNumber(s, radix, exact) {
             exponent = _parseInt(s.substring(e + 1));
         }
 
-        return parseUinteger(integer + fraction, sign)
-            .SN__exp10(exponent - fraction.length);
+        return parseDecimal(sign, integer + fraction,
+                            exponent - fraction.length);
     }
     function parseComplex(s) {
         var a = s.indexOf('@');
@@ -507,13 +503,13 @@ function stringToNumber(s, radix, exact) {
             var xabs = x.SN_abs();
 
             var shift = precision - floor(xabs.SN_log() / LN2) - 1;
-            var scale = positiveIntegerExpt(TWO, abs(shift));
+            var scale = TWO.SN_expt(toEINative(abs(shift)));
             if (shift < 0)
                 scale = scale.SN_reciprocal();
             var shifted = xabs.SN_multiply(scale);
 
             // Correct for log() imprecision.
-            var denom = positiveIntegerExpt(TWO, precision);
+            var denom = TWO.SN_expt(toEINative(precision));
             while (shifted.SN_ge(denom)) {
                 shifted = shifted.SN_divide(TWO);
                 scale = scale.SN_divide(TWO);
@@ -1821,7 +1817,7 @@ function nativeToExact(x) {
         var dl2 = nativeDenominatorLog2(x);
         n = x * 9007199254740992;
         n *= pow(2, dl2 - 53);
-        d = positiveIntegerExpt(TWO, dl2);
+        d = TWO.SN_expt(toEINative(dl2));
     }
     //assert(_isFinite(n));
     return canonicalEQ(numberToEI(n), d);
@@ -2620,6 +2616,10 @@ DISP.ER.toPrecision = function(precision) {
 // EQ: Exact rational abstract base class.
 //
 
+function parseDecimal(sign, significand, exponent) {
+    return parseEI(sign, significand).SN__exp10(exponent);
+}
+
 DISP.EQ.SN_isRational = retTrue;
 
 DISP.EQ.SN_eq = function(z) {
@@ -2861,6 +2861,15 @@ DISP.EQFraction.SN_log = function() {
 // EI: Exact integer abstract base class.
 //
 
+function parseEI(sign, string, radix) {
+    var n = _parseInt(string, radix);
+
+    if (n < 9007199254740992)
+        return toEINative(sign * n);
+
+    return parseEIBig(string, sign, radix);
+}
+
 DISP.EI.SN_isInteger = retTrue;
 
 DISP.EI.SN_debug = function() { return "EI"; };
@@ -2982,34 +2991,36 @@ DISP.EI.SN__divide_EQ = function(q) {
     return reduceEQ(q.SN_numerator(), q.SN_denominator().SN_multiply(this));
 };
 
-function positiveIntegerExpt(b, p) {
-    //assert(p > 0);
-    //assert(p == round(p));
-    var result = pow(b, p);
-    if (result > -9007199254740992 && result < 9007199254740992)
-        return toEINative(result);
-
-    var newLog = b.SN_log() * p;
-    if (newLog > SN.maxIntegerDigits * LN10)
-        raise("&implementation-restriction",
-              "exact integer would exceed limit of " + (+SN.maxIntegerDigits) +
-              " digits; adjust SchemeNumber.maxIntegerDigits",
-              newLog / LN10);
-
-    return new EIBig(b.SN__toBigInteger().pow(p));
-}
-
 DISP.EI.SN_expt = function(z) {
     return z.SN__expt_EI(this);
 };
 
 DISP.EI.SN__expt_EI = function(n) {
     // Return n to the power of this integer.
+
     var s = this.SN_sign();
-    // Any inexactness is beyond the range that will fit in memory, we
-    // assume.
-    //assert(this.SN_abs().SN_gt(ONE));
-    var a = positiveIntegerExpt(n, this.SN_abs().valueOf());
+    var p = this.SN_abs().valueOf();
+
+    // If p != this due to inexactness, our result would exhaust memory,
+    // since |n| is at least 2.  (expt is specialized for -1, 0, and 1.)
+    //assert(n.SN_abs().SN_ge(2));
+
+    var result = pow(n, p);
+    var a;
+    if (result > -9007199254740992 && result < 9007199254740992) {
+        a = toEINative(result);
+    }
+    else {
+        var newLog = n.SN_log() * p;
+        if (newLog > SN.maxIntegerDigits * LN10)
+            raise("&implementation-restriction",
+                  "exact integer would exceed limit of " +
+                  (+SN.maxIntegerDigits) +
+                  " digits; adjust SchemeNumber.maxIntegerDigits",
+                  newLog / LN10);
+
+        a = new EIBig(n.SN__toBigInteger().pow(p));
+    }
     return (s > 0 ? a : a.SN_reciprocal());
 };
 
@@ -3404,7 +3415,7 @@ DISP.EIBig.valueOf = function() {
 
 DISP.EIBig.SN_log = function() {
     var x = toFlonum(this._.abs().log());
-    return this._.isPositive() ? x : makeRectangular(x, PI);
+    return this._.isPositive() ? x : inexactRectangular(x, PI);
 };
 
 DISP.EIBig.SN_debug = function() {
@@ -3649,3 +3660,11 @@ if (typeof exports !== "undefined") {
 }
 
 // load for testing: load("biginteger.js");load("schemeNumber.js");sn=SchemeNumber;fn=sn.fn;ns=fn["number->string"];1
+
+/*
+  Export to plugins: N C R ER EQ EI pureVirtual <everything gotten from plugins>
+  raise
+
+  Get from plugins: toFlonum parseEI toEINative
+  parseDecimal exactRectangular inexactRectangular makePolar
+ */
