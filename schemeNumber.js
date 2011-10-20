@@ -124,7 +124,7 @@ function unimpl() {
     throw new Error("BUG: unimplemented");
 }
 function pureVirtual() {
-    throw new Error("BUG: Abstract method not overridden");
+    throw new Error("BUG: Abstract method not overridden for " + this);
 }
 
 function N() {}   N.prototype = new Number();  // Scheme numbers.
@@ -3649,6 +3649,14 @@ function checkPureVirtual(handler) {
 }
 checkPureVirtual(this.alert || this.print || function(e) {throw e;});
 
+SN.pluginApi = {
+    N:N, C:C, R:R, ER:ER, EQ:EQ, EI:EI, pureVirtual:pureVirtual, raise:raise
+};
+SN._bogusApi = {
+    Flonum:Flonum, Rectangular:Rectangular, EQFraction:EQFraction,
+    EINative:EINative, EIBig:EIBig
+};
+
 return SN;
 
 })();
@@ -3662,9 +3670,12 @@ if (typeof exports !== "undefined") {
 // load for testing: load("biginteger.js");load("schemeNumber.js");sn=SchemeNumber;fn=sn.fn;ns=fn["number->string"];1
 
 /*
-  Export to plugins: N C R ER EQ EI pureVirtual <everything gotten from plugins>
-  raise
+  Export to plugins:
+  * N C R ER EQ EI pureVirtual raise
+  * everything supplied by plugins
+  * some way to "install" binary operators
 
-  Get from plugins: toFlonum parseEI toEINative
-  parseDecimal exactRectangular inexactRectangular makePolar
+  Get from plugins:
+  toFlonum parseEI toEINative parseDecimal
+  exactRectangular inexactRectangular makePolar
  */
