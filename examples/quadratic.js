@@ -103,7 +103,7 @@ Quadratic.prototype.toString = function() {
 };
 
 function debug(q) {
-    return "Quadratic(" + q + ")";
+    return "Quadratic(" + q.toString() + ")";
 }
 
 Quadratic.prototype.valueOf = function() {
@@ -219,7 +219,7 @@ function negate(q) {
 // XXX core should do this when we pass our operators to a nice, new
 // high-level interface, say sn.pluginApi.addType("Quadratic", Quadratic,
 // {add_EQ:add_EQ,...}).
-Quadratic.prototype.SN_debug = function() { return debug(this.toString()); };
+Quadratic.prototype.SN_debug = function() { return debug(this); };
 Quadratic.prototype.SN_negate = function() { return negate(this); };
 Quadratic.prototype.SN__add_EQ = function(q) { return add_EQ(this, q); };
 Quadratic.prototype.SN__subtract_EQ = function(q) { return add_EQ(this.SN_negate(), q); };
