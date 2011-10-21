@@ -1,5 +1,29 @@
 // Exact quadratic numbers.  Incomplete.
-// XXX should avoid "i in x" construct due to concerns about
+
+// I take quadratic to mean satisfying some quadratic equation with
+// integer coefficients.  The quadratic numbers are the rationals
+// along with their real square roots and anything you can get by
+// adding such numbers.  The sum, difference, product, and quotient
+// of two quadratic numbers, if real, are themselves quadratic.
+// They are also called constructible numbers:
+// http://en.wikipedia.org/wiki/Constructible_number
+
+// The simplest irrational example is the square root of 2.
+
+// The goal here is to represent them exactly in Scheme and return
+// exact results where the standard requires it.
+
+// Field operations (+ - * /) are relatively easy.  Comparisons (< >
+// positive? negative?) are the hard ones and are not yet begun here.
+
+// The purpose of this file is to test ideas for supporting extension
+// of the core set of types defined in schemeNumber.js.
+
+// This file is incomplete; if complete, it would present a clean,
+// module-like interface and would not rely on the variables "fn",
+// "sn", and "ns" in the global environment.
+
+// XXX We should avoid "i in x" construct due to concerns about
 // Object.prototype.  Looking for a good alternative.
 
 function assert(x) { if (!x) throw new Error("assertion failed"); }
