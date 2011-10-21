@@ -1,17 +1,14 @@
 // Exact quadratic numbers.  Incomplete.
 
 // The quadratic numbers are the rationals along with their real
-// square roots and anything you can get by adding such numbers.  The
-// sum, difference, product, and quotient of two quadratic numbers, if
-// real, are themselves quadratic.
+// square roots and everything obtainable by adding together such
+// numbers.  The sum, difference, product, and quotient of two
+// quadratic numbers are themselves quadratic.
 
 // The simplest irrational example is the square root of 2.
 
-// The goal here is to represent them exactly in Scheme and return
-// exact results where the standard requires it.
-
-// Field operations (+ - * /) are relatively easy.  Comparisons (< >
-// positive? negative?) are the hard ones and are not yet begun here.
+// The goal here is to represent these numbers exactly in Scheme and
+// return exact results where the standard requires it.
 
 // The purpose of this file is to test ideas for supporting extension
 // of the core set of types defined in schemeNumber.js.
@@ -30,6 +27,7 @@ function factorize(n) {
     assert(fn["positive?"](n));
     var ret = {};
     // Stupidly factor n into primes.
+    // Lots of room for optimization, I think.
     var sqrtN = fn["exact-integer-sqrt"](n)[0];
     var ONE = sn("1");
     var TWO = sn("2");
@@ -237,30 +235,6 @@ function negate(q) {
     return new Quadratic(r);
 }
 
-// XXX core should do this when we pass our operators to a nice, new
-// high-level interface, say sn.pluginApi.addType("Quadratic", Quadratic,
-// {add_EQ:add_EQ,...}).
-Quadratic.prototype.SN_debug = function() { return debug(this); };
-Quadratic.prototype.SN_negate = function() { return negate(this); };
-Quadratic.prototype.SN__add_EQ = function(q) { return add_EQ(this, q); };
-Quadratic.prototype.SN__subtract_EQ = function(q) { return add_EQ(this.SN_negate(), q); };
-Quadratic.prototype.SN__add_Quadratic = function(q) { return add_Quadratic(this, q); };
-Quadratic.prototype.SN__subtract_Quadratic = function(q) { return add_Quadratic(this.SN_negate(), q); };
-Quadratic.prototype.SN_add = function(z) { return z.SN__add_Quadratic(this); };
-Quadratic.prototype.SN_subtract = function(z) { return z.SN__subtract_Quadratic(this); };
-sn.pluginApi.C.prototype.SN__add_Quadratic = sn.pluginApi.C.prototype.SN__add_Real;
-sn.pluginApi.C.prototype.SN__subtract_Quadratic = sn.pluginApi.C.prototype.SN__subtract_Real;
-sn.pluginApi.ER.prototype.SN__add_Quadratic = sn.pluginApi.pureVirtual;
-sn.pluginApi.ER.prototype.SN__subtract_Quadratic = sn.pluginApi.pureVirtual;
-sn.pluginApi.EQ.prototype.SN__add_Quadratic = function(q) { return add_EQ(q, this); };
-sn.pluginApi.EQ.prototype.SN__subtract_Quadratic = function(q) { return add_EQ(q, this.SN_negate()); };
-sn._bogusApi.EINative.prototype.SN__add_Quadratic = sn.pluginApi.EQ.prototype.SN__add_Quadratic;
-sn._bogusApi.EINative.prototype.SN__subtract_Quadratic = sn.pluginApi.EQ.prototype.SN__subtract_Quadratic;
-// ...
-Quadratic.prototype.SN__add_EINative = Quadratic.prototype.SN__add_EQ;
-Quadratic.prototype.SN__subtract_EINative = Quadratic.prototype.SN__subtract_EQ;
-// ...
-
 function _multiply_EQ(x, eq) {
     assert(fn["rational?"](eq));
     var ret = {};
@@ -309,5 +283,114 @@ function multiply_EQ(quad, rat) {
 function multiply_Quadratic(q, r) {
     return _toSN(_multiply(q._, r._));
 }
+
+// Returns q and r such that x == q + r * sqrt(p) and neither q nor r
+// contains the square root of a number divisible by p.
+function _decompose(x, p) {
+    var q = null;
+    var r = null;
+    for (var i in x) {
+        var c = x[i];
+        var n = sn(i);
+        var dm = fn["div-and-mod"](n, p);
+        //print("divmod(" + n + ", " + p + ") == " + dm);
+        if (fn["zero?"](dm[1])) {
+            r = r || {};
+            r[dm[0]] = c;
+        }
+        else {
+            q = q || {};
+            q[i] = c;
+        }
+    }
+    return [q, r];
+}
+
+// Return true if X is positive.  PRIMES must be a sorted array of
+// exact integers containing each prime factor of each key of x.  That
+// is, of each number whose square root is taken in x.  X must be nonzero.
+function _isPositive(x, primes) {
+    while (primes.length) {
+        var p = primes.pop();
+        var qr = _decompose(x, p);
+        var q = qr[0];
+        var r = qr[1];
+        // x == q + r * sqrt(p)
+        // No number under the radical in q or r is divisible by p.
+        if (!q) {
+            x = r;
+            continue;
+        }
+        if (!r) {
+            x = q;
+            continue;
+        }
+        // We want to know whether Q + R * sqrt(P) > 0.
+        // It is easier to find whether Q - R * sqrt(P) > 0.
+        // Once we know that, we can multiply the two numbers and
+        // determine whether the product is positive.
+        // X > 0 iff the product and Q-R*sqrt(P) share the same sign.
+        var mprr = _multiply_EQ(_multiply(r, r), p);
+        _negate(mprr, mprr);
+        var qqmprr = _add(_multiply(q, q), mprr);
+
+        // qqmprr == Q^2 - P*R^2, the product described above.
+        // Q-R*sqrt(P) is positive iff Q > R*sqrt(P).
+        // Clearly, sqrt(P) is positive, so this falls into two cases:
+        // If R>0, then test whether Q>0 and Q^2 > P*R^2.
+        // If R<0, then test whether Q>0 or Q^2 < P*R^2.
+        // We can tell which of Q^2 and P*R^2 is greater by testing the
+        // sign of their difference, qqmprr.
+        var a = _isPositive(qqmprr, primes.slice());
+        var b = _isPositive(r, primes.slice());
+        var c = _isPositive(q, primes.slice());
+        return a == (b ? (c && a) : (c || a));
+    }
+    return fn["positive?"](x[1]);
+}
+
+function isPositive(q) {
+    // Find all prime factors of numbers under radicals in x.
+    var primes = [];
+    var seen = {};
+    for (var i in q._) {
+        var factors = factorize(sn(i));
+        for (var f in factors) {
+            if (!seen[f]) {
+                primes.push(sn(f));
+                seen[f] = true;
+            }
+        }
+    }
+    primes.sort(fn["-"]);  // XXX should convert "-" result to JS number?
+    return _isPositive(q._, primes);
+}
+
+// XXX core should do this when we pass our operators to a nice, new
+// high-level interface, say sn.pluginApi.addType("Quadratic", Quadratic,
+// {add_EQ:add_EQ,...}).
+Quadratic.prototype.SN_debug = function() { return debug(this); };
+Quadratic.prototype.SN_negate = function() { return negate(this); };
+Quadratic.prototype.SN_isPositive = function() { return isPositive(this); };
+Quadratic.prototype.SN_isNegative = function() { return !isPositive(this); };
+Quadratic.prototype.SN_sign = function() { return isPositive(this) ? 1 : -1; };
+Quadratic.prototype.SN__add_EQ = function(q) { return add_EQ(this, q); };
+Quadratic.prototype.SN__subtract_EQ = function(q) { return add_EQ(this.SN_negate(), q); };
+Quadratic.prototype.SN__add_Quadratic = function(q) { return add_Quadratic(this, q); };
+Quadratic.prototype.SN__subtract_Quadratic = function(q) { return add_Quadratic(this.SN_negate(), q); };
+Quadratic.prototype.SN_add = function(z) { return z.SN__add_Quadratic(this); };
+Quadratic.prototype.SN_subtract = function(z) { return z.SN__subtract_Quadratic(this); };
+sn.pluginApi.C.prototype.SN__add_Quadratic = sn.pluginApi.C.prototype.SN__add_Real;
+sn.pluginApi.C.prototype.SN__subtract_Quadratic = sn.pluginApi.C.prototype.SN__subtract_Real;
+sn.pluginApi.ER.prototype.SN__add_Quadratic = sn.pluginApi.pureVirtual;
+sn.pluginApi.ER.prototype.SN__subtract_Quadratic = sn.pluginApi.pureVirtual;
+sn.pluginApi.EQ.prototype.SN__add_Quadratic = function(q) { return add_EQ(q, this); };
+sn.pluginApi.EQ.prototype.SN__subtract_Quadratic = function(q) { return add_EQ(q, this.SN_negate()); };
+sn._bogusApi.EINative.prototype.SN__add_Quadratic = sn.pluginApi.EQ.prototype.SN__add_Quadratic;
+sn._bogusApi.EINative.prototype.SN__subtract_Quadratic = sn.pluginApi.EQ.prototype.SN__subtract_Quadratic;
+// ... and so on for EIBig, EI, EQRational.
+Quadratic.prototype.SN__add_EINative = Quadratic.prototype.SN__add_EQ;
+Quadratic.prototype.SN__subtract_EINative = Quadratic.prototype.SN__subtract_EQ;
+// ...
 
 // ... incomplete.
