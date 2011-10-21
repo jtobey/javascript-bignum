@@ -1,12 +1,10 @@
 // Exact quadratic numbers.  Incomplete.
 
-// I take quadratic to mean satisfying some quadratic equation with
-// integer coefficients.  The quadratic numbers are the rationals
-// along with their real square roots and anything you can get by
-// adding such numbers.  The sum, difference, product, and quotient
-// of two quadratic numbers, if real, are themselves quadratic.
-// They are also called constructible numbers:
-// http://en.wikipedia.org/wiki/Constructible_number
+// The quadratic numbers are the rationals along with their real
+// square roots and anything you can get by adding such numbers.  The
+// sum, difference, product, and quotient of two quadratic numbers, if
+// real, are themselves quadratic.  They are also called constructible
+// numbers: http://en.wikipedia.org/wiki/Constructible_number
 
 // The simplest irrational example is the square root of 2.
 
