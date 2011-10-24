@@ -76,16 +76,15 @@ function factorSquares(n) {
 var Quadratic = function(x) {
     this._ = x;
 };
-Quadratic.prototype = new sn.pluginApi.ER();
 
 var ROOT_START = "\u221A";  // Unicode Character 'SQUARE ROOT'
 var ROOT_END = "";
 //var ROOT_START = "sqrt("; var ROOT_END = ")";
 
-Quadratic.prototype.toString = function() {
+function numberToString(q, radix) {
     var ret = "";
-    for (var n in this._) {  // XXX should sort.
-        var c = this._[n];
+    for (var n in q._) {  // XXX should sort.
+        var c = q._[n];
         if (fn["positive?"](c)) {
             if (ret != "") {
                 ret += "+";
@@ -99,8 +98,8 @@ Quadratic.prototype.toString = function() {
         // Express c * sqrt(n).
 
         // Trivial case n=1, express c.
-        if (fn["="](n, "1")) {
-            ret += ns(c);
+        if (n === "1") {
+            ret += c.toString(radix);
             continue;
         }
 
@@ -109,26 +108,33 @@ Quadratic.prototype.toString = function() {
 
         var num = fn.numerator(c);
         if (!fn["="](num, "1")) {
-            ret += ns(num);
+            ret += num.toString(radix);
         }
-        ret += ROOT_START + ns(n) + ROOT_END;
+        ret += ROOT_START;
+        if (radix && radix != 10) {
+            ret += sn(n).toString(radix);
+        }
+        else {
+            ret += n;
+        }
+        ret += ROOT_END;
 
         if (!fn["integer?"](c)) {
             var den = fn.denominator(c);
-            ret += "/" + ns(den);
+            ret += "/" + den.toString(radix);
         }
     }
     return ret;
 };
 
 function debug(q) {
-    return "Quadratic(" + q.toString() + ")";
+    return "Quadratic(" + numberToString(q) + ")";
 }
 
-Quadratic.prototype.valueOf = function() {
+function valueOf(q) {
     var ret = 0;
-    for (var n in this._) {
-        var c = this._[n];
+    for (var n in q._) {
+        var c = q._[n];
         ret += c * Math.sqrt(n);
     }
     return ret;
@@ -205,7 +211,7 @@ function _add(x, y) {
 function _toSN(x) {
     var ret = sn("0");
     for (i in x) {
-        if (i == "1") {
+        if (i === "1") {
             ret = x[i];
         }
         else {
@@ -221,11 +227,11 @@ function _negate(q, r) {
     }
 }
 
-function add_EQ(quad, rat) {
+function add_Quadratic_EQ(quad, rat) {
     return _toSN(_add(quad._, _upgrade_EQ(rat)));
 }
 
-function add_Quadratic(q, r) {
+function add_Quadratic_Quadratic(q, r) {
     return _toSN(_add(q._, r._));
 }
 
@@ -268,9 +274,10 @@ function _multiply(x, y) {
     var ret = {};
     for (n in y) {
         var c = y[n];
-        n = sn(n);
         var tmp = _multiply_EQ(x, c);
-        tmp = _multiply_single(tmp, n);
+        if (n != "1") {
+            tmp = _multiply_single(tmp, sn(n));
+        }
         ret = _add(ret, tmp);
     }
     return ret;
@@ -280,13 +287,14 @@ function multiply_EQ(quad, rat) {
     return _toSN(_multiply(quad._, _upgrade_EQ(rat)));
 }
 
-function multiply_Quadratic(q, r) {
+function multiply_Quadratic_Quadratic(q, r) {
     return _toSN(_multiply(q._, r._));
 }
 
 // Returns q and r such that x == q + r * sqrt(p) and neither q nor r
-// contains the square root of a number divisible by p.
-function _decompose(x, p) {
+// contains the square root of a number divisible by p.  If isDivide
+// is true, the second returned element shall be r*sqrt(p) instead of r.
+function _decompose(x, p, isDivide) {
     var q = null;
     var r = null;
     for (var i in x) {
@@ -296,7 +304,7 @@ function _decompose(x, p) {
         //print("divmod(" + n + ", " + p + ") == " + dm);
         if (fn["zero?"](dm[1])) {
             r = r || {};
-            r[dm[0]] = c;
+            r[isDivide ? i : dm[0]] = c;
         }
         else {
             q = q || {};
@@ -309,10 +317,11 @@ function _decompose(x, p) {
 // Return true if X is positive.  PRIMES must be a sorted array of
 // exact integers containing each prime factor of each key of x.  That
 // is, of each number whose square root is taken in x.  X must be nonzero.
-function _isPositive(x, primes) {
-    while (primes.length) {
-        var p = primes.pop();
-        var qr = _decompose(x, p);
+// XXX Should avoid work when all components of X are of one sign.
+function _isPositive(x, primes, primeIndex) {
+    while (primeIndex > 0) {
+        var p = primes[--primeIndex];
+        var qr = _decompose(x, p, false);
         var q = qr[0];
         var r = qr[1];
         // x == q + r * sqrt(p)
@@ -325,35 +334,29 @@ function _isPositive(x, primes) {
             x = q;
             continue;
         }
+        var qGt0 = _isPositive(q, primes, primeIndex);
+        var rGt0 = _isPositive(r, primes, primeIndex);
+        if (rGt0 === qGt0) {
+            return rGt0;
+        }
         // We want to know whether Q + R * sqrt(P) > 0.
-        // It is easier to find whether Q - R * sqrt(P) > 0.
-        // Once we know that, we can multiply the two numbers and
-        // determine whether the product is positive.
-        // X > 0 iff the product and Q-R*sqrt(P) share the same sign.
-        var mprr = _multiply_EQ(_multiply(r, r), p);
-        _negate(mprr, mprr);
-        var qqmprr = _add(_multiply(q, q), mprr);
-
-        // qqmprr == Q^2 - P*R^2, the product described above.
-        // Q-R*sqrt(P) is positive iff Q > R*sqrt(P).
-        // Clearly, sqrt(P) is positive, so this falls into two cases:
-        // If R>0, then test whether Q>0 and Q^2 > P*R^2.
-        // If R<0, then test whether Q>0 or Q^2 < P*R^2.
-        // We can tell which of Q^2 and P*R^2 is greater by testing the
-        // sign of their difference, qqmprr.
-        var a = _isPositive(qqmprr, primes.slice());
-        var b = _isPositive(r, primes.slice());
-        var c = _isPositive(q, primes.slice());
-        return a == (b ? (c && a) : (c || a));
+        // Q > -R*sqrt(P)
+        // (Q > 0) ? (R < 0 && Q^2 > R^2*P) : (R < 0 || Q^2 < R^2*P)
+        // Check whether Q^2 - (R^2)*P is positive.
+        var mr2p = _multiply_EQ(_multiply(r, r), p);
+        _negate(mr2p, mr2p);
+        var q2GtR2p = _isPositive(_add(_multiply(q, q), mr2p), primes,
+                                  primeIndex);
+        return (qGt0 === q2GtR2p);
     }
     return fn["positive?"](x[1]);
 }
 
-function isPositive(q) {
-    // Find all prime factors of numbers under radicals in x.
+// Return a sorted array of all prime factors of numbers under radicals in x.
+function _primes(x) {
     var primes = [];
     var seen = {};
-    for (var i in q._) {
+    for (var i in x) {
         var factors = factorize(sn(i));
         for (var f in factors) {
             if (!seen[f]) {
@@ -363,29 +366,70 @@ function isPositive(q) {
         }
     }
     primes.sort(fn["-"]);  // XXX should convert "-" result to JS number?
-    return _isPositive(q._, primes);
+    return primes;
+}
+
+function isPositive(q) {
+    var primes = _primes(q._);
+    return _isPositive(q._, primes, primes.length);
+}
+
+function _divide(x, y, primes) {
+    while (primes.length) {
+        var p = primes.pop();
+        var qr = _decompose(y, p, true);
+        var q = qr[0];
+        var r = qr[1];
+        // y == q + r
+        // No number under the radical in q or r/sqrt(p) is divisible by p.
+        if (!r) {
+            continue;
+        }
+        if (!q) {
+            x = _multiply_single(x, p);
+            y = _multiply_single(y, p);
+            continue;
+        }
+        // Multiply x and y by (q-r) to clear sqrt(p) from y.
+        _negate(r, q);
+        x = _multiply(x, q);
+        y = _multiply(y, q);
+    }
+    return _multiply_EQ(x, fn["/"](y[1]));
+}
+
+function divide_Quadratic_Quadratic(q, r) {
+    return _toSN(_divide(q._, r._, _primes(r._)));
+}
+
+function divide_EQ_Quadratic(rat, quad) {
+    return _toSN(_divide(_upgrade_EQ(rat), quad._, _primes(quad._)));
 }
 
 // XXX core should do this when we pass our operators to a nice, new
 // high-level interface, say sn.pluginApi.addType("Quadratic", Quadratic,
-// {add_EQ:add_EQ,...}).
+// sn.pluginApi.ER, {add_Quadratic_EQ:add_Quadratic_EQ,...}).
+Quadratic.prototype = new sn.pluginApi.ER();
+
+Quadratic.prototype.SN_numberToString = function(r, p) { return numberToString(this, r); };
+Quadratic.prototype.valueOf = function() { return valueOf(this); };
 Quadratic.prototype.SN_debug = function() { return debug(this); };
 Quadratic.prototype.SN_negate = function() { return negate(this); };
 Quadratic.prototype.SN_isPositive = function() { return isPositive(this); };
 Quadratic.prototype.SN_isNegative = function() { return !isPositive(this); };
 Quadratic.prototype.SN_sign = function() { return isPositive(this) ? 1 : -1; };
-Quadratic.prototype.SN__add_EQ = function(q) { return add_EQ(this, q); };
-Quadratic.prototype.SN__subtract_EQ = function(q) { return add_EQ(this.SN_negate(), q); };
-Quadratic.prototype.SN__add_Quadratic = function(q) { return add_Quadratic(this, q); };
-Quadratic.prototype.SN__subtract_Quadratic = function(q) { return add_Quadratic(this.SN_negate(), q); };
+Quadratic.prototype.SN__add_EQ = function(q) { return add_Quadratic_EQ(this, q); };
+Quadratic.prototype.SN__subtract_EQ = function(q) { return add_Quadratic_EQ(this.SN_negate(), q); };
+Quadratic.prototype.SN__add_Quadratic = function(q) { return add_Quadratic_Quadratic(this, q); };
+Quadratic.prototype.SN__subtract_Quadratic = function(q) { return add_Quadratic_Quadratic(this.SN_negate(), q); };
 Quadratic.prototype.SN_add = function(z) { return z.SN__add_Quadratic(this); };
 Quadratic.prototype.SN_subtract = function(z) { return z.SN__subtract_Quadratic(this); };
 sn.pluginApi.C.prototype.SN__add_Quadratic = sn.pluginApi.C.prototype.SN__add_Real;
 sn.pluginApi.C.prototype.SN__subtract_Quadratic = sn.pluginApi.C.prototype.SN__subtract_Real;
 sn.pluginApi.ER.prototype.SN__add_Quadratic = sn.pluginApi.pureVirtual;
 sn.pluginApi.ER.prototype.SN__subtract_Quadratic = sn.pluginApi.pureVirtual;
-sn.pluginApi.EQ.prototype.SN__add_Quadratic = function(q) { return add_EQ(q, this); };
-sn.pluginApi.EQ.prototype.SN__subtract_Quadratic = function(q) { return add_EQ(q, this.SN_negate()); };
+sn.pluginApi.EQ.prototype.SN__add_Quadratic = function(q) { return add_Quadratic_EQ(q, this); };
+sn.pluginApi.EQ.prototype.SN__subtract_Quadratic = function(q) { return add_Quadratic_EQ(q, this.SN_negate()); };
 sn._bogusApi.EINative.prototype.SN__add_Quadratic = sn.pluginApi.EQ.prototype.SN__add_Quadratic;
 sn._bogusApi.EINative.prototype.SN__subtract_Quadratic = sn.pluginApi.EQ.prototype.SN__subtract_Quadratic;
 // ... and so on for EIBig, EI, EQRational.
