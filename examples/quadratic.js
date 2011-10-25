@@ -283,7 +283,7 @@ function _multiply(x, y) {
     return ret;
 }
 
-function multiply_EQ(quad, rat) {
+function multiply_Quadratic_EQ(quad, rat) {
     return _toSN(_multiply(quad._, _upgrade_EQ(rat)));
 }
 
@@ -374,6 +374,28 @@ function isPositive(q) {
     return _isPositive(q._, primes, primes.length);
 }
 
+function isZero(q) {
+    return false;
+}
+
+function equals_Quadratic_EQ(q, r) {
+    return false;
+}
+
+function equals_Quadratic_Quadratic(q, r) {
+    for (i in q) {
+        if (r[i] === undefined || !fn["="](q[i], r[i])) {
+            return false;
+        }
+    }
+    for (i in r) {
+        if (q[i] === undefined) {
+            return false;
+        }
+    }
+    return true;
+}
+
 function _divide(x, y, primes) {
     while (primes.length) {
         var p = primes.pop();
@@ -407,8 +429,25 @@ function divide_EQ_Quadratic(rat, quad) {
 }
 
 // XXX core should do this when we pass our operators to a nice, new
-// high-level interface, say sn.pluginApi.addType("Quadratic", Quadratic,
-// sn.pluginApi.ER, {add_Quadratic_EQ:add_Quadratic_EQ,...}).
+// high-level interface, say
+if (false)  // until addType exists
+sn.pluginApi.addType("Quadratic", Quadratic, "ER", {
+    "numberToString": numberToString,
+    // XXX how to hook into the number parser?
+    "debug": debug,
+    "valueOf": valueOf,
+    "add(Quadratic,EQ)": add_Quadratic_EQ,
+    "add(Quadratic,Quadratic)": add_Quadratic_Quadratic,
+    "negate(Quadratic)": negate,
+    "multiply(Quadratic,EQ": multiply_Quadratic_EQ,
+    "multiply(Quadratic,Quadratic)": multiply_Quadratic_Quadratic,
+    "divide(EQ,Quadratic)": divide_EQ_Quadratic,
+    "divide(Quadratic,Quadratic)": divide_Quadratic_Quadratic,
+    "isPositive(Quadratic)": isPositive,
+    "isZero(Quadratic)": isZero,
+    "equals(Quadratic,EQ)": equals_Quadratic_EQ,
+    "equals(Quadratic,Quadratic)": equals_Quadratic_Quadratic,
+});
 Quadratic.prototype = new sn.pluginApi.ER();
 
 Quadratic.prototype.SN_numberToString = function(r, p) { return numberToString(this, r); };
