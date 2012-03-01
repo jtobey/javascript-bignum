@@ -72,6 +72,10 @@ script in this directory.
 
 CHANGES
 
+1.1.5 (unstable) - 2012-03-01
+
+    * Fixed parser bug affecting numbers like "#e.021".
+
 1.1.2 (unstable) - 2011-03-19
 
     * Do not modify the standard Number.prototype object.

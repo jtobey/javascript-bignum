@@ -310,7 +310,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,1,4];
+SchemeNumber.VERSION = [1,1,5];
 
 var floPow   = flo.pow;
 var floLog   = flo.log;

@@ -1,3 +1,10 @@
+1.1.5 (unstable) - 2012-03-01
+
+    * Fixed parser bug affecting numbers like "#e.021" on platforms
+      where parseInt("021") returns 17 instead of 21 as specified by
+      ECMA.
+    * Various minor improvements and reorganizations.
+
 1.1.4 (unstable) - 2011-03-29
 
     * ECMAScript-like conversions: sn(new Date()) means sn(+new Date()).
