@@ -409,7 +409,7 @@ function stringToNumber(s, radix, exact) {
                 lose();
 
             s = s.substring(0, pipe);
-            var precision = _parseInt(afterPipe);
+            var precision = _parseInt(afterPipe, 10);
 
             if (precision === 0)
                 s = "0.0";
@@ -442,7 +442,7 @@ function stringToNumber(s, radix, exact) {
                 fraction = "";
             else
                 fraction = s.substring(dot + 1, e);
-            exponent = _parseInt(s.substring(e + 1));
+            exponent = _parseInt(s.substring(e + 1), 10);
         }
 
         return parseDecimal(sign, integer + fraction,
@@ -539,8 +539,8 @@ function stringToNumber(s, radix, exact) {
     if (!radix || radix == 10) {
         if (/^-?[0-9]{1,15}$/.test(s)) {
             if (exact === false)
-                return toFlonum(_parseInt(s));
-            return toEINative(_parseInt(s));
+                return toFlonum(_parseInt(s, 10));
+            return toEINative(_parseInt(s, 10));
         }
         radix = 10;
     }
@@ -2476,7 +2476,7 @@ function zeroes(count) {
 
 // Specified by ECMA-262, 5th edition, 15.7.4.5.
 DISP.ER.toFixed = function(fractionDigits) {
-    var f = (fractionDigits === undefined ? 0 : _parseInt(fractionDigits));
+    var f = (fractionDigits === undefined ? 0 : _parseInt(fractionDigits, 10));
     if (f > SN.maxIntegerDigits)
         throw new RangeError("fractionDigits exceeds " +
                              "SchemeNumber.maxIntegerDigits: " +
@@ -2512,7 +2512,7 @@ DISP.ER.toFixed = function(fractionDigits) {
 };
 
 DISP.ER.toExponential = function(fractionDigits) {
-    var f = (fractionDigits === undefined ? 20 : _parseInt(fractionDigits));
+    var f = (fractionDigits === undefined ? 20 : _parseInt(fractionDigits, 10));
     if (f < 0)
         throw new RangeError("SchemeNumber toExponential: negative " +
                              "argument: " + f);
@@ -2569,7 +2569,7 @@ DISP.ER.toPrecision = function(precision) {
         p = 21;
     }
     else {
-        p = _parseInt(precision);
+        p = _parseInt(precision, 10);
         if (p < 1)
             throw new RangeError("SchemeNumber toPrecision: expected a " +
                                  "positive precision, got: " + precision);
@@ -2590,7 +2590,7 @@ DISP.ER.toPrecision = function(precision) {
 
     var ret = x.toExponential(p - 1);
     var eIndex = ret.indexOf('e');
-    var exponent = _parseInt(ret.substring(eIndex + 1));
+    var exponent = _parseInt(ret.substring(eIndex + 1), 10);
     if (exponent >= -6 && exponent < p) {
         if (exponent === 0)
             ret = ret.substring(0, eIndex);
@@ -2862,7 +2862,7 @@ DISP.EQFraction.SN_log = function() {
 //
 
 function parseEI(sign, string, radix) {
-    var n = _parseInt(string, radix);
+    var n = _parseInt(string, radix || 10);
 
     if (n < 9007199254740992)
         return toEINative(sign * n);
