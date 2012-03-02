@@ -55,6 +55,20 @@ Non-real complex numbers are represented in rectangular coordinates,
 either both exact or both inexact.
 
 
+SIMILAR PROJECTS
+
+* Danny Yoo's Whalesong (https://github.com/dyoo/js-numbers), a Racket
+  (Scheme) to JavaScript compiler with its own Scheme numeric tower
+  called js-numbers (https://github.com/dyoo/js-numbers).
+
+* Leemon Baird's big integer library (http://www.leemon.com/crypto/BigInt.js).
+
+* HOP (http://hop.inria.fr/), a framework containing a Scheme-to-JS
+  compiler that did NOT implement the numeric tower as of 2011.
+
+* Any others out there???
+
+
 INSTALLATION
 
 Copy biginteger.js and schemeNumber.js from this directory to your Web
