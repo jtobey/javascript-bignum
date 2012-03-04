@@ -310,7 +310,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,1,5];
+SchemeNumber.VERSION = [1,1,6];
 
 var floPow   = flo.pow;
 var floLog   = flo.log;
@@ -1404,8 +1404,8 @@ function fn_isEqv(a, b) {
     arguments.length === 2 || args2(arguments);
     if (a === b)
         return true;
-    a = SN(a);
-    b = SN(b);
+    if (!isNumber(a) || !isNumber(b))
+        return false;
     return (a.SN_eq(b) && a.SN_isExact() === b.SN_isExact());
 }
 

@@ -1,3 +1,7 @@
+1.1.6 (unstable) - 2012-03-04
+
+    * Fixed bug in fn["eqv?"] affecting non-numeric arguments.
+
 1.1.5 (unstable) - 2012-03-01
 
     * Fixed parser bug affecting numbers like "#e.021" on platforms
