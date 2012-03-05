@@ -1,5 +1,5 @@
-// Scheme numerical tower in JavaScript.  Described in README.
-// Copyright (c) 2011 by John Tobey <John.Tobey@gmail.com>
+// Scheme numerical tower in JavaScript.
+// Copyright (c) 2011,2012 by John Tobey <John.Tobey@gmail.com>
 
 /*
     File: schemeNumber.js
@@ -310,7 +310,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,1,6];
+SchemeNumber.VERSION = [1,2,0];
 
 var floPow   = flo.pow;
 var floLog   = flo.log;

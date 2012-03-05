@@ -1,6 +1,6 @@
 Scheme arithmetic library for JavaScript,
 https://github.com/jtobey/javascript-bignum.
-Copyright (c) 2010,2011 John Tobey <John.Tobey@gmail.com>
+Copyright (c) 2010,2011,2012 John Tobey <John.Tobey@gmail.com>
 Copyright (c) 2009 Matthew Crumley <email@matthewcrumley.com>
 Licensed under the MIT license, file LICENSE.
 Big integer implementation based on javascript-biginteger,
@@ -33,9 +33,10 @@ to precision.
 IMPLEMENTATION DETAILS
 
 Inexact real numbers are represented as native numbers.  (Versions
-1.0.x of this library returned primitive values and augmented the
-standard Number.prototype with new methods.  The current version wraps
-every number in an object and does not affect Number.prototype.)
+1.0.x of this library returned ordinary JavaScript numbers and added
+properties to the standard Number.prototype object.  The current
+version wraps every number in an object and does not affect
+Number.prototype.)
 
 Number objects may contain properties and methods other than the
 standard toString, toFixed, etc.  Such properties have names beginning
@@ -57,9 +58,9 @@ either both exact or both inexact.
 
 SIMILAR PROJECTS
 
-* Danny Yoo's Whalesong (https://github.com/dyoo/js-numbers), a Racket
-  (Scheme) to JavaScript compiler with its own Scheme numeric tower
-  called js-numbers (https://github.com/dyoo/js-numbers).
+* Danny Yoo's Whalesong (http://hashcollision.org/whalesong/), a
+  Racket (Scheme) to JavaScript compiler with its own Scheme numeric
+  tower called js-numbers (https://github.com/dyoo/js-numbers).
 
 * Leemon Baird's big integer library (http://www.leemon.com/crypto/BigInt.js).
 
@@ -86,6 +87,8 @@ script in this directory.
 
 CHANGES
 
+1.2.0 - 2012-03-04 - Current stable release.
+
 1.1.5 (unstable) - 2012-03-01
 
     * Fixed parser bug affecting numbers like "#e.021".
@@ -93,8 +96,6 @@ CHANGES
 1.1.2 (unstable) - 2011-03-19
 
     * Do not modify the standard Number.prototype object.
-
-1.0.9 - 2011-03-19 - Current stable release.
 
 1.0.1 - 2011-02-10 - First numbered release.
 

@@ -1,23 +1,16 @@
 TODO:
 
-* Give users control over whether or not we use Number.prototype.
-
 * Make it easy to choose among different implementations of exact
   integers, exact rationals, and complex numbers.
+
+* Give users control over whether or not we use Number.prototype.
 
 * Consider supporting a configuration where inexact reals are returned
   as primitive numbers but Number.prototype is not used.
 
-* Consider avoiding "for (x in y)" out of concern for Object.prototype
-  use.
+* Avoid "for (x in y)" out of concern for Object.prototype use.
 
-* BigInteger: Consider having pow() reject non-integer arguments.
-
-* Consider aliasing or renaming BigInteger.toString() so as not to
-  conflict with the default toString().
-
-* BigInteger: Consider patching multiplySingleDigit to support
-  negative "this".
+* Implement integers using another library, such as Leemon Baird's.
 
 * Consider a BigDecimal class like Java's BigDecimal.
 

@@ -1,3 +1,8 @@
+1.2.0 - 2012-03-04
+
+    * Stable release with unmodified Number.prototype.
+    * Added test case for recent fix.
+
 1.1.6 (unstable) - 2012-03-04
 
     * Fixed bug in fn["eqv?"] affecting non-numeric arguments.
