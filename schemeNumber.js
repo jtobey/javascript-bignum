@@ -183,7 +183,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,0,9];
+SchemeNumber.VERSION = [1,0,10];
 
 function isNumber(x) {
     return x instanceof Number || typeof x === "number";
@@ -252,7 +252,7 @@ function stringToNumber(s, radix, exact) {
         if (!uintegerPattern[radix].test(s))
             lose();
 
-        var n = parseInt(s, radix);
+        var n = parseInt(s, radix || 10);
 
         if (exact === false)
             return toFlonum(sign * n);
@@ -299,7 +299,7 @@ function stringToNumber(s, radix, exact) {
                 lose();
 
             s = s.substring(0, pipe);
-            var precision = parseInt(afterPipe);
+            var precision = parseInt(afterPipe, 10);
 
             if (precision === 0)
                 s = "0.0";
@@ -332,7 +332,7 @@ function stringToNumber(s, radix, exact) {
                 fraction = "";
             else
                 fraction = s.substring(dot + 1, e);
-            exponent = parseInt(s.substring(e + 1));
+            exponent = parseInt(s.substring(e + 1), 10);
         }
 
         return parseUinteger(integer + fraction, sign)
@@ -428,7 +428,7 @@ function stringToNumber(s, radix, exact) {
     // Common cases first.
     if (!radix || radix == 10) {
         if (/^-?[0-9]{1,15}$/.test(s)) {
-            return (exact === false ? toFlonum : toEINative)(parseInt(s));
+            return (exact === false ? toFlonum : toEINative)(parseInt(s, 10));
         }
         radix = 10;
     }
@@ -1292,8 +1292,8 @@ function fn_isEqv(a, b) {
     arguments.length === 2 || args2(arguments);
     if (a === b)
         return true;
-    a = SN(a);
-    b = SN(b);
+    if (!isNumber(a) || !isNumber(b))
+        return false;
     return (a.SN_eq(b) && a.SN_isExact() === b.SN_isExact());
 }
 
@@ -2369,7 +2369,7 @@ function zeroes(count) {
 
 // Specified by ECMA-262, 5th edition, 15.7.4.5.
 DISP.ER.toFixed = function(fractionDigits) {
-    var f = (fractionDigits === undefined ? 0 : parseInt(fractionDigits));
+    var f = (fractionDigits === undefined ? 0 : parseInt(fractionDigits, 10));
     if (f > SN.maxIntegerDigits)
         throw new RangeError("fractionDigits exceeds " +
                              "SchemeNumber.maxIntegerDigits: " +
@@ -2405,7 +2405,7 @@ DISP.ER.toFixed = function(fractionDigits) {
 };
 
 DISP.ER.toExponential = function(fractionDigits) {
-    var f = (fractionDigits === undefined ? 20 : parseInt(fractionDigits));
+    var f = (fractionDigits === undefined ? 20 : parseInt(fractionDigits, 10));
     if (f < 0)
         throw new RangeError("SchemeNumber toExponential: negative " +
                              "argument: " + f);
@@ -2462,7 +2462,7 @@ DISP.ER.toPrecision = function(precision) {
         p = 21;
     }
     else {
-        p = parseInt(precision);
+        p = parseInt(precision, 10);
         if (p < 1)
             throw new RangeError("SchemeNumber toPrecision: expected a " +
                                  "positive precision, got: " + precision);
@@ -2483,7 +2483,7 @@ DISP.ER.toPrecision = function(precision) {
 
     var ret = x.toExponential(p - 1);
     var eIndex = ret.indexOf('e');
-    var exponent = parseInt(ret.substring(eIndex + 1));
+    var exponent = parseInt(ret.substring(eIndex + 1), 10);
     if (exponent >= -6 && exponent < p) {
         if (exponent === 0)
             ret = ret.substring(0, eIndex);

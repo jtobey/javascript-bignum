@@ -1,3 +1,8 @@
+1.0.10 - 2012-03-04
+
+    * Don't let non-ECMA-262 parseInt treat "021" as octal.
+    * fn["eqv?"]: as documented, don't try to convert arguments.
+
 1.0.9 - 2011-03-19
 
     * Fixes backported from 1.1 branch:
