@@ -2204,8 +2204,8 @@ function retOne()     { return ONE; }
 //
 
 defClass("SchemeNumber", {ctor: N});
-function subclass(name, super) {
-    return defClass(name, {extends: super, ctor: interfaces[name]});
+function subclass(name, base) {
+    return defClass(name, {extends: base, ctor: interfaces[name]});
 }
 var Complex       = subclass("Complex",       "SchemeNumber");
 var Real          = subclass("Real",          "Complex");
@@ -2368,7 +2368,7 @@ expt.def("Complex", "ExactInteger", function(n) {
     if (isExact(this))
         return expt_N_EI(this, n);
     return complexExpt(this, n);
-})
+});
 
 sin.def("Complex", function() {
     var iz = multiply(I, this);
@@ -2791,7 +2791,7 @@ var Real                 = args.realName || "Real";
 var R                    = (isDefaultInexactReal ? Real : FlonumType);
 var InexactReal          = args.inexactRealName || "InexactReal";
 var ExactReal            = args.exactRealName || "ExactReal";
-var super                = args.superName || InexactReal;
+var base                 = args.baseName || InexactReal;
 var InexactRealConstructor = args.interfaces.InexactReal;
 
 //
@@ -2964,7 +2964,7 @@ var numberToBinary     = pluginApi.numberToBinary;
 var nativeDenominatorLog2 = pluginApi.nativeDenominatorLog2;
 var nativeDenominator  = pluginApi.nativeDenominator;
 
-defClass(FlonumType, {ctor: Flonum, extends: super});
+defClass(FlonumType, {ctor: Flonum, extends: base});
 
 // We'll need these (and more?) if we support primitive numbers, since
 // Number does not inherit from any of our classes.
@@ -3240,10 +3240,10 @@ return {
 function makeExactFractionClass(args) {
 
 var EIF               = args.className || "ExactIntegerFraction";
-var super             = args.superName || "ExactRational";
+var base              = args.baseName || "ExactRational";
 var EI                = args.exactIntegerName || "ExactInteger";
 var isDefaultRational = args.isDefaultRational;
-var ER                = (isDefaultRational ? super : EIF);
+var ER                = (isDefaultRational ? base : EIF);
 var ExactRational     = args.interfaces.ExactRational;
 
 var parseEI   = args.parseEI;
@@ -3389,7 +3389,7 @@ var ZERO  = nativeToEI(0);
 var ONE   = nativeToEI(1);
 var M_ONE = nativeToEI(-1);
 
-defClass(EIF, {ctor: EQFraction, extends: super});
+defClass(EIF, {ctor: EQFraction, extends: base});
 
 EQFraction.prototype.valueOf = function() {
     var n = this._n;
@@ -3521,9 +3521,9 @@ function makeRectangularClass(args) {
 
 args = args || {};
 var Rect     = args.className || "Rectangular";
-var super    = args.superName || "Complex";
+var base     = args.baseName || "Complex";
 var Real     = args.realName || "Real";
-var C        = (args.isDefaultComplex ? super : Rect);
+var C        = (args.isDefaultComplex ? base : Rect);
 var Complex  = args.interfaces.Complex;
 
 var nativeToEI = args.nativeToEI;
@@ -3685,7 +3685,7 @@ var isUnit             = pluginApi.isUnit;
 var exp10              = pluginApi.exp10;
 */
 
-defClass(Rect, {ctor: Rectangular, extends: super});
+defClass(Rect, {ctor: Rectangular, extends: base});
 
 function retFalse()   { return false; }
 
@@ -3895,7 +3895,7 @@ var BigIntegerConstructor = args.BigIntegerConstructor;
 var BigType               = args.BigIntegerName || "BigInteger";
 var NativeType            = args.NativeName || "Proto" + BigType;
 var HybridType            = args.HybridName || "Hybrid" + BigType;
-var super                 = args.superName || "ExactInteger";
+var base                  = args.baseName || "ExactInteger";
 var Real                  = args.realName || "Real";
 var Complex               = args.complexName || "Complex";
 var InexactReal           = args.inexactRealName || "InexactReal";
@@ -4071,7 +4071,7 @@ var raiseDivisionByExactZero = pluginApi.raiseDivisionByExactZero;
 var nativeDenominatorLog2 = pluginApi.nativeDenominatorLog2;
 var nativeDenominator  = pluginApi.nativeDenominator;
 
-defClass(HybridType, {ctor: Hybrid,   extends: super});
+defClass(HybridType, {ctor: Hybrid,   extends: base});
 defClass(NativeType, {ctor: EINative, extends: HybridType});
 defClass(   BigType, {ctor: BigIntegerConstructor,
                       extends: HybridType});
