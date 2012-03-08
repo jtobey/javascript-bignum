@@ -1,3 +1,11 @@
+1.3.0 (unstable) - 2012-03-07
+
+    * Unstable development branch containing new plugin API.
+    * Major refactoring to support number type extensions.
+    * Cleaned up and formalized the double-dispatch system.
+    * Minor logic and performance fixes, but test suite performance
+      lags that of 1.2.0 by about 20%.
+
 1.2.0 - 2012-03-04
 
     * Stable release with unmodified Number.prototype.
