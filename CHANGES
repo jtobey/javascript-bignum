@@ -1,3 +1,27 @@
+1.3.0 (unstable) - 2012-03-07
+
+    * Unstable development branch containing new plugin API.
+    * Major refactoring to support number type extensions.
+    * Cleaned up and formalized the double-dispatch system.
+    * Minor logic and performance fixes, but test suite performance
+      lags that of 1.2.0 by about 20%.
+
+1.2.0 - 2012-03-04
+
+    * Stable release with unmodified Number.prototype.
+    * Added test case for recent fix.
+
+1.1.6 (unstable) - 2012-03-04
+
+    * Fixed bug in fn["eqv?"] affecting non-numeric arguments.
+
+1.1.5 (unstable) - 2012-03-01
+
+    * Fixed parser bug affecting numbers like "#e.021" on platforms
+      where parseInt("021") returns 17 instead of 21 as specified by
+      ECMA.
+    * Various minor improvements and reorganizations.
+
 1.1.4 (unstable) - 2011-03-29
 
     * ECMAScript-like conversions: sn(new Date()) means sn(+new Date()).
