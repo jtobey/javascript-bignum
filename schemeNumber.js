@@ -414,6 +414,24 @@ function makeContext(opts) {
 
 function assert(x) { if (!x) throw new Error("assertion failed"); }
 
+/*
+    Function: makeInterfaces()
+*/
+function makeInterfaces() {
+    function N(){} N.prototype = new Number();  // so sn(x) instanceof Number.
+    function Complex(){}             Complex.prototype = new N();
+    function Real(){}                   Real.prototype = new Complex();
+    function InexactReal(){}     InexactReal.prototype = new Real();
+    function ExactReal(){}         ExactReal.prototype = new Real();
+    function ExactRational(){} ExactRational.prototype = new ExactReal();
+    function ExactInteger(){}   ExactInteger.prototype = new ExactRational();
+    return {
+        N:N, Complex:Complex, Real:Real, InexactReal:InexactReal,
+        ExactReal:ExactReal, ExactRational:ExactRational,
+        ExactInteger:ExactInteger
+    };
+}
+
 function makeBase(args) {
 
 function requiredArg(name) {
@@ -435,7 +453,7 @@ var makePolar          = requiredArg("makePolar");
 
 var disp       = args.disp || JtMultipleDispatch;
 var interfaces = args.interfaces;
-var N          = interfaces.N || function(){};
+var N          = interfaces.N;
 
 function isNumber(x) {
     return x instanceof N;
@@ -1976,6 +1994,8 @@ function nativeDenominator(x) {
 
 SN.pluginApi = {
 
+    interfaces         : interfaces,
+
     toFlonum           : toFlonum,
     parseEI            : parseEI,
     nativeToEI         : nativeToEI,
@@ -2075,16 +2095,26 @@ return SN;
 
 /*
     Function: makeTower(SN)
+    A continuation of <makeBase>, this function registers the core
+    interface classes with the dispatch system and defines functions
+    on them where required by R6RS.
 
-    Defines the abstract numeric classes in SN: SchemeNumber, Complex,
-    Real, ExactReal, ExactRational, ExactInteger.  Provides several
-    function implementations in terms of more primitive functions.
-    Provides implementations of the methods toFixed, toExponential,
-    and toPrecision on exact reals.
+    Where a function does not have a reasonable generic implementation
+    for a given class, *makeTower* defines it as abstract.
+
+    *makeTower* defines the methods toFixed, toExponential, and
+    toPrecision (specified by ECMAScript for Number) on exact reals.
+
+    *SN* should be the result of a call to <makeBase>.
+
+    See Also: <makeInterfaces>.
  */
 function makeTower(SN) {
 
 var pluginApi = SN.pluginApi;
+
+var interfaces         = pluginApi.interfaces;
+var N                  = interfaces.N;
 
 var toFlonum           = pluginApi.toFlonum;
 /*
@@ -4600,52 +4630,45 @@ if (!BigInteger) {
         throw new Error("BigInteger is not defined.");
 }
 
-function N(){} N.prototype = new Number();  // Inherit from standard Number.
-function Complex(){} Complex.prototype = new N();
-function Real(){} Real.prototype = new Complex();
-function InexactReal(){} InexactReal.prototype = new Real();
-function ExactReal(){} ExactReal.prototype = new Real();
-function ExactRational(){} ExactRational.prototype = new ExactReal();
-function ExactInteger(){} ExactInteger.prototype = new ExactRational();
-var interfaces = {
-    N:N, Complex:Complex, Real:Real, InexactReal:InexactReal,
-    ExactReal:ExactReal, ExactRational:ExactRational, ExactInteger:ExactInteger
-};
+return (function() {
 
-var Flonums = makeNativeFlonumClass({
-    interfaces: interfaces,
-    isDefaultInexactReal: true,
-});
+    var interfaces = makeInterfaces();
 
-var Integers = makeHybridBigIntegerClass({
-    interfaces: interfaces,
-    BigIntegerConstructor: BigInteger,
-    isDefaultInteger: true,
-});
+    var Flonums = makeNativeFlonumClass({
+        interfaces: interfaces,
+        isDefaultInexactReal: true,
+    });
 
-var Rationals = makeExactFractionClass({
-    interfaces: interfaces,
-    isDefaultRational: true,
-    parseEI:   Integers.parseEI,
-});
+    var Integers = makeHybridBigIntegerClass({
+        interfaces: interfaces,
+        BigIntegerConstructor: BigInteger,
+        isDefaultInteger: true,
+    });
 
-var Complexes = makeRectangularClass({
-    interfaces: interfaces,
-    isDefaultComplex: true,
-    nativeToEI: Integers.nativeToEI,
-    toFlonum:   Flonums.toFlonum,
-});
+    var Rationals = makeExactFractionClass({
+        interfaces: interfaces,
+        isDefaultRational: true,
+        parseEI:   Integers.parseEI,
+    });
 
-var sn = implementSchemeNumbers({
-    interfaces: interfaces,
-    Flonums   : Flonums,
-    Integers  : Integers,
-    Rationals : Rationals,
-    Complexes : Complexes,
-});
-sn.implementSchemeNumbers = implementSchemeNumbers;
+    var Complexes = makeRectangularClass({
+        interfaces: interfaces,
+        isDefaultComplex: true,
+        nativeToEI: Integers.nativeToEI,
+        toFlonum:   Flonums.toFlonum,
+    });
 
-return sn;
+    var sn = implementSchemeNumbers({
+        interfaces: interfaces,
+        Flonums   : Flonums,
+        Integers  : Integers,
+        Rationals : Rationals,
+        Complexes : Complexes,
+    });
+    sn.implementSchemeNumbers = implementSchemeNumbers;
+
+    return sn;
+})();
 })();
 
 if (typeof exports !== "undefined") {
