@@ -307,6 +307,8 @@ function makeContext(opts) {
                 for (i = 0; i < ndisp; i++) {
                     types[i] = sp + arguments[i];
                     if (!classes[types[i]]) {
+                        // XXX Could add arguments to a list to be
+                        // defined during defClass.
                         throw Error("Type not defined with defClass: " +
                                     arguments[i] + ".  Usage: def(" +
                                     usageArgs() + ", FUNCTION)");
@@ -2874,11 +2876,11 @@ eq.def("ExactRational", "ExactRational", function(q) {
         eq(numerator(this), numerator(q));
 });
 compare.def("ExactRational", "ExactRational", function(q) {
-    var tn = numerator(this);
-    var qn = numerator(q);
-    var signDiff = sign(tn) - sign(qn);
+    var signDiff = sign(this) - sign(q);
     if (signDiff !== 0)
         return (signDiff > 0 ? 1 : -1);
+    var tn = numerator(this);
+    var qn = numerator(q);
     var td = denominator(this);
     var qd = denominator(q);
     if (qd === td)  // cheap optimization
@@ -2946,7 +2948,8 @@ truncate.def(   "ExactInteger", retThis);
 // Useful default implementations:
 
 exp10.def("ExactInteger", function(p) {
-    return multiply(this, expt_N_EI(nativeToExactInteger(10), nativeToExactInteger(p)));
+    return multiply(this, expt_N_EI(nativeToExactInteger(10),
+                                    nativeToExactInteger(p)));
 });
 
 gcdNonnegative.def("ExactInteger", "ExactInteger", function(a, b) {
@@ -4567,9 +4570,7 @@ exactIntegerSqrt.def(NativeType, function() {
 
 var toBigInteger = defGeneric("BigInteger_import", 1);
 
-toBigInteger.def(BigType, function() {
-    return this;
-});
+toBigInteger.def(BigType, retThis);
 toBigInteger.def(NativeType, function() {
     return BigIntegerConstructor(this._);
 });
