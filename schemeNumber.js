@@ -2105,10 +2105,55 @@ function nativeDenominator(x) {
     return natPow(2, nativeDenominatorLog2(x));
 }
 
-// XXX Document.
+/*
+    Property: pluginApi
+    Container of functions and objects used (and, in some cases,
+    extended) by number type implementations.
+
+    interfaces - the first argument passed to <makeBase>
+
+    defClass - TO DO: document.
+
+    defGeneric - TO DO: document.
+
+    stringToNumber     - see <makeBase>
+
+    parseInexact       - see <makeBase>
+
+    toFlonum           - see <makeBase>
+
+    parseExactInteger  - see <makeBase>
+
+    nativeToExactInteger - see <makeBase>
+
+    divideReduced      - see <makeBase>
+
+    I                  - see <makeBase>
+
+    MINUS_I            - see <makeBase>
+
+    exactRectangular   - see <makeBase>
+
+    inexactRectangular - see <makeBase>
+
+    makePolar          - see <makeBase>
+
+    raise - function(conditionType, message, irritants...)
+    forwards its arguments to <SchemeNumber.raise> and handles errors
+    in that function, namely returning when it shouldn't.
+
+    raiseDivisionByExactZero - function()
+    raises an exception to report division by exact zero
+
+    TO DO: cleanup/document the rest.
+*/
 SN.pluginApi = {
 
     interfaces         : interfaces,
+
+    defClass           : disp.defClass,
+    defGeneric         : disp.defGeneric,
+    getConstructor     : disp.getConstructor,
 
     stringToNumber     : stringToNumber,
     parseInexact       : parseInexact,
@@ -2135,10 +2180,6 @@ SN.pluginApi = {
     numberToBinary     : numberToBinary,
     nativeDenominatorLog2: nativeDenominatorLog2,
     nativeDenominator  : nativeDenominator,
-
-    defClass           : disp.defClass,
-    defGeneric         : disp.defGeneric,
-    getConstructor     : disp.getConstructor,
 
     numberToString     : numberToString,
     isExact            : isExact,
