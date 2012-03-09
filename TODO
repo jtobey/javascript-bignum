@@ -4,6 +4,12 @@ TODO:
 
 * Fix (expt 0 0) in maint branches as per the example in R6RS.
 
+* Make various unary functions raise &assertion on wrong type argument.
+
+* Decimal: Relax the constraint that 10 not divide n.
+
+* Decimal: Find out why fn["+"]("#e1e-50") loops.
+
 * Provide a choice among different implementations of exact integers,
   exact rationals, complex numbers, and inexact reals.
 

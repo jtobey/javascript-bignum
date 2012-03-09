@@ -13,6 +13,7 @@ var count = 0;
 var good = 0;
 
 function testExact(x, meth, arg) {
+    try {
     var js, sn;
     if (arg === undefined) {
         js = Number(x)[meth]();
@@ -21,6 +22,10 @@ function testExact(x, meth, arg) {
     else {
         js = Number(x)[meth](arg);
         sn = SchemeNumber("#e"+x)[meth](arg);
+    }
+    }
+    catch (e) {
+        sn = e;
     }
     if (js == sn)
         good++;

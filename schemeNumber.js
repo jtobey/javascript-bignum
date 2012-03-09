@@ -465,7 +465,8 @@ function makeInterfaces() {
     *stringToNumber*.
 
     Otherwise, if *args* does not contain *stringToNumber*, it must
-    contain both *parseInexact* and *parseExactInteger*.
+    contain both *parseInexact* and *parseExactInteger*, which the
+    parser then calls via <defaultStringToNumber>.
 
     If *args* does not contain the properties relating to complex
     numbers, the library will not support complex arithmetic, and it
@@ -506,6 +507,12 @@ function makeInterfaces() {
     <nativeToExactInteger> must be a function returning an exact
     Scheme number whose value equals *integer*.
 
+    parserExp10 - function(n, e)
+    *n* and *e* are exact integers.  <parserExp10> must return an
+    exact integer whose value equals *n* times 10 to the power *e*.
+    <defaultStringToNumber> calls *parserExp10* to construct exact
+    decimal literals.
+
     divideReduced - function(numerator, denominator)
     *numerator* is an exact integer.  *denominator* is an exact,
     positive integer, possibly 1, that has no factors in common with
@@ -529,14 +536,23 @@ function makeInterfaces() {
 */
 function makeBase(interfaces, args) {
 
+var stringToNumber       = args.stringToNumber;
 var parseInexact         = args.parseInexact;
 var parseExactInteger    = args.parseExactInteger;
-var divideReduced        = args.divideReduced;
+
+if (!stringToNumber && !(parseInexact && parseExactInteger)) {
+    throw Error("Neither stringToNumber nor the default version's" +
+                " dependencies found");
+}
+stringToNumber    = stringToNumber    || defaultStringToNumber;
+parseInexact      = parseInexact      || defaultParseInexact;
+parseExactInteger = parseExactInteger || defaultParseExactInteger;
 
 var toFlonum             = args.toFlonum             || defaultToFlonum;
 var nativeToExactInteger = args.nativeToExactInteger ||
-        defaultNativeToExactInteger;
-var stringToNumber       = args.stringToNumber       || defaultStringToNumber;
+                                               defaultNativeToExactInteger;
+var parserExp10          = args.parserExp10          || defaultParserExp10;
+var divideReduced        = args.divideReduced;
 
 var exactRectangular     = getComplexFunc("exactRectangular");
 var inexactRectangular   = getComplexFunc("inexactRectangular");
@@ -689,6 +705,13 @@ function defaultNativeToExactInteger(n) {
     return parseExactInteger(n < 0 ? -1 : 1, natAbs(n).toString(16), 16);
 }
 
+function defaultParserExp10(n, e) {
+    var ie = +e;
+    if (ne(nativeToExactInteger(ie), e))
+        raise("&implementation-restriction", "exponent limit exceeded", e);
+    return exp10(n, ie);
+}
+
 // How to split a rectangular literal into real and imaginary components:
 var decimalComplex = /^(.*[^a-zA-Z]|)([-+].*)i$/;
 var radixComplex = /^(.*)([-+].*)i$/;
@@ -821,7 +844,7 @@ function defaultStringToNumber(s, radix, exact) {
             return parseInexact(sign, s);
 
         var integer = s.substring(0, dot === -1 ? e : dot);
-        var exponent = 0;
+        var exponent = ZERO;
         var fraction;
 
         if (e === -1)
@@ -831,11 +854,12 @@ function defaultStringToNumber(s, radix, exact) {
                 fraction = "";
             else
                 fraction = s.substring(dot + 1, e);
-            exponent = _parseInt(s.substring(e + 1), 10);
+            exponent = parseReal(s.substring(e + 1));
         }
 
-        return exp10(parseExactInteger(sign, integer + fraction),
-                     exponent - fraction.length, 10);
+        return parserExp10(parseExactInteger(sign, integer + fraction),
+                           subtract(exponent,
+                                    nativeToExactInteger(fraction.length)));
     }
     function parseComplex(s) {
         var a = s.indexOf('@');
@@ -1621,6 +1645,7 @@ SchemeNumber.fn = {
     ">=" : makeComparator(ge),
 
     "zero?"     : makeUnary(isZero),
+    // XXX All these makeUnary functions should assert their argument type.
     "positive?" : makeUnary(isPositive),
     "negative?" : makeUnary(isNegative),
     "odd?"      : makeUnary(isOdd),
@@ -2162,6 +2187,7 @@ SN.pluginApi = {
     toFlonum           : toFlonum,
     parseExactInteger  : parseExactInteger,
     nativeToExactInteger : nativeToExactInteger,
+    parserExp10        : parserExp10,
     divideReduced      : divideReduced || divide,
     I                  : I,
     MINUS_I            : M_I,
@@ -2935,6 +2961,8 @@ floor.def("ExactRational", function() {
 
 isInteger.def("ExactInteger", retTrue);
 
+isEven.def(   "ExactInteger", pureVirtual);
+isOdd.def(    "ExactInteger", pureVirtual);
 exp10.def(    "ExactInteger", pureVirtual);
 gcdNonnegative.def("ExactInteger", "ExactInteger", pureVirtual);
 
@@ -4952,10 +4980,11 @@ return (function() {
         toFlonum:              Flonums.toFlonum,
     });
 
-    var sn = implementSchemeNumbers(
-        interfaces,
-        [Integers, Rationals, Flonums, Complexes]
-    );
+    var impls = [Integers, Rationals, Flonums, Complexes];
+
+    //load("lib/decimal.js"); var Decimals = implementExactDecimals({interfaces:interfaces,nativeToExactInteger:Integers.nativeToExactInteger,isDefaultDecimal:true}); impls.unshift(Decimals);
+
+    var sn = implementSchemeNumbers(interfaces, impls);
 
     sn.implementSchemeNumbers = implementSchemeNumbers;
 
