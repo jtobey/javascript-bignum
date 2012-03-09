@@ -3411,8 +3411,29 @@ return {
 
 /*
     Function: implementExactFractions(args)
+    Returns an object containing a <divideReduced> property suitable
+    for use with <makeBase>, along with an <install> method for
+    <implementSchemeNumbers>.
 
-isDefaultRational
+    The returned function produces exact rationals represented as
+    pairs of exact integers, numerator and positive denominator in
+    lowest terms.
+
+    *args.interfaces* should be the result of a call to
+    <makeInterfaces> and should be used in any subsequent calls to
+    <makeBase>.
+
+    If *args* contains property *isDefaultRational* with a true
+    value, <install> creates <pluginApi> operations as follows.
+
+    - The operators <negate>, <square>, <reciprocal>, <sign>, <add>,
+      <subtract>, <multiply>, and <divide> may return an object
+      created by this implementation when passed any exact rational
+      arguments.
+
+    - The <expt> operator may return an object created by this
+      implementation when passed any exact rational base and exact
+      integer power.
 */
 function implementExactFractions(args) {
 
@@ -3685,6 +3706,37 @@ return {
 }
 
 
+/*
+    Function: implementRectangular(args)
+    Returns an object containing <exactRectangular>,
+    <inexactRectangular>, <makePolar>, <I>, and <MINUS_I> properties
+    suitable for use with <makeBase>, along with an <install> method
+    for <implementSchemeNumbers>.
+
+    The returned functions produce complex numbers represented as
+    pairs of real numbers equaling the real and imaginary parts.
+
+    *args.interfaces* should be the result of a call to
+    <makeInterfaces> and should be used in any subsequent calls to
+    <makeBase>.
+
+    *args* must contain *nativeToExactInteger* and *toFlonum*
+    *properties of the kind specified by <makeBase>.
+
+    If *args* contains property *isDefaultComplex* with a true value,
+    <install> creates <pluginApi> operations as follows.
+
+    - The operator <numberToString> may return a representation in
+      rectangular coordinates when passed any complex argument.
+
+    - The operators <magnitude> and <angle> may convert their argument
+      to rectangular coordinates before calculating a result for any
+      complex argument.
+
+    - The operators <add>, <subtract>, <multiply>, <divide>, <negate>,
+      <square>, <reciprocal>, and <exp> may return an object created
+      by this implementation when passed any complex arguments.
+*/
 function implementRectangular(args) {
 
 args = args || {};
@@ -4058,11 +4110,11 @@ return {
     <makeBase>, along with an <install> method for
     <implementSchemeNumbers>.
 
-    The returned functions produce exact numbers represented as native
-    numbers in the range with absolute value less than 2^53.  Outside
-    this range, the implementation uses *args.BigIntegerConstructor*
-    to create and operate on numbers.  *BigIntegerConstructor* must
-    behave like <BigInteger at
+    The returned functions produce exact integers represented as
+    native numbers in the range with absolute value less than 2^53.
+    Outside this range, the implementation uses
+    *args.BigIntegerConstructor* to create and operate on numbers.
+    *BigIntegerConstructor* must behave like <BigInteger at
     https://github.com/silentmatt/javascript-biginteger>.
 
     *args.interfaces* should be the result of a call to
