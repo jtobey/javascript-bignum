@@ -2105,6 +2105,7 @@ function nativeDenominator(x) {
     return natPow(2, nativeDenominatorLog2(x));
 }
 
+// XXX Document.
 SN.pluginApi = {
 
     interfaces         : interfaces,
@@ -2923,7 +2924,37 @@ return SN;
 }
 
 
-function makeNativeFlonumClass(args) {
+/*
+    Function: implementNativeFlonums(args)
+    Returns an object containing <parseInexact> and <toFlonum>
+    properties suitable for use with <makeBase>, along with an
+    <install> method for <implementSchemeNumbers>.
+
+    The returned functions produce inexact numbers represented as
+    native numbers using native operations, where applicable.
+
+    *args.interfaces* should be the result of a call to
+    <makeInterfaces> and should be used in any subsequent calls to
+    <makeBase>.
+
+    If *args* contains property *isDefaultInexactReal* with a true
+    value, <install> creates <pluginApi> operations as follows.
+
+    - The comparison operators (<eq>, <ne>, <gt>, <lt>, <ge>, <le>,
+      and <compare>) may convert their arguments to native numbers and
+      use native comparison when both are real and at least one is
+      inexact.
+
+    - The operators <add>, <subtract>, <multiply>, <divide>,
+      <divAndMod>, <div>, <mod>, and <expt> may return an object
+      created by this implementation when both arguments are real and
+      at least one is inexact.
+
+    - The operators <toInexact>, <atan>, <atan2>, <cos>, <exp>, <sin>,
+      <tan>, <acos>, <asin>, <log>, and <sqrt> may return an object
+      created by this implementation when passed any real arguments.
+*/
+function implementNativeFlonums(args) {
 
 args = args || {};
 var isDefaultInexactReal = args.isDefaultInexactReal;
@@ -3215,25 +3246,22 @@ isOdd.def(FlonumType, function() {
     return (this & 1) === 1;
 });
 
-function Flonum_eq(x) { return +this == x; }
-function Flonum_ne(x) { return +this != x; }
-function Flonum_gt(x) { return this > x; }
-function Flonum_lt(x) { return this < x; }
-function Flonum_ge(x) { return this >= x; }
-function Flonum_le(x) { return this <= x; }
+function define_binop(op, func) {
+    op.def(FlonumType, FlonumType, func);
+    op.def(Real, FlonumType, func);
+    op.def(FlonumType, Real, func);
+    if (isDefaultInexactReal) {
+        op.def(Real, InexactReal, func);
+        op.def(InexactReal, Real, func);
+    }
+}
 
-eq.def(R, FlonumType, Flonum_eq);
-eq.def(FlonumType, R, Flonum_eq);
-ne.def(R, FlonumType, Flonum_ne);
-ne.def(FlonumType, R, Flonum_ne);
-gt.def(R, FlonumType, Flonum_gt);
-gt.def(FlonumType, R, Flonum_gt);
-lt.def(R, FlonumType, Flonum_lt);
-lt.def(FlonumType, R, Flonum_lt);
-ge.def(R, FlonumType, Flonum_ge);
-ge.def(FlonumType, R, Flonum_ge);
-le.def(R, FlonumType, Flonum_le);
-le.def(FlonumType, R, Flonum_le);
+define_binop(eq, function(x) { return +this == x; });
+define_binop(ne, function(x) { return +this != x; });
+define_binop(gt, function(x) { return this > x; });
+define_binop(lt, function(x) { return this < x; });
+define_binop(ge, function(x) { return this >= x; });
+define_binop(le, function(x) { return this <= x; });
 
 function Flonum_compare(x) {
     if (+this == x) return 0;
@@ -3242,22 +3270,12 @@ function Flonum_compare(x) {
     return NaN;
 };
 
-compare.def(R, FlonumType, Flonum_compare);
-compare.def(FlonumType, R, Flonum_compare);
+define_binop(compare, Flonum_compare);
 
-function Flonum_add(x)      { return toFlonum(this + x); }
-function Flonum_subtract(x) { return toFlonum(this - x); }
-function Flonum_multiply(x) { return toFlonum(this * x); }
-function Flonum_divide(x)   { return toFlonum(this / x); }
-
-add.def(      R, FlonumType, Flonum_add);
-add.def(      FlonumType, R, Flonum_add);
-subtract.def( R, FlonumType, Flonum_subtract);
-subtract.def( FlonumType, R, Flonum_subtract);
-multiply.def( R, FlonumType, Flonum_multiply);
-multiply.def( FlonumType, R, Flonum_multiply);
-divide.def(   R, FlonumType, Flonum_divide);
-divide.def(   FlonumType, R, Flonum_divide);
+define_binop(add,      function(x) { return toFlonum(this + x); });
+define_binop(subtract, function(x) { return toFlonum(this - x); });
+define_binop(multiply, function(x) { return toFlonum(this * x); });
+define_binop(divide,   function(x) { return toFlonum(this / x); });
 
 negate.def(FlonumType, function() {
     return toFlonum(-this);
@@ -3271,7 +3289,7 @@ reciprocal.def(FlonumType, function() {
     return toFlonum(1 / this);
 });
 
-function div_Flonum_R(x, y) {
+function div_native(x, y) {
     if (y > 0)
         return natFloor(x / y);
     if (y < 0)
@@ -3280,17 +3298,26 @@ function div_Flonum_R(x, y) {
         divModArg2Zero(toFlonum(y));
     return NaN;
 }
-divAndMod.def(FlonumType, R, function(y) {
+function Flonum_divAndMod(y) {
+    var x = +this;
     y = +y;
-    var div = div_Flonum_R(this, y);
-    return [toFlonum(div), toFlonum(this - (y * div))];
-});
-div.def(FlonumType, R, function(y) {
-    return toFlonum(div_Flonum_R(this, y));
-});
-mod.def(FlonumType, R, function(y) {
-    return toFlonum(this - y * div_Flonum_R(this, y));
-});
+    var div = div_native(x, y);
+    return [toFlonum(div), toFlonum(x - (y * div))];
+}
+function Flonum_div(y) {
+    var x = +this;
+    y = +y;
+    return toFlonum(div_native(x, y));
+}
+function Flonum_mod(y) {
+    var x = +this;
+    y = +y;
+    return toFlonum(x - y * div_native(x, y));
+}
+
+define_binop(divAndMod, Flonum_divAndMod);
+define_binop(div, Flonum_div);
+define_binop(mod, Flonum_mod);
 
 square.def(FlonumType, function() {
     return toFlonum(this * this);
@@ -3303,8 +3330,7 @@ function Flonum_expt(x) {
     return floPow(this, x);
 }
 
-expt.def(R, FlonumType, Flonum_expt);
-expt.def(FlonumType, R, Flonum_expt);
+define_binop(expt, Flonum_expt);
 
 round.def(FlonumType, function() {
     var ret = natFloor(this);
@@ -3376,14 +3402,19 @@ function parseInexact(sign, string) {
 }
 
 return {
-    toFlonum:     toFlonum,
     parseInexact: parseInexact,
+    toFlonum:     toFlonum,
     install:      install,
 };
-};
+}
 
 
-function makeExactFractionClass(args) {
+/*
+    Function: implementExactFractions(args)
+
+isDefaultRational
+*/
+function implementExactFractions(args) {
 
 var EIF               = args.className || "ExactIntegerFraction";
 var base              = args.baseName || "ExactRational";
@@ -3654,7 +3685,7 @@ return {
 }
 
 
-function makeRectangularClass(args) {
+function implementRectangular(args) {
 
 args = args || {};
 var Rect     = args.className || "Rectangular";
@@ -3693,7 +3724,6 @@ var M_I  = new Rectangular(ZERO, nativeToExactInteger(-1));
 
 /*
     Function: exactRectangular(x, y)
-
     This function behaves like the standard <make-rectangular> but
     assumes both arguments are exact reals.
  */
@@ -3710,7 +3740,6 @@ function exactRectangular(x, y) {
 
 /*
     Function: inexactRectangular(x, y)
-
     This function behaves like the standard <make-rectangular> but
     assumes both arguments are inexact reals.
  */
@@ -3722,7 +3751,6 @@ function inexactRectangular(x, y) {
 
 /*
     Function: makePolar(r, theta)
-
     This function behaves like the standard <make-polar> but assumes
     both its arguments are real.
 */
@@ -4023,9 +4051,36 @@ return {
 }
 
 
-// Exact integers as native and big objects that automatically convert
-// to each other.
-function makeHybridBigIntegerClass(args) {
+/*
+    Function: implementHybridBigIntegers(args)
+    Returns an object containing <parseExactInteger> and
+    <nativeToExactInteger> properties suitable for use with
+    <makeBase>, along with an <install> method for
+    <implementSchemeNumbers>.
+
+    The returned functions produce exact numbers represented as native
+    numbers in the range with absolute value less than 2^53.  Outside
+    this range, the implementation uses *args.BigIntegerConstructor*
+    to create and operate on numbers.  *BigIntegerConstructor* must
+    behave like <BigInteger at
+    https://github.com/silentmatt/javascript-biginteger>.
+
+    *args.interfaces* should be the result of a call to
+    <makeInterfaces> and should be used in any subsequent calls to
+    <makeBase>.
+
+    If *args* contains property *isDefaultInteger* with a true
+    value, <install> creates <pluginApi> operations as follows.
+
+    - The operator <toExact> may return an object created by this
+      implementation when passed any inexact real argument.
+
+    - The operators <compare>, <add>, <subtract>, <multiply>,
+      <divAndMod>, <div>, <mod>, and <gcdNonnegative> may return an
+      object created by this implementation when passed any two exact
+      integer arguments.
+*/
+function implementHybridBigIntegers(args) {
 
 var BigIntegerConstructor = args.BigIntegerConstructor;
 var BigType               = args.BigIntegerName || "BigInteger";
@@ -4728,9 +4783,10 @@ return {
     The implementation might install methods using the plugin API
     (SchemeNumber.pluginApi).
 
-    See Also: <makeNativeFlonumClass>, <makeHybridBigIntegerClass>,
-    <makeExactFractionClass>, <makeRectangularClass>, <makeBase>,
+    See Also: <implementNativeFlonums>, <implementHybridBigIntegers>,
+    <implementExactFractions>, <implementRectangular>, <makeBase>,
     <pluginApi>
+
 */
 function implementSchemeNumbers(interfaces, implementations) {
     var args = {};
@@ -4779,23 +4835,23 @@ return (function() {
 
     var interfaces = makeInterfaces();
 
-    var Flonums = makeNativeFlonumClass({
+    var Flonums = implementNativeFlonums({
         interfaces:            interfaces,
         isDefaultInexactReal:  true,
     });
 
-    var Integers = makeHybridBigIntegerClass({
+    var Integers = implementHybridBigIntegers({
         interfaces: interfaces,
         BigIntegerConstructor: BigInteger,
         isDefaultInteger:      true,
     });
 
-    var Rationals = makeExactFractionClass({
+    var Rationals = implementExactFractions({
         interfaces:            interfaces,
         isDefaultRational:     true,
     });
 
-    var Complexes = makeRectangularClass({
+    var Complexes = implementRectangular({
         interfaces:            interfaces,
         isDefaultComplex:      true,
         nativeToExactInteger:  Integers.nativeToExactInteger,
