@@ -87,7 +87,13 @@ script in this directory.
 
 CHANGES
 
-1.2.0 - 2012-03-04 - Current stable release.
+1.2.1 - 2012-03-16 - Current stable release.
+
+    * Fixed parser bugs affecting non-decimal radix.
+
+1.2.0 - 2012-03-04
+
+    * Stable release with unmodified Number.prototype.
 
 1.1.5 (unstable) - 2012-03-01
 

@@ -1,3 +1,7 @@
+1.2.1 - 2012-03-16
+
+    * Fixed parser bugs affecting non-decimal radix.
+
 1.2.0 - 2012-03-04
 
     * Stable release with unmodified Number.prototype.
