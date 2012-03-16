@@ -195,8 +195,19 @@ sub gen_scheme {
 
 sub prolog_js {
     print(<<'END');
-load("../biginteger.js");
-load("../schemeNumber.js");
+var BigInteger, SchemeNumber;
+
+if (typeof require === "undefined") {
+    load("../biginteger.js");
+    load("../schemeNumber.js");
+} else {
+    BigInteger = require('../biginteger').BigInteger;
+    SchemeNumber = require('../schemeNumber').SchemeNumber;
+}
+
+if (typeof print === "undefined")
+    var print = console.log;
+
 var fn = SchemeNumber.fn;
 var isNumber = fn["number?"];
 var ns = fn["number->string"];

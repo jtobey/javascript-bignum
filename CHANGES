@@ -1,3 +1,5 @@
+    * Made test suite run under Node.js, 95% speedup versus Rhino.
+
 1.2.1 - 2012-03-16
 
     * Fixed parser bugs affecting non-decimal radix.

@@ -1,20 +1,8 @@
 TODO:
 
-* Make it easy to choose among different implementations of exact
-  integers, exact rationals, and complex numbers.
-
-* Give users control over whether or not we use Number.prototype.
+* Figure out ecma-node test failures.  V8 thinks "1.23e22" < 1e21 ?
 
 * Consider supporting a configuration where inexact reals are returned
   as primitive numbers but Number.prototype is not used.
 
 * Avoid "for (x in y)" out of concern for Object.prototype use.
-
-* Implement integers using another library, such as Leemon Baird's.
-
-* Consider a BigDecimal class like Java's BigDecimal.
-
-* Consider creating a framework for selecting implementations of
-  BigInteger (and perhaps alternatives to EQFraction or even
-  Rectangular).  The library could dynamically measure usage and swap
-  implementations on-the-fly to improve performance.
