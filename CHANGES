@@ -1,3 +1,8 @@
+1.0.11 - 2012-03-16
+
+    * Fixed parser bugs affecting non-decimal radix.
+    * Made test suite run under Node.js, 90% speedup versus Rhino.
+
 1.0.10 - 2012-03-04
 
     * Don't let non-ECMA-262 parseInt treat "021" as octal.

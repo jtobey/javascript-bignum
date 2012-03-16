@@ -183,7 +183,7 @@ var SchemeNumber = SN;
 
     For example, *[1,2,4]* corresponds to Version 1.2.4.
 */
-SchemeNumber.VERSION = [1,0,10];
+SchemeNumber.VERSION = [1,0,11];
 
 function isNumber(x) {
     return x instanceof Number || typeof x === "number";
@@ -285,7 +285,7 @@ function stringToNumber(s, radix, exact) {
                 .SN_divide(parseUinteger(s.substring(slash + 1), 1));
 
         if (radix !== 10)
-            lose();
+            return parseUinteger(s, sign);
 
         var pipe = s.indexOf('|');
         if (pipe !== -1) {
@@ -430,7 +430,6 @@ function stringToNumber(s, radix, exact) {
         if (/^-?[0-9]{1,15}$/.test(s)) {
             return (exact === false ? toFlonum : toEINative)(parseInt(s, 10));
         }
-        radix = 10;
     }
 
     var i = 0;
@@ -448,6 +447,7 @@ function stringToNumber(s, radix, exact) {
             }
             i += 2;
         }
+        radix = radix || 10;
         return parseComplex(s.substring(i));
     }
     catch (e) {
@@ -3276,7 +3276,9 @@ function EIBig(n) {
 EIBig.prototype = new EI();
 
 function parseEIBig(s, sign, radix) {
-    n = BigInteger.parse(s, radix);
+    // Trim leading zeroes to avoid BigInteger treating "0c" and "0b"
+    // as radix prefixes.
+    n = BigInteger.parse(s.replace(/^0+/, ""), radix);
     if (sign < 0)
         n = n.negate();
     return new EIBig(n);

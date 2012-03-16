@@ -1,8 +1,18 @@
 // Test the SchemeNumber implementations of ECMA standard number
 // formatting functions toFixed, toExponential, and toPrecision.
 
-load("../biginteger.js");
-load("../schemeNumber.js");
+var BigInteger, SchemeNumber;
+
+if (typeof require === "undefined") {
+    load("../biginteger.js");
+    load("../schemeNumber.js");
+} else {
+    BigInteger = require('../biginteger').BigInteger;
+    SchemeNumber = require('../schemeNumber').SchemeNumber;
+}
+
+if (typeof print === "undefined")
+    var print = console.log;
 
 var exact=["0", "1", "-1", "123", "1e6", "2e-6", "3e12", "4e-12",
            "12.3", "1.23", "1.23e-4", "-1.23e-9", "1.23e8",

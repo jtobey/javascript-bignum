@@ -1,18 +1,3 @@
 TODO:
 
-* Consider providing the option not to tamper with Number.prototype.
-
-* BigInteger: Consider having pow() reject non-integer arguments.
-
-* Consider aliasing or renaming BigInteger.toString() so as not to
-  conflict with the default toString().
-
-* BigInteger: Consider patching multiplySingleDigit to support
-  negative "this".
-
-* Consider a BigDecimal class like Java's BigDecimal.
-
-* Consider creating a framework for selecting implementations of
-  BigInteger (and perhaps alternatives to EQFraction or even
-  Rectangular).  The library could dynamically measure usage and swap
-  implementations on-the-fly to improve performance.
+* Figure out ecma-node test failures.  Node.js thinks "1.23e22" < 1e21 ?
