@@ -1,8 +1,17 @@
 // Test the SchemeNumber implementations of ECMA standard number
 // formatting functions toFixed, toExponential, and toPrecision.
 
-load("../biginteger.js");
-load("../schemeNumber.js");
+var BigInteger, SchemeNumber;
+
+if (typeof require === "undefined") {
+    load("../biginteger.js");
+    load("../schemeNumber.js");
+} else {
+    SchemeNumber = require('../schemeNumber').SchemeNumber;
+}
+
+if (typeof print === "undefined")
+    var print = console.log;
 
 var exact=["0", "1", "-1", "123", "1e6", "2e-6", "3e12", "4e-12",
            "12.3", "1.23", "1.23e-4", "-1.23e-9", "1.23e8",
@@ -50,30 +59,30 @@ function testInexact(x, meth, arg) {
     count++;
 }
 exact.forEach(function (x) {
-        var maxFixed = 16 - Math.round(x).toString().length;
+    var maxFixed = 16 - Math.ceil(Math.log(x)/Math.LN10);
 
-        if (x < 1e21)
-            testExact(x, "toFixed", undefined);
-        testExact(x, "toExponential", undefined);
-        testExact(x, "toPrecision", undefined);
+    if (x < 1e21)
+        testExact(x, "toFixed", undefined);
+    testExact(x, "toExponential", undefined);
+    testExact(x, "toPrecision", undefined);
 
-        for (i = 0; i < 16; i++) {
-            if (i <= maxFixed)
-                testExact(x, "toFixed", i);
-            testExact(x, "toExponential", i);
-            testExact(x, "toPrecision", i + 1);
-        }
-    });
+    for (i = 0; i < 16; i++) {
+        if (i <= maxFixed)
+            testExact(x, "toFixed", i);
+        testExact(x, "toExponential", i);
+        testExact(x, "toPrecision", i + 1);
+    }
+});
 inexact.forEach(function(x) {
-        ["toFixed", "toExponential", "toPrecision"].forEach(function(meth) {
-                testInexact(x, meth, undefined);
-            });
-        for (i = 0; i < 21; i++) {
-            testInexact(x, "toFixed", i);
-            testInexact(x, "toExponential", i);
-            testInexact(x, "toPrecision", i + 1);
-        }
+    ["toFixed", "toExponential", "toPrecision"].forEach(function(meth) {
+        testInexact(x, meth, undefined);
     });
+    for (i = 0; i < 21; i++) {
+        testInexact(x, "toFixed", i);
+        testInexact(x, "toExponential", i);
+        testInexact(x, "toPrecision", i + 1);
+    }
+});
 
 print(good+"/"+count+" tests passed");
 if (count == 0 || good != count)

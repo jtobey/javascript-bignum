@@ -1,5 +1,7 @@
-JS = rhino -f
-JSR6RS = ( rhino 2>/dev/null | grep '^(' ) <
+JS = rhino
+RHINO = rhino -f
+RHINO_PIPE = ( rhino 2>/dev/null | grep '^(' ) <
+NODE = node
 SCHEME = mosh
 EDITOR = emacs
 PAGER = less
@@ -9,33 +11,40 @@ JSDEP = ../biginteger.js ../schemeNumber.js
 
 default: r6rs ecma
 
-r6rs: js.raw.good test-sn.js $(JSDEP)
-	$(JSR6RS) test-sn.js | diff js.raw.good -
+r6rs: r6rs-$(JS)
 
-ecma: jstest.js $(JSDEP)
-	$(JS) $<
+r6rs-node: node.out.good test-sn.js $(JSDEP)
+	$(NODE) test-sn.js | diff node.out.good -
 
-full: test-sn.diff
-	$(EDITOR) $^
+r6rs-rhino: rhino.out.good test-sn.js $(JSDEP)
+	$(RHINO_PIPE) test-sn.js | diff rhino.out.good -
 
-test-sn.diff: js.out scheme.out
-	diff $^ > $@.tmp || true
-	mv $@.tmp $@
+ecma: ecma-$(JS)
+
+ecma-node: jstest.js $(JSDEP)
+	$(NODE) $<
+
+ecma-rhino: jstest.js $(JSDEP)
+	$(RHINO) $<
 
 test-sn.%: gen-test.pl
 	./$< $* > $@.tmp
 	mv $@.tmp $@
 
-%.out: %.raw float-filter.pl
-	./float-filter.pl < $< > $@.tmp
+node.out.good: test-sn.js
+	$(NODE) $< > $@.tmp
 	mv $@.tmp $@
 
-js.raw.good: test-sn.js
-	$(JSR6RS) $< > $@.tmp
+node.out: test-sn.js $(JSDEP)
+	$(NODE) $< > $@.tmp
 	mv $@.tmp $@
 
-js.raw: test-sn.js $(JSDEP)
-	$(JSR6RS) $< > $@.tmp
+rhino.out.good: test-sn.js
+	$(RHINO_PIPE) $< > $@.tmp
+	mv $@.tmp $@
+
+rhino.out: test-sn.js $(JSDEP)
+	$(RHINO_PIPE) $< > $@.tmp
 	mv $@.tmp $@
 
 scheme.raw: test-sn.scheme
@@ -43,6 +52,5 @@ scheme.raw: test-sn.scheme
 	mv $@.tmp $@
 
 clean:
-	rm -f scheme.out js.out test-sn.scheme test-sn.js test-sn.diff
-	rm -f scheme.raw js.raw
-	rm -f *~
+	rm -f test-sn.scheme test-sn.js test-sn.diff
+	rm -f *.out *.raw *~

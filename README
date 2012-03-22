@@ -35,12 +35,13 @@ IMPLEMENTATION DETAILS
 This release contains a plugin API designed to support alternative
 implementations of four broad types: exact integer, exact rational,
 inexact real, and complex.  The plugin API is under heavy development
-and neither complete nor documented.
+and neither complete nor documented.  A multiple dispatch system
+supports specialization of basic operations by any operands' types.
 
 Exact integers of absolute value less than 2 to the 53rd power
 (9,007,199,254,740,992 or about 9e15) are represented as native
 numbers.  Outside this range, exact integers are represented as
-BigInteger objects: arrays base 10000000.
+BigInteger objects: arrays base 10000000 with sign flag.
 
 Exact rationals are represented as pairs of exact integers (numerator,
 denominator) in lowest terms.

@@ -4,6 +4,8 @@ TODO:
 
 * Fix (expt 0 0) in maint branches as per the example in R6RS.
 
+* Backport fix: (angle 1.0) must be inexact.
+
 * Make various unary functions raise &assertion on wrong type argument.
 
 * Decimal: Relax the constraint that 10 not divide n.
