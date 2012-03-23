@@ -671,12 +671,12 @@ function implementUncurry(plugins) {
 
         but not relying on func or its prototype having a "call"
         property.  The point is to make library code behave the same
-        after arbitrary code runs.
+        after arbitrary code runs, possibly improving security and
+        performance.
 
         http://wiki.ecmascript.org/doku.php?id=conventions:safe_meta_programming
     */
-    var uncurry = g.Function.prototype.bind.bind(g.Function.prototype.call);
-    api.uncurry = uncurry;
+    api.uncurry = g.Function.prototype.bind.bind(g.Function.prototype.call);
     return api;
 }
 
@@ -3410,20 +3410,11 @@ function implementRnrsBase(plugins) {
     //"use strict";  // Strict mode hinders error reporting.
     var g = plugins.get("es5globals");
     var uncurry = plugins.get("uncurry");
-    // XXX Could prune unused items.
-    var SchemeNumber, toSchemeNumber, SchemeNumberType, Complex, Real, InexactReal, ExactReal, ExactRational, ExactInteger, debug, numberToString, isExact, isInexact, isComplex, isReal, isRational, isInteger, isZero, toExact, toInexact, negate, reciprocal, eq, ne, add, subtract, multiply, divide, square, realPart, imagPart, expt, expt, exp, magnitude, angle, sqrt, log, asin, acos, atan, sin, cos, tan, SN_isFinite, SN_isInfinite, SN_isNaN, isUnit, abs, isPositive, isNegative, sign, floor, ceiling, truncate, round, compare, gt, lt, ge, le, divAndMod, div, mod, atan2, numerator, denominator, isEven, isOdd, exactIntegerSqrt, exp10, gcdNonnegative, stringToNumber, I, MINUS_I, ZERO, ONE, TWO, MINUS_ONE, INEXACT_ZERO, INEXACT_ONE, PI, INFINITY, MINUS_INFINITY, NAN, raise, defaultRaise, raiseDivisionByExactZero, isNumber, assertReal, toReal, assertInteger, toInteger, assertExact, numberToBinary, nativeDenominatorLog2, nativeDenominator, makeRectangular, makePolar;
+    var SchemeNumber, stringToNumber, ZERO, ONE, MINUS_ONE, INEXACT_ZERO, NAN, raise, isNumber, assertReal, toReal, toInteger, assertExact, makeRectangular, makePolar;
+    var numberToString, isExact, isInexact, isComplex, isReal, isRational, isInteger, isZero, toExact, toInexact, negate, reciprocal, eq, ne, add, subtract, multiply, divide, realPart, imagPart, expt, exp, magnitude, angle, sqrt, log, asin, acos, atan, sin, cos, tan, SN_isFinite, SN_isInfinite, SN_isNaN, abs, isPositive, isNegative, floor, ceiling, truncate, round, compare, gt, lt, ge, le, divAndMod, div, mod, atan2, numerator, denominator, isEven, isOdd, exactIntegerSqrt, gcdNonnegative;
     var Array_push = uncurry(g.Array.prototype.push);
 
     SchemeNumber             = plugins.get("SchemeNumber");
-    toSchemeNumber           = plugins.get("toSchemeNumber");
-    SchemeNumberType         = plugins.get("SchemeNumberType");
-    Complex                  = plugins.get("Complex");
-    Real                     = plugins.get("Real");
-    InexactReal              = plugins.get("InexactReal");
-    ExactReal                = plugins.get("ExactReal");
-    ExactRational            = plugins.get("ExactRational");
-    ExactInteger             = plugins.get("ExactInteger");
-    debug                    = plugins.get("debug");
     numberToString           = plugins.get("numberToString");
     isExact                  = plugins.get("isExact");
     isInexact                = plugins.get("isInexact");
@@ -3442,10 +3433,8 @@ function implementRnrsBase(plugins) {
     subtract                 = plugins.get("subtract");
     multiply                 = plugins.get("multiply");
     divide                   = plugins.get("divide");
-    square                   = plugins.get("square");
     realPart                 = plugins.get("realPart");
     imagPart                 = plugins.get("imagPart");
-    expt                     = plugins.get("expt");
     expt                     = plugins.get("expt");
     exp                      = plugins.get("exp");
     magnitude                = plugins.get("magnitude");
@@ -3461,11 +3450,9 @@ function implementRnrsBase(plugins) {
     SN_isFinite              = plugins.get("SN_isFinite");
     SN_isInfinite            = plugins.get("SN_isInfinite");
     SN_isNaN                 = plugins.get("SN_isNaN");
-    isUnit                   = plugins.get("isUnit");
     abs                      = plugins.get("abs");
     isPositive               = plugins.get("isPositive");
     isNegative               = plugins.get("isNegative");
-    sign                     = plugins.get("sign");
     floor                    = plugins.get("floor");
     ceiling                  = plugins.get("ceiling");
     truncate                 = plugins.get("truncate");
@@ -3484,35 +3471,21 @@ function implementRnrsBase(plugins) {
     isEven                   = plugins.get("isEven");
     isOdd                    = plugins.get("isOdd");
     exactIntegerSqrt         = plugins.get("exactIntegerSqrt");
-    exp10                    = plugins.get("exp10");
     gcdNonnegative           = plugins.get("gcdNonnegative");
     stringToNumber           = plugins.get("stringToNumber");
 
     function onPluginsChanged(plugins) {
-        I                        = plugins.get("I");
-        MINUS_I                  = plugins.get("MINUS_I");
         ZERO                     = plugins.get("ZERO");
         ONE                      = plugins.get("ONE");
-        TWO                      = plugins.get("TWO");
         MINUS_ONE                = plugins.get("MINUS_ONE");
         INEXACT_ZERO             = plugins.get("INEXACT_ZERO");
-        INEXACT_ONE              = plugins.get("INEXACT_ONE");
-        PI                       = plugins.get("PI");
-        INFINITY                 = plugins.get("INFINITY");
-        MINUS_INFINITY           = plugins.get("MINUS_INFINITY");
         NAN                      = plugins.get("NAN");
         raise                    = plugins.get("raise");
-        defaultRaise             = plugins.get("defaultRaise");
-        raiseDivisionByExactZero = plugins.get("raiseDivisionByExactZero");
         isNumber                 = plugins.get("isNumber");
         assertReal               = plugins.get("assertReal");
         toReal                   = plugins.get("toReal");
-        assertInteger            = plugins.get("assertInteger");
         toInteger                = plugins.get("toInteger");
         assertExact              = plugins.get("assertExact");
-        numberToBinary           = plugins.get("numberToBinary");
-        nativeDenominatorLog2    = plugins.get("nativeDenominatorLog2");
-        nativeDenominator        = plugins.get("nativeDenominator");
         makeRectangular          = plugins.get("makeRectangular");
         makePolar                = plugins.get("makePolar");
     }
