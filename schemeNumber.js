@@ -2975,6 +2975,36 @@ function implementSchemeNumber(plugins) {
     return SchemeNumber;
 }
 
+function makeMinimalBase() {
+
+    var SchemeNumber, debug;
+
+    var disp = DispatchJs.makeContext({
+        methodNamePrefix: "SN_",
+        methodNameSeparator: " ",
+        //debug: true,
+    });
+
+    var plugins = new PluginContainer({
+        Dispatch: disp,
+        es5globals: getEs5Globals(),
+    });
+
+    plugins.extend(implementUncurry(plugins));
+    plugins.extend(defineGenericFunctions(plugins));
+    plugins.extend(defineSchemeNumberType(plugins));
+    plugins.extend(defineDebugFunction(plugins));
+
+    // XXX These next steps could be conflated.
+    SchemeNumber = implementSchemeNumber(plugins);
+    plugins.extend("SchemeNumber", SchemeNumber);
+    plugins.extend(implementCoreLibrary(plugins));
+    SchemeNumber.raise = plugins.get("defaultRaise");
+    SchemeNumber.fn = implementRnrsBase(plugins);
+
+    return SchemeNumber;
+}
+
 /*
     Function: defineAbstractTypes(plugins)
     Creates a prototype-based type hierarchy corresponding to some of
@@ -4757,39 +4787,12 @@ function installEcmaMethods(plugins) {
     ExactRational.prototype.valueOf = plugins.get("Rational_valueOf");
 }
 
-function makeMinimalBase() {
-
-    var SchemeNumber, debug;
-
-    var disp = DispatchJs.makeContext({
-        methodNamePrefix: "SN_",
-        methodNameSeparator: " ",
-        //debug: true,
-    });
-
-    var plugins = new PluginContainer({
-        Dispatch: disp,
-        es5globals: getEs5Globals(),
-    });
-
-    plugins.extend(implementUncurry(plugins));
-    plugins.extend(defineGenericFunctions(plugins));
-    plugins.extend(defineSchemeNumberType(plugins));
-    plugins.extend(defineDebugFunction(plugins));
-
-    // XXX These next steps could be conflated.
-    SchemeNumber = implementSchemeNumber(plugins);
-    plugins.extend("SchemeNumber", SchemeNumber);
-    plugins.extend(implementCoreLibrary(plugins));
-    SchemeNumber.raise = plugins.get("defaultRaise");
-    SchemeNumber.fn = implementRnrsBase(plugins);
-
-    return SchemeNumber;
-}
-
 function makeBase() {
     var SchemeNumber = makeMinimalBase();
     var plugins = SchemeNumber.plugins;
+
+    SchemeNumber.makeMinimalBase = makeMinimalBase;
+    SchemeNumber.makeBase = makeBase;
 
     plugins.extend(implementPluginLibrary(plugins));
     plugins.extend(defineAbstractTypes(plugins));
