@@ -293,7 +293,6 @@ function makeContext(opts) {
                 base:    base,
                 sub:     [],
                 ename:   _replace(sep + name, /([\"\\])/g, "\\$1"),
-                //meths:   [],
             };
             //opts.debug && console.log("defClass:", name, "base:", base);
             if (typeof base !== "undefined") {
@@ -334,32 +333,6 @@ function makeContext(opts) {
                         doit(0);
                     }
                 }
-            /*
-            bases = [];
-            for (c = classes[base]; c; c = classes[c.base]) {
-                _unshift(bases, c);
-            }
-            inherited = _create(null);
-            opts.debug && console.log("bases", bases.map(function(c){return c.ename}));
-            _forEach(bases, function(c) {
-                _forEach(c.meths, function(array) {
-                    var types = _slice(array[0]);
-                    var i = array[1], do_def = array[2], fnName = array[3];
-                    var c0 = classes[types[0]];
-                    var proto = c0.ctor.prototype;
-                    var method = _join(_concat([prefix, fnName],
-                                               _slice(types, 1)), sep);
-                    var code = proto[method];
-                    if (!_hasOwnProperty(proto, method)) {
-                        //opts.debug && console.log("inherited property:" + method)
-                        return;
-                    }
-                    types[i] = name;
-                    //opts.debug && console.log("Propagating", [c.ename, name, i, types]);
-                    do_def(types, code, inherited);
-                });
-            });
-            */
             }
             return ctor;
         },
@@ -437,12 +410,6 @@ function makeContext(opts) {
                 }
                 //opts.debug && console.log("def");
                 do_def(types, fn, _create(null));
-
-                //opts.debug && console.log("Recording in meths:" + types);
-                //for (i = ndisp-1; i >= 0; i--) {
-                    // XXX memory leak+slow for methods often redefined.
-                    //_push(classes[types[i]].meths, [types, i, do_def, fnName]);
-                //}
             }
 
             function do_def(types, fn, inherited) {
@@ -480,7 +447,7 @@ function makeContext(opts) {
                         opts.debug && console.log("Skipping " + i + " " + types[i] + '["' + method + '"] ' + short_fn(proto[method]) + "!=" + short_fn(oldm[i]));
                         return;  // already more specialized in an argument.
                     }
-                    //print("doit("+i+","+method+")  "+cs[i].ename);
+                    //console.log("doit("+i+","+method+")  "+cs[i].ename);
                     if (proto === Object.prototype) // sanity check.
                         throw Error("BUG: code would modify Object.prototype.");
 
@@ -4454,6 +4421,45 @@ function installEcmaMethods(plugins) {
     ExactRational.prototype.valueOf = plugins.get("Rational_valueOf");
 }
 
+function makeBase() {
+
+    var SchemeNumber, debug;
+
+    var disp = DispatchJs.makeContext({
+        methodNamePrefix: "SN_",
+        methodNameSeparator: " ",
+        //debug: true,
+    });
+
+    var plugins = new PluginContainer({
+        Dispatch: disp,
+        es5globals: getEs5Globals(),
+    });
+
+    plugins.extend(implementUncurry(plugins));
+
+    plugins.extend(defineAbstractTypes(plugins));
+    installAbstractTypes(plugins);
+
+    debug = defineDebugFunction(plugins);
+    plugins.extend("debug", debug);
+
+    plugins.extend(defineGenericFunctions(plugins));
+
+    SchemeNumber = implementSchemeNumber(plugins);
+    plugins.extend("SchemeNumber", SchemeNumber);
+
+    plugins.extend(implementPluginLibrary(plugins));
+
+    installGenericFunctions(plugins);
+    installEcmaMethods(plugins);
+
+    SchemeNumber.raise = plugins.get("defaultRaise");
+    SchemeNumber.fn = implementRnrsBase(plugins);
+
+    return SchemeNumber;
+}
+
 /*
     Function: implementNativeInexactReal(plugins)
     Returns a collection of functions implementing inexact reals as
@@ -6346,41 +6352,12 @@ return (function() {
 
     // Build the SchemeNumber object piece by piece.
 
-    var SchemeNumber, debug;
-
-    var disp = DispatchJs.makeContext({
-        methodNamePrefix: "SN_",
-        methodNameSeparator: " ",
-        //debug: true,
-    });
-
-    var plugins = new PluginContainer({
-        Dispatch: disp,
-        es5globals: getEs5Globals(),
-    });
-
-    plugins.extend(implementUncurry(plugins));
-
-    plugins.extend(defineAbstractTypes(plugins));
-    installAbstractTypes(plugins);
-
-    debug = defineDebugFunction(plugins);
-    plugins.extend("debug", debug);
-
-    plugins.extend(defineGenericFunctions(plugins));
-
-    SchemeNumber = implementSchemeNumber(plugins);
-    plugins.extend("SchemeNumber", SchemeNumber);
-
-    plugins.extend(implementPluginLibrary(plugins));
-
-    installGenericFunctions(plugins);
-    installEcmaMethods(plugins);
-
-    SchemeNumber.raise = plugins.get("defaultRaise");
-    SchemeNumber.fn = implementRnrsBase(plugins);
-
     // XXX This could use some refactoring.
+
+    var SchemeNumber = makeBase();
+    var plugins = SchemeNumber.plugins;
+    var disp = plugins.get("Dispatch");
+    var debug = plugins.get("debug");
 
     plugins.extend("BigInteger", BigInteger);
     var Integers = implementHybridBigInteger(plugins);
