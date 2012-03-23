@@ -680,6 +680,59 @@ function implementUncurry(plugins) {
     return api;
 }
 
+function defineSchemeNumberType(plugins) {
+    "use strict";
+    var g = plugins.get("es5globals");
+    var _NaN = g.NaN;
+    var api = g.Object.create(null);
+    var numberToString = plugins.get("numberToString");
+    var disp = plugins.get("Dispatch");
+
+    function SchemeNumberType(){}
+
+    // Inherit from Number so that "x instanceof Number" holds.
+    // But then override the standard methods, which are compatible
+    // only with native Number objects.
+
+    SchemeNumberType.prototype = new Number();
+
+    function onPluginsChanged(plugins, changed) {
+        numberToString = plugins.get("numberToString");
+    }
+    plugins.onChange.subscribe(onPluginsChanged);
+
+    // Good defaults.
+    function genericToString(radix) {
+        if (numberToString)
+            return numberToString(this, radix);
+        return "[object SchemeNumber]";
+    }
+    function genericToLocaleString() {
+        return genericToString();
+    }
+    function retNaN() {
+        return _NaN;
+    }
+
+    // Bad default.
+    function genericFormatter() {
+        if (numberToString)
+            return numberToString(this);
+        return "SchemeNumber";
+    }
+
+    SchemeNumberType.prototype.toFixed        = genericFormatter;
+    SchemeNumberType.prototype.toExponential  = genericFormatter;
+    SchemeNumberType.prototype.toPrecision    = genericFormatter;
+    SchemeNumberType.prototype.toString       = genericToString;
+    SchemeNumberType.prototype.toLocaleString = genericToLocaleString;
+    SchemeNumberType.prototype.valueOf        = retNaN;
+
+    disp.defClass("SchemeNumber", { ctor: SchemeNumberType });
+
+    api.SchemeNumberType         = SchemeNumberType;
+    return api;
+}
 
 /*
     Function: defineAbstractTypes(plugins)
@@ -702,28 +755,15 @@ function implementUncurry(plugins) {
     *plugins* shall be a <PluginContainer> with the following
     contents.
 
-    genericFormatter - function() -> string
-    Used as the default *toFixed*, *toExponential*, and *toPrecision*
-    method.
-
-    genericToString - function(radix) -> string
-    Used as the default *toString* method.
-
-    genericToLocaleString - function() -> string
-    Used as the default *toLocaleString* method.
-
-    retNaN - function() -> number
-    Used as the default *valueOf* method.
+    SchemeNumberType - base of the numerical tower
+    Inherits from the built-in *Number* prototype.  Comprises all
+    Scheme numbers.
 
     Output:
 
     <defineAbstractTypes> returns an object with the following
     properties, each a constructor of zero arguments having no side
     effects.
-
-    SchemeNumberType - base of the numerical tower
-    Inherits from the built-in *Number* prototype.  Comprises all
-    Scheme numbers.
 
     Complex - complex number type
     Inherits from *SchemeNumberType*.
@@ -763,11 +803,11 @@ function implementUncurry(plugins) {
     Examples:
 
     > SchemeNumber("#e1.2").toFixed(2)  // "1.20"
-    > SchemeNumber("1/3").toFixed(20)   // "0.33333333333333333333"
+    > SchemeNumber("2/3").toFixed(20)   // "0.66666666666666666667"
 
     Compare the native version:
 
-    > (1/3).toFixed(20)                 // "0.33333333333333331483"
+    > (2/3).toFixed(20)                 // "0.66666666666666662966"
 
     Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
 
@@ -813,39 +853,15 @@ function defineAbstractTypes(plugins) {
     "use strict";
     var g = plugins.get("es5globals");
     var api = g.Object.create(null);
+    var SchemeNumberType = plugins.get("SchemeNumberType");
 
-    // N - local alias for SchemeNumberType.
-    function N(){}
-
-    // Inherit from Number so that "x instanceof Number" holds.
-    // But then override the standard methods, which are compatible
-    // only with native Number objects.
-
-    N.prototype = new Number();
-    N.prototype.toFixed        = plugins.get("genericFormatter");
-    N.prototype.toExponential  = N.prototype.toFixed;
-    N.prototype.toPrecision    = N.prototype.toFixed;
-    N.prototype.toString       = plugins.get("genericToString");
-    N.prototype.toLocaleString = plugins.get("genericToLocaleString");
-    N.prototype.valueOf        = plugins.get("retNaN");
-
-    function Complex(){}             Complex.prototype = new N();
+    function Complex(){}             Complex.prototype = new SchemeNumberType();
     function Real(){}                   Real.prototype = new Complex();
     function InexactReal(){}     InexactReal.prototype = new Real();
     function ExactReal(){}         ExactReal.prototype = new Real();
     function ExactRational(){} ExactRational.prototype = new ExactReal();
     function ExactInteger(){}   ExactInteger.prototype = new ExactRational();
 
-    /*
-        SchemeNumberType         = plugins.get("SchemeNumberType");
-        Complex                  = plugins.get("Complex");
-        Real                     = plugins.get("Real");
-        InexactReal              = plugins.get("InexactReal");
-        ExactReal                = plugins.get("ExactReal");
-        ExactRational            = plugins.get("ExactRational");
-        ExactInteger             = plugins.get("ExactInteger");
-    */
-    api.SchemeNumberType         = N;
     api.Complex                  = Complex;
     api.Real                     = Real;
     api.InexactReal              = InexactReal;
@@ -873,8 +889,6 @@ function defineAbstractTypes(plugins) {
 function installAbstractTypes(plugins) {
     "use strict";
     var disp = plugins.get("Dispatch");
-
-    disp.defClass("SchemeNumber", { ctor: plugins.get("SchemeNumberType") });
 
     function def(name) {
         disp.defClass(name, { ctor: plugins.get(name) });
@@ -2436,19 +2450,6 @@ function implementPluginLibrary(plugins) {
     }
 
     //
-    // Good defaults.
-    //
-
-    function genericToString(radix) {
-        if (numberToString)
-            return numberToString(this, radix);
-        return "[object SchemeNumber]";
-    }
-    function genericToLocaleString() {
-        return genericToString();
-    }
-
-    //
     // For ECMAScript Number formatting methods.
     //
 
@@ -2459,13 +2460,6 @@ function implementPluginLibrary(plugins) {
                               "0000000000000000");
         }
         return ret;
-    }
-
-    // Bad default.
-    function genericFormatter() {
-        if (numberToString)
-            return numberToString(this);
-        return "SchemeNumber";
     }
 
     // Specified by ECMA-262, 5th edition, 15.7.4.5.
@@ -2978,9 +2972,6 @@ function implementPluginLibrary(plugins) {
     api.expt_N_EI                = expt_N_EI;
     api.gcdNonnegative_via_isZero_mod= gcdNonnegative_via_isZero_mod;
 
-    api.genericToString          = genericToString;
-    api.genericToLocaleString    = genericToLocaleString;
-    api.genericFormatter         = genericFormatter;
     api.Real_toFixed             = Real_toFixed;
     api.Real_toExponential       = Real_toExponential;
     api.Real_toPrecision         = Real_toPrecision;
@@ -4394,6 +4385,7 @@ function installGenericFunctions(plugins) {
 */
 function installEcmaMethods(plugins) {
     "use strict";
+    var N             = plugins.get("SchemeNumberType");
     var ExactReal     = plugins.get("ExactReal");
     var Complex       = plugins.get("Complex");
     var Real          = plugins.get("Real");
@@ -4408,11 +4400,11 @@ function installEcmaMethods(plugins) {
     Complex.prototype.toPrecision   = plugins.get("Complex_toPrecision");
 
     // If Real inherits these from Complex, they will loop infinitely.
-    Real.prototype.valueOf        = plugins.get("retNaN");
-    Real.prototype.toFixed        = plugins.get("genericFormatter");
-    Real.prototype.toExponential  = Real.prototype.toFixed;
-    Real.prototype.toPrecision    = Real.prototype.toFixed;
-    Real.prototype.toString       = plugins.get("genericToString");
+    Real.prototype.valueOf        = N.prototype.valueOf;
+    Real.prototype.toFixed        = N.prototype.toFixed;
+    Real.prototype.toExponential  = N.prototype.toExponential;
+    Real.prototype.toPrecision    = N.prototype.toPrecision;
+    Real.prototype.toString       = N.prototype.toString;
 
     ExactReal.prototype.toFixed       = plugins.get("Real_toFixed");
     ExactReal.prototype.toExponential = plugins.get("Real_toExponential");
@@ -4438,12 +4430,13 @@ function makeBase() {
 
     plugins.extend(implementUncurry(plugins));
 
-    plugins.extend(defineAbstractTypes(plugins));
-    installAbstractTypes(plugins);
+    plugins.extend(defineSchemeNumberType(plugins));
 
     debug = defineDebugFunction(plugins);
     plugins.extend("debug", debug);
 
+    plugins.extend(defineAbstractTypes(plugins));
+    installAbstractTypes(plugins);
     plugins.extend(defineGenericFunctions(plugins));
 
     SchemeNumber = implementSchemeNumber(plugins);
@@ -4451,11 +4444,11 @@ function makeBase() {
 
     plugins.extend(implementPluginLibrary(plugins));
 
-    installGenericFunctions(plugins);
-    installEcmaMethods(plugins);
-
     SchemeNumber.raise = plugins.get("defaultRaise");
     SchemeNumber.fn = implementRnrsBase(plugins);
+
+    installGenericFunctions(plugins);
+    installEcmaMethods(plugins);
 
     return SchemeNumber;
 }
@@ -5274,35 +5267,6 @@ function installFlonum(plugins) {
 
 /*
     Function: implementHybridBigInteger(args)
-
-    XXX documentation out of date.
-
-    Returns an object containing <parseExactInteger> and
-    <nativeToExactInteger> properties suitable for use with
-    <makeBase>, along with an <install> method for
-    <implementSchemeNumbers>.
-
-    The returned functions produce exact integers represented as
-    native numbers in the range with absolute value less than 2^53.
-    Outside this range, the implementation uses
-    *args.BigIntegerConstructor* to create and operate on numbers.
-    *BigIntegerConstructor* must behave like <BigInteger at
-    https://github.com/silentmatt/javascript-biginteger>.
-
-    *args.interfaces* should be the result of a call to
-    <makeInterfaces> and should be used in any subsequent calls to
-    <makeBase>.
-
-    If *args* contains property *isDefaultInteger* with a true
-    value, <install> creates <pluginApi> operations as follows.
-
-    - The operator <toExact> may return an object created by this
-      implementation when passed any inexact real argument.
-
-    - The operators <compare>, <add>, <subtract>, <multiply>,
-      <divAndMod>, <div>, <mod>, and <gcdNonnegative> may return an
-      object created by this implementation when passed any two exact
-      integer arguments.
 */
 function implementHybridBigInteger(plugins) {
     "use strict";
@@ -6085,30 +6049,6 @@ function installHybridInteger(plugins) {
 
 /*
     Function: implementFraction(plugins)
-    XXX documentation out of date.
-    Returns an object containing a <divideReduced> property suitable
-    for use with <makeBase>, along with an <install> method for
-    <implementSchemeNumbers>.
-
-    The returned function produces exact rationals represented as
-    pairs of exact integers, numerator and positive denominator in
-    lowest terms.
-
-    *args.interfaces* should be the result of a call to
-    <makeInterfaces> and should be used in any subsequent calls to
-    <makeBase>.
-
-    If *args* contains property *isDefaultRational* with a true
-    value, <install> creates <pluginApi> operations as follows.
-
-    - The operators <negate>, <square>, <reciprocal>, <sign>, <add>,
-      <subtract>, <multiply>, and <divide> may return an object
-      created by this implementation when passed any exact rational
-      arguments.
-
-    - The <expt> operator may return an object created by this
-      implementation when passed any exact rational base and exact
-      integer power.
 */
 function implementFraction(plugins) {
     "use strict";
@@ -6159,35 +6099,6 @@ function implementFraction(plugins) {
 
 /*
     Function: implementRectangular(plugins)
-    XXX documentation is obsolete.
-    Returns an object containing <exactRectangular>,
-    <inexactRectangular>, <makePolar>, <I>, and <MINUS_I> properties
-    suitable for use with <makeBase>, along with an <install> method
-    for <implementSchemeNumbers>.
-
-    The returned functions produce complex numbers represented as
-    pairs of real numbers equaling the real and imaginary parts.
-
-    *args.interfaces* should be the result of a call to
-    <makeInterfaces> and should be used in any subsequent calls to
-    <makeBase>.
-
-    *args* must contain *nativeToExactInteger* and *toFlonum*
-    *properties of the kind specified by <makeBase>.
-
-    If *args* contains property *isDefaultComplex* with a true value,
-    <install> creates <pluginApi> operations as follows.
-
-    - The operator <numberToString> may return a representation in
-      rectangular coordinates when passed any complex argument.
-
-    - The operators <magnitude> and <angle> may convert their argument
-      to rectangular coordinates before calculating a result for any
-      complex argument.
-
-    - The operators <add>, <subtract>, <multiply>, <divide>, <negate>,
-      <square>, <reciprocal>, and <exp> may return an object created
-      by this implementation when passed any complex arguments.
 */
 function implementRectangular(plugins) {
     "use strict";
