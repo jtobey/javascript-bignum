@@ -696,11 +696,6 @@ function defineSchemeNumberType(plugins) {
 
     SchemeNumberType.prototype = new Number();
 
-    function onPluginsChanged(plugins, changed) {
-        numberToString = plugins.get("numberToString");
-    }
-    plugins.onChange.subscribe(onPluginsChanged);
-
     // Good defaults.
     function genericToString(radix) {
         if (numberToString)
@@ -935,6 +930,7 @@ function defineDebugFunction(plugins) {
     var disp             = plugins.get("Dispatch");
     var SchemeNumberType = plugins.get("SchemeNumberType");
     var Object_toString  = uncurry(g.Object.prototype.toString);
+    var api = g.Object.create(null);
 
     // Generic default for classes that don't specialize debug.
     function SchemeNumber_debug() {
@@ -947,10 +943,10 @@ function defineDebugFunction(plugins) {
         return "SchemeNumber(" + t + ")";
     }
 
-    var debug = disp.defGeneric("debug", 1);
-    debug.def(SchemeNumberType, SchemeNumber_debug);
+    api.debug = disp.defGeneric("debug", 1);
+    api.debug.def(SchemeNumberType, SchemeNumber_debug);
 
-    return debug;
+    return api;
 }
 
 /*
@@ -1177,11 +1173,102 @@ function defineDebugFunction(plugins) {
 function defineGenericFunctions(plugins) {
     "use strict";
     var g = plugins.get("es5globals");
+    var disp = plugins.get("Dispatch");
+    var api = g.Object.create(null);
+
+    function def(name, ndisp, nargs) {
+        api[name] = disp.defGeneric(name, ndisp, nargs);
+    }
+
+    def("toSchemeNumber", 1);
+    def("numberToString", 1, 3);
+    def("isExact", 1);
+    def("isInexact", 1);
+
+    def("isComplex", 1);
+    def("isReal", 1);
+    def("isRational", 1);
+    def("isInteger", 1);
+    def("isZero", 1);
+
+    def("toExact", 1);
+    def("toInexact", 1);
+    def("negate", 1);
+    def("reciprocal", 1);
+
+    def("eq", 2);
+    def("ne", 2);
+
+    def("add", 2);
+    def("subtract", 2);
+    def("multiply", 2);
+    def("divide", 2);
+
+    def("square", 1);
+
+    def("realPart", 1);
+    def("imagPart", 1);
+
+    def("expt", 2);
+
+    def("exp", 1);
+    def("magnitude", 1);
+    def("angle", 1);
+    def("sqrt", 1);
+
+    def("log", 1);
+    def("asin", 1);
+    def("acos", 1);
+    def("atan", 1);
+
+    def("sin", 1);
+    def("cos", 1);
+    def("tan", 1);
+
+    def("SN_isFinite", 1);
+    def("SN_isInfinite", 1);
+    def("SN_isNaN", 1);
+
+    def("isUnit", 1);
+    def("abs", 1);
+    def("isPositive", 1);
+    def("isNegative", 1);
+    def("sign", 1);
+    def("floor", 1);
+    def("ceiling", 1);
+    def("truncate", 1);
+    def("round", 1);
+
+    def("compare", 2);
+    def("gt", 2);
+    def("lt", 2);
+    def("ge", 2);
+    def("le", 2);
+    def("divAndMod", 2);
+    def("div", 2);
+    def("mod", 2);
+    def("atan2", 2);
+
+    def("numerator", 1);
+    def("denominator", 1);
+    def("numeratorAndDenominator", 1);
+
+    def("isEven", 1);
+    def("isOdd", 1);
+    def("exactIntegerSqrt", 1);
+    def("exp10", 2);
+    def("gcdNonnegative", 2);
+    def("divideReduced", 2);
+
+    return api;
+}
+
+function installStubFunctions(plugins) {
+    "use strict";
+    var g = plugins.get("es5globals");
     var uncurry = plugins.get("uncurry");
     var Function_apply = uncurry(g.Function.prototype.apply);
     var Array_concat   = uncurry(g.Array.prototype.concat);
-
-    var disp = plugins.get("Dispatch");
 
     var SchemeNumberType         = plugins.get("SchemeNumberType");
     var Complex                  = plugins.get("Complex");
@@ -1191,15 +1278,13 @@ function defineGenericFunctions(plugins) {
     var ExactRational            = plugins.get("ExactRational");
     var ExactInteger             = plugins.get("ExactInteger");
 
-    var api = g.Object.create(null);
-
-    api.toSchemeNumber = disp.defGeneric("toSchemeNumber", 1);
-
-    function def(name, types, nargs) {
-        nargs = nargs || types.length;
-        api[name] = disp.defGeneric(name, types.length, nargs);
-        Function_apply(api[name].def, null,
-                       Array_concat(types, g.undefined, nargs));
+    function def(name, types) {
+        var func = plugins.get(name);
+        if (!func) {
+            console.log(name, "not found");
+            return;
+        }
+        Function_apply(func.def, func, types /*Array_concat(types, g.undefined)*/);
     }
 
     // These are the functions that number implementations must implement.
@@ -1211,7 +1296,7 @@ function defineGenericFunctions(plugins) {
     // add.def("MyComplex", Complex, add_MyComplex_to_AnyComplex);
     // add.def(Complex, "MyComplex", add_AnyComplex_to_MyComplex);
 
-    def("numberToString", [SchemeNumberType], 3);
+    def("numberToString", [SchemeNumberType]);
     def("isExact",        [SchemeNumberType]);
     def("isInexact",      [SchemeNumberType]);
 
@@ -1240,7 +1325,7 @@ function defineGenericFunctions(plugins) {
     def("imagPart",       [Complex]);
 
     def("expt",           [SchemeNumberType, ExactInteger]);
-    api.expt.def(Complex, Complex);
+    def("expt",           [Complex, Complex]);
 
     def("exp",            [Complex]);
     def("magnitude",      [Complex]);
@@ -1290,9 +1375,6 @@ function defineGenericFunctions(plugins) {
     def("exp10",          [ExactInteger, ExactInteger]);
     def("gcdNonnegative", [ExactInteger, ExactInteger]);
     def("divideReduced",  [ExactInteger, ExactInteger]);
-
-    //perl -nle 'printf(qq(        %-25s= plugins.get("%s");\n), $1, $1) while /(\w+)[,;]/g'
-    return api;
 }
 
 
@@ -4429,23 +4511,20 @@ function makeBase() {
     });
 
     plugins.extend(implementUncurry(plugins));
-
-    plugins.extend(defineSchemeNumberType(plugins));
-
-    debug = defineDebugFunction(plugins);
-    plugins.extend("debug", debug);
-
-    plugins.extend(defineAbstractTypes(plugins));
-    installAbstractTypes(plugins);
     plugins.extend(defineGenericFunctions(plugins));
+    plugins.extend(defineSchemeNumberType(plugins));
+    plugins.extend(defineDebugFunction(plugins));
 
     SchemeNumber = implementSchemeNumber(plugins);
     plugins.extend("SchemeNumber", SchemeNumber);
 
     plugins.extend(implementPluginLibrary(plugins));
-
     SchemeNumber.raise = plugins.get("defaultRaise");
     SchemeNumber.fn = implementRnrsBase(plugins);
+
+    plugins.extend(defineAbstractTypes(plugins));
+    installAbstractTypes(plugins);
+    installStubFunctions(plugins);
 
     installGenericFunctions(plugins);
     installEcmaMethods(plugins);
@@ -6263,12 +6342,12 @@ return (function() {
 
     // Build the SchemeNumber object piece by piece.
 
-    // XXX This could use some refactoring.
-
     var SchemeNumber = makeBase();
-    var plugins = SchemeNumber.plugins;
-    var disp = plugins.get("Dispatch");
-    var debug = plugins.get("debug");
+    var plugins      = SchemeNumber.plugins;
+    var disp         = plugins.get("Dispatch");
+    var debug        = plugins.get("debug") || {def: function(){}};
+
+    // XXX This could use some refactoring.
 
     plugins.extend("BigInteger", BigInteger);
     var Integers = implementHybridBigInteger(plugins);
