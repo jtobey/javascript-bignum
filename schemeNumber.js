@@ -3641,14 +3641,6 @@ function implementPluginLibrary(plugins) {
     onPluginsChanged(plugins, {});
 
     //
-    // For MinusOne.  Move to an integer library.
-    //
-
-    function retI()           { return I; }
-    function negateThis()     { return negate(this); }
-    function reciprocalThis() { return reciprocal(this); }
-
-    //
     // For lazy implementors.  Used in Complex and elsewhere.  These
     // belong in a separate library.  Could support replacement with
     // dummy versions that return NaN.
@@ -4407,8 +4399,6 @@ function implementPluginLibrary(plugins) {
     // End library function definitions.
     //
 
-    api.retI                     = retI;
-
     api.Complex_sqrt             = Complex_sqrt;
     api.Complex_exp              = Complex_exp;
     api.Complex_sin              = Complex_sin;
@@ -4459,10 +4449,6 @@ function implementPluginLibrary(plugins) {
     api.numberToBinary           = numberToBinary;
     api.nativeDenominatorLog2    = nativeDenominatorLog2;
     api.nativeDenominator        = nativeDenominator;
-
-    // XXX The "Minus One library"
-    api.negateThis               = negateThis;
-    api.reciprocalThis           = reciprocalThis;
 
     api.square_via_multiply      = square_via_multiply;
     api.isInexact_via_isExact    = isInexact_via_isExact;
@@ -5619,21 +5605,65 @@ function installFlonum(plugins) {
 
 /*
     Function: implementHybridBigInteger(args)
+    Exact integer implementation that uses native numbers up to
+    2^53-1 and BigInteger objects beyond.
 */
-function implementHybridBigInteger(plugins) {
+function implementHybridBigInteger(plugins, BigInteger) {
     "use strict";
     var g                        = plugins.get("es5globals");
     var uncurry                  = plugins.get("uncurry");
-    var Real                     = plugins.get("Real");
-    var ExactReal                = plugins.get("ExactReal");
+    var SchemeNumber             = plugins.get("SchemeNumber");
     var ExactInteger             = plugins.get("ExactInteger");
-    var BigInteger               = plugins.get("BigInteger");
     var BigIntegerName           = BigInteger.name || "BigInteger";
     var NativeExactIntegerName = "Proto" + BigIntegerName;
     var Number_toString = uncurry(g.Number.prototype.toString);
     var String_replace  = uncurry(g.String.prototype.replace);
+    var String_substring = uncurry(g.String.prototype.substring);
     var _parseInt                = g.parseInt;
     var api = g.Object.create(null);
+
+    var Math_LN10    = g.Math.LN10;
+    var Math_abs     = g.Math.abs;
+    var Math_ceil    = g.Math.ceil;
+    var Math_exp     = g.Math.exp;
+    var Math_floor   = g.Math.floor;
+    var Math_pow     = g.Math.pow;
+    var Math_sqrt    = g.Math.sqrt;
+
+    var _parseInt    = g.parseInt;
+    var _Number      = g.Number;
+    var _String      = g.String;
+
+    var toBigInteger = plugins.get("Dispatch").defGeneric("toBigInteger", 1);
+
+    var toNativeExactInteger, raise, raiseDivisionByExactZero, numberToString, isExact, isZero, negate, reciprocal, divide, log, isNegative, sign, isEven, exp10, nativeToInexact, inexactRectangular, PI, INEXACT_ZERO, ONE, MINUS_ONE, I;
+
+    raise                    = plugins.get("raise");
+    raiseDivisionByExactZero = plugins.get("raiseDivisionByExactZero");
+
+    numberToString           = plugins.get("numberToString");
+    isExact                  = plugins.get("isExact");
+    isZero                   = plugins.get("isZero");
+    negate                   = plugins.get("negate");
+    reciprocal               = plugins.get("reciprocal");
+    divide                   = plugins.get("divide");
+    log                      = plugins.get("log");
+    isNegative               = plugins.get("isNegative");
+    sign                     = plugins.get("sign");
+    isEven                   = plugins.get("isEven");
+    exp10                    = plugins.get("exp10");
+
+    function onPluginsChanged(plugins) {
+        nativeToInexact          = plugins.get("nativeToInexact");
+        inexactRectangular       = plugins.get("inexactRectangular");
+        PI                       = plugins.get("PI");
+        INEXACT_ZERO             = plugins.get("INEXACT_ZERO");
+        ONE                      = plugins.get("ONE");
+        MINUS_ONE                = plugins.get("MINUS_ONE");
+        I                        = plugins.get("I");
+    }
+    plugins.onChange.subscribe(onPluginsChanged);
+    onPluginsChanged(plugins);
 
     function HybridBigInteger(){}
     HybridBigInteger.prototype = new ExactInteger();
@@ -5651,6 +5681,10 @@ function implementHybridBigInteger(plugins) {
 
     function NativeExactInteger_debug() {
         return NativeExactIntegerName + "(" + this._ + ")";
+    }
+
+    function BigInteger_debug() {
+        return BigIntegerName + "(" + this.toString() + ")";
     }
 
     function valueOf() {
@@ -5702,140 +5736,9 @@ function implementHybridBigInteger(plugins) {
         //assert(n === natFloor(n));
         if (n < 9007199254740992 && n > -9007199254740992)
             return toNativeExactInteger(n);
-        //console.log("toString 16: ", n);
+        // Use base 16 to avoid exponential notation.
         return BigInteger.parse(Number_toString(n, 16), 16);
     }
-
-    api.HybridBigInteger         = HybridBigInteger;
-    api.NativeExactInteger       = NativeExactInteger;
-    api.NativeExactInteger_debug = NativeExactInteger_debug;
-    api.ZeroType                 = ZeroType;
-    api.OneType                  = OneType;
-    api.MinusOneType             = MinusOneType;
-    api.Zero_debug               = Zero_debug;
-    api.One_debug                = One_debug;
-    api.MinusOne_debug           = MinusOne_debug;
-    api.toNativeExactInteger     = toNativeExactInteger;
-    api.parseExactInteger        = parseExactInteger;
-    api.nativeToExactInteger     = nativeToExactInteger;
-    return api;
-}
-
-function implementHybridBigIntegerLibrary(plugins) {
-    "use strict";
-    var SchemeNumber = plugins.get("SchemeNumber");
-    var g            = plugins.get("es5globals");
-    var uncurry      = plugins.get("uncurry");
-    var Number_toString  = uncurry(g.Number.prototype.toString);
-    var String_substring = uncurry(g.String.prototype.substring);
-    var api = g.Object.create(null);
-
-    // Squirrel away the native math library.  XXX could trim unused items.
-    var Math_E       = g.Math.E;
-    var Math_LN10    = g.Math.LN10;
-    var Math_LN2     = g.Math.LN2;
-    var Math_LOG2E   = g.Math.LOG2E;
-    var Math_LOG10E  = g.Math.LOG10E;
-    var Math_PI      = g.Math.PI;
-    var Math_SQRT1_2 = g.Math.SQRT1_2;
-    var Math_SQRT2   = g.Math.SQRT2;
-    var Math_abs     = g.Math.abs;
-    var Math_acos    = g.Math.acos;
-    var Math_asin    = g.Math.asin;
-    var Math_atan    = g.Math.atan;
-    var Math_atan2   = g.Math.atan2;
-    var Math_ceil    = g.Math.ceil;
-    var Math_cos     = g.Math.cos;
-    var Math_exp     = g.Math.exp;
-    var Math_floor   = g.Math.floor;
-    var Math_log     = g.Math.log;
-    var Math_max     = g.Math.max;
-    var Math_min     = g.Math.min;
-    var Math_pow     = g.Math.pow;
-    var Math_random  = g.Math.random;
-    var Math_round   = g.Math.round;
-    var Math_sin     = g.Math.sin;
-    var Math_sqrt    = g.Math.sqrt;
-    var Math_tan     = g.Math.tan;
-
-    var _isFinite    = g.isFinite;
-    var _isNaN       = g.isNaN;
-    var _parseFloat  = g.parseFloat;
-    var _parseInt    = g.parseInt;
-    var _undefined   = g.undefined;
-    var _Number      = g.Number;
-    var _String      = g.String;
-
-    var raise, raiseDivisionByExactZero, toNativeExactInteger, numberToString, isExact, isInexact, toExact, toInexact, isRational, isInteger, isZero, negate, reciprocal, divideReducedNotByOne, square, eq, ne, add, subtract, multiply, divide, expt, exp, sqrt, log, asin, acos, atan, sin, cos, tan, abs, isPositive, isNegative, sign, floor, ceiling, truncate, round, compare, gt, lt, ge, le, divAndMod, div, mod, atan2, numerator, denominator, isEven, isOdd, exp10, toBigInteger, nativeToInexact, inexactRectangular, PI, INEXACT_ZERO, ONE, MINUS_ONE;
-
-    function onPluginsChanged(plugins) {
-        // XXX Could trim the unused ones.
-        // XXX Could look up generic and core functions only once.
-        raise                    = plugins.get("raise");
-        raiseDivisionByExactZero = plugins.get("raiseDivisionByExactZero");
-        toNativeExactInteger     = plugins.get("toNativeExactInteger");
-        numberToString           = plugins.get("numberToString");
-        isExact                  = plugins.get("isExact");
-        isInexact                = plugins.get("isInexact");
-        toExact                  = plugins.get("toExact");
-        toInexact                = plugins.get("toInexact");
-        isRational               = plugins.get("isRational");
-        isInteger                = plugins.get("isInteger");
-        isZero                   = plugins.get("isZero");
-        negate                   = plugins.get("negate");
-        reciprocal               = plugins.get("reciprocal");
-        square                   = plugins.get("square");
-        eq                       = plugins.get("eq");
-        ne                       = plugins.get("ne");
-        add                      = plugins.get("add");
-        subtract                 = plugins.get("subtract");
-        multiply                 = plugins.get("multiply");
-        divide                   = plugins.get("divide");
-        expt                     = plugins.get("expt");
-        exp                      = plugins.get("exp");
-        sqrt                     = plugins.get("sqrt");
-        log                      = plugins.get("log");
-        asin                     = plugins.get("asin");
-        acos                     = plugins.get("acos");
-        atan                     = plugins.get("atan");
-        sin                      = plugins.get("sin");
-        cos                      = plugins.get("cos");
-        tan                      = plugins.get("tan");
-        abs                      = plugins.get("abs");
-        isPositive               = plugins.get("isPositive");
-        isNegative               = plugins.get("isNegative");
-        sign                     = plugins.get("sign");
-        floor                    = plugins.get("floor");
-        ceiling                  = plugins.get("ceiling");
-        truncate                 = plugins.get("truncate");
-        round                    = plugins.get("round");
-        compare                  = plugins.get("compare");
-        gt                       = plugins.get("gt");
-        lt                       = plugins.get("lt");
-        ge                       = plugins.get("ge");
-        le                       = plugins.get("le");
-        divAndMod                = plugins.get("divAndMod");
-        div                      = plugins.get("div");
-        mod                      = plugins.get("mod");
-        atan2                    = plugins.get("atan2");
-        numerator                = plugins.get("numerator");
-        denominator              = plugins.get("denominator");
-        isEven                   = plugins.get("isEven");
-        isOdd                    = plugins.get("isOdd");
-        exp10                    = plugins.get("exp10");
-
-        toBigInteger             = plugins.get("toBigInteger");
-
-        divideReducedNotByOne    = plugins.get("divideReducedNotByOne");
-        nativeToInexact          = plugins.get("nativeToInexact");
-        inexactRectangular       = plugins.get("inexactRectangular");
-        PI                       = plugins.get("PI");
-        INEXACT_ZERO             = plugins.get("INEXACT_ZERO");
-        ONE                      = plugins.get("ONE");
-        MINUS_ONE                = plugins.get("MINUS_ONE");
-    }
-    plugins.onChange.subscribe(onPluginsChanged);
-    onPluginsChanged(plugins);
 
     function NEI_numberToString(radix, precision) {
         return Number_toString(this._, radix || 10);
@@ -6028,9 +5931,9 @@ function implementHybridBigIntegerLibrary(plugins) {
         return reduceBigInteger(toBigInteger(this).multiply(toBigInteger(n)));
     }
 
-    function EI_divAndMod(d) {
+    function EI_divAndMod_EI(n, d) {
         d = toBigInteger(d);
-        var dm = toBigInteger(this).divRem(d);
+        var dm = toBigInteger(n).divRem(d);
         var div = dm[0];
         var mod = dm[1];
 
@@ -6040,20 +5943,20 @@ function implementHybridBigIntegerLibrary(plugins) {
         }
         return [reduceBigInteger(div), reduceBigInteger(mod)];
     }
+
+    function EI_divAndMod(d) {
+        return EI_divAndMod_EI(this, d);
+    }
     function EI_div(d) {
-        return divAndMod(this, d)[0];
+        return EI_divAndMod_EI(this, d)[0];
     }
     function EI_mod(d) {
-        return divAndMod(this, d)[1];
+        return EI_divAndMod_EI(this, d)[1];
     }
 
     function BigInteger_log() {
         var x = nativeToInexact(this.abs().log());
         return this.isPositive() ? x : inexactRectangular(x, PI);
-    }
-
-    function BigInteger_debug() {
-        return BigType + "(" + this.toString() + ")";
     }
 
     function NEI_exp10(e) {
@@ -6088,7 +5991,7 @@ function implementHybridBigIntegerLibrary(plugins) {
             else
                 // Could make this an array lookup.
                 den = toNativeExactInteger(
-                    Number(String_substring("1000000000000000", 0, 1 - e)));
+                    _Number(String_substring("1000000000000000", 0, 1 - e)));
             return divide(num, den);
         }
         if (e < 16) {
@@ -6199,204 +6102,180 @@ function implementHybridBigIntegerLibrary(plugins) {
         }
     }
 
-    api.NEI_numberToString       = NEI_numberToString;
-    api.Zero_compare             = Zero_compare;
-    api.Zero_divide              = Zero_divide;
-    api.MinusOne_expt_EI         = MinusOne_expt_EI;
-    api.NEI_isPositive           = NEI_isPositive;
-    api.NEI_isNegative           = NEI_isNegative;
-    api.NEI_sign                 = NEI_sign;
-    api.NEI_isEven               = NEI_isEven;
-    api.NEI_isOdd                = NEI_isOdd;
-    api.NEI_eq                   = NEI_eq;
-    api.NEI_ne                   = NEI_ne;
-    api.NEI_compare              = NEI_compare;
-    api.NEI_add                  = NEI_add;
-    api.NEI_negate               = NEI_negate;
-    api.NEI_abs                  = NEI_abs;
-    api.NEI_subtract             = NEI_subtract;
-    api.NEI_div                  = NEI_div;
-    api.NEI_mod                  = NEI_mod;
-    api.NEI_divAndMod            = NEI_divAndMod;
-    api.NEI_exactIntegerSqrt     = NEI_exactIntegerSqrt;
-    api.NEI_toBigInteger         = NEI_toBigInteger;
-    api.EI_toBigInteger          = EI_toBigInteger;
-    api.Hybrid_expt              = Hybrid_expt;
-    api.NEI_multiply             = NEI_multiply;
-    api.NEI_square               = NEI_square;
-    api.BigInteger_numberToString= BigInteger_numberToString;
-    api.EI_compare               = EI_compare;
-    api.EI_add                   = EI_add;
-    api.EI_subtract              = EI_subtract;
-    api.EI_multiply              = EI_multiply;
-    api.EI_divAndMod             = EI_divAndMod;
-    api.EI_div                   = EI_div;
-    api.EI_mod                   = EI_mod;
-    api.BigInteger_log           = BigInteger_log;
-    api.BigInteger_debug         = BigInteger_debug;
-    api.NEI_exp10                = NEI_exp10;
-    api.BigInteger_exp10         = BigInteger_exp10;
-    api.BigInteger_sqrt          = BigInteger_sqrt;
-    api.BigInteger_exactIntegerSqrt= BigInteger_exactIntegerSqrt;
-    api.NEI_gcdNonnegative       = NEI_gcdNonnegative;
-    api.EI_gcdNonnegative        = EI_gcdNonnegative;
+    function retI()           { return I; }
+    function negateThis()     { return negate(this); }
+    function reciprocalThis() { return reciprocal(this); }
+
+    function install(isDefaultInteger) {
+        "use strict";
+        var disp                     = plugins.get("Dispatch");
+        var Complex                  = plugins.get("Complex");
+        var Real                     = plugins.get("Real");
+        var EI                       = plugins.get("ExactInteger");
+        var Hybrid                   = HybridBigInteger;
+        var NEI                      = NativeExactInteger;
+        var debug                    = plugins.get("debug");
+
+        var retTrue, retFalse, retThis, retFirst, retZero, retOne, sign, negate, raiseDivisionByExactZero, Complex_expt, reciprocal;
+        retTrue                  = plugins.get("retTrue");
+        retFalse                 = plugins.get("retFalse");
+        retThis                  = plugins.get("retThis");
+        retFirst                 = plugins.get("retFirst");
+        retZero                  = plugins.get("retZero");
+        retOne                   = plugins.get("retOne");
+        sign                     = plugins.get("sign");
+        negate                   = plugins.get("negate");
+        raiseDivisionByExactZero = plugins.get("raiseDivisionByExactZero");
+        Complex_expt             = plugins.get("Complex_expt");
+        reciprocal               = plugins.get("reciprocal");
+
+        disp.defClass("Zero",     {ctor: ZeroType});
+        disp.defClass("One",      {ctor: OneType});
+        disp.defClass("MinusOne", {ctor: MinusOneType});
+
+        disp.defClass("HybridBigInteger", {ctor: HybridBigInteger});
+        disp.defClass("ProtoBigInteger", {ctor: NativeExactInteger});
+        disp.defClass("BigInteger", {ctor: BigInteger,
+                                     base: "HybridBigInteger"});
+
+        debug.def(NativeExactInteger, NativeExactInteger_debug);
+        debug.def(BigInteger, BigInteger_debug);
+
+        function def1(generic, type, func) {
+            plugins.get(generic).def(type, func);
+        }
+        function def2(generic, type1, type2, func) {
+            plugins.get(generic).def(type1, type2, func);
+        }
+        function defBigUnary(name) {
+            plugins.get(name).def(BigInteger, BigInteger.prototype[name]);
+        }
+
+        def1("isZero",     ZeroType, retTrue);
+        def1("isPositive", ZeroType, retFalse);
+        def1("isNegative", ZeroType, retFalse);
+        def2("compare",    ZeroType, Real, Zero_compare);
+        def2("compare",    Real, ZeroType, sign);
+        def2("add",        ZeroType, Complex, retFirst);
+        def2("add",        Complex, ZeroType, retThis);
+        def2("subtract",   ZeroType, Complex, negate);
+        def2("subtract",   Complex, ZeroType, retThis);
+        def1("negate",     ZeroType, retThis);
+        def1("abs",        ZeroType, retThis);
+        def2("multiply",   ZeroType, Complex, retThis);
+        def2("multiply",   Complex, ZeroType, retFirst);
+        def1("square",     ZeroType, retThis);
+        def1("reciprocal", ZeroType, raiseDivisionByExactZero);
+        def2("divide",     Complex, ZeroType, raiseDivisionByExactZero);
+        def2("divide",     ZeroType, Complex, Zero_divide);
+        def2("expt",       Complex, ZeroType, retOne);
+        def2("expt",       ZeroType, Complex, Complex_expt);
+
+        def1("sqrt",       ZeroType, retThis);
+        def1("exp",        ZeroType, retOne);
+        def1("sin",        ZeroType, retThis);
+        def1("cos",        ZeroType, retOne);
+        def1("tan",        ZeroType, retThis);
+        def1("asin",       ZeroType, retThis);
+        def1("atan",       ZeroType, retThis);
+
+        def1("isPositive", OneType, retTrue);
+        def1("isNegative", OneType, retFalse);
+        def1("isUnit",     OneType, retTrue);
+        def1("abs",        OneType, retThis);
+        def2("multiply",   OneType, Complex, retFirst);
+        def2("multiply",   Complex, OneType, retThis);
+        def1("reciprocal", OneType, retThis);
+        def2("divide",     OneType, Complex, reciprocal);
+        def2("divide",     Complex, OneType, retThis);
+        def1("square",     OneType, retThis);
+        def2("expt",       OneType, Complex, retThis);
+        def2("expt",       Complex, OneType, retThis);
+        def1("sqrt",       OneType, retThis);
+        def1("log",        OneType, retZero);
+        def1("acos",       OneType, retZero);
+
+        def1("isPositive", MinusOneType, retFalse);
+        def1("isNegative", MinusOneType, retTrue);
+        def1("isUnit",     MinusOneType, retTrue);
+        def1("abs",        MinusOneType, retOne);
+        def2("multiply",   MinusOneType, Complex, negate);
+        def2("multiply",   Complex, MinusOneType, negateThis);
+        def1("reciprocal", MinusOneType, retThis);
+        def1("square",     MinusOneType, retOne);
+        def1("sqrt",       MinusOneType, retI);
+        def2("expt",       Complex, MinusOneType, reciprocalThis);
+        def2("expt",       MinusOneType, EI, MinusOne_expt_EI);
+
+        def1("isZero",     NEI, retFalse);  // The zero class overrides.
+        def1("isPositive", NEI, NEI_isPositive);
+        def1("isNegative", NEI, NEI_isNegative);
+        def1("sign",       NEI, NEI_sign);
+
+        def1("isEven",     NEI, NEI_isEven);
+        def1("isOdd",      NEI, NEI_isOdd);
+
+        def2("eq",         NEI, NEI, NEI_eq);
+        def2("ne",         NEI, NEI, NEI_ne);
+        def2("compare",    NEI, NEI, NEI_compare);
+
+        def2("add",        NEI, NEI, NEI_add);
+        def1("negate",     NEI, NEI_negate);
+        def1("abs",        NEI, NEI_abs);
+        def2("subtract",   NEI, NEI, NEI_subtract);
+
+        def2("div",        NEI, NEI, NEI_div);
+        def2("mod",        NEI, NEI, NEI_mod);
+        def2("divAndMod",  NEI, NEI, NEI_divAndMod);
+
+        def1("exactIntegerSqrt", NEI, NEI_exactIntegerSqrt);
+
+        toBigInteger.def(BigInteger, retThis);
+        toBigInteger.def(NEI,        NEI_toBigInteger);
+        toBigInteger.def(EI,         EI_toBigInteger);
+
+        def2("expt",       Hybrid, Hybrid, Hybrid_expt);
+
+        def2("multiply",   NEI, NEI, NEI_multiply);
+        def1("square",     NEI, NEI_square);
+
+        def1("numberToString", NEI, NEI_numberToString);
+        def1("numberToString", BigInteger, BigInteger_numberToString);
+
+        defBigUnary("isZero");
+        defBigUnary("isEven");
+        defBigUnary("isOdd");
+        defBigUnary("sign");
+        defBigUnary("isUnit");
+        defBigUnary("isPositive");
+        defBigUnary("isNegative");
+        defBigUnary("negate");
+        defBigUnary("abs");
+        defBigUnary("square");
+
+        def1("log",        BigInteger, BigInteger_log);
+        def2("exp10",      NEI, EI, NEI_exp10);
+        def2("exp10",      BigInteger, EI, BigInteger_exp10);
+        def1("sqrt",       BigInteger, BigInteger_sqrt);
+        def1("exactIntegerSqrt", BigInteger, BigInteger_exactIntegerSqrt);
+        def2("gcdNonnegative", NEI, NEI, NEI_gcdNonnegative);
+
+        if (isDefaultInteger) {
+            def2("compare",    EI, EI, EI_compare);
+            def2("add",        EI, EI, EI_add);
+            def2("subtract",   EI, EI, EI_subtract);
+            def2("multiply",   EI, EI, EI_multiply);
+            def2("divAndMod",  EI, EI, EI_divAndMod);
+            def2("div",        EI, EI, EI_div);
+            def2("mod",        EI, EI, EI_mod);
+            def2("gcdNonnegative", EI, EI, EI_gcdNonnegative);
+        }
+    }
+
+    api.parseExactInteger        = parseExactInteger;
+    api.nativeToExactInteger     = nativeToExactInteger;
+    api.install                  = install;
     return api;
-}
-
-function installHybridInteger(plugins) {
-    "use strict";
-    var disp                     = plugins.get("Dispatch");
-    var Complex                  = plugins.get("Complex");
-    var Real                     = plugins.get("Real");
-    var EI                       = plugins.get("ExactInteger");
-    var Hybrid                   = plugins.get("HybridBigInteger");
-    var Zero                     = plugins.get("ZeroType");
-    var One                      = plugins.get("OneType");
-    var MinusOne                 = plugins.get("MinusOneType");
-    var NEI                      = plugins.get("NativeExactInteger");
-    var BigInteger               = plugins.get("BigInteger");
-    var i;
-    var isDefaultInteger = true;  // XXX should make it an option.
-
-    function def1(generic, type, impl) {
-        var func = plugins.get(impl);
-        if (!func)
-            console.log(impl + " not defined");
-        plugins.get(generic).def(type, func);
-    }
-    function def2(generic, type1, type2, impl) {
-        var func = plugins.get(impl);
-        if (!func)
-            console.log(impl + " not defined");
-        plugins.get(generic).def(type1, type2, func);
-    }
-    function defBigUnary(name) {
-        plugins.get(name).def(BigInteger, BigInteger.prototype[name]);
-    }
-
-    disp.defClass("Zero",     {ctor: Zero});
-    disp.defClass("One",      {ctor: One});
-    disp.defClass("MinusOne", {ctor: MinusOne});
-
-    def1("isZero",     Zero, "retTrue");
-    def1("isPositive", Zero, "retFalse");
-    def1("isNegative", Zero, "retFalse");
-    def2("compare",    Zero, Real, "Zero_compare");
-    def2("compare",    Real, Zero, "sign");
-    def2("add",        Zero, Complex, "retFirst");
-    def2("add",        Complex, Zero, "retThis");
-    def2("subtract",   Zero, Complex, "negate");
-    def2("subtract",   Complex, Zero, "retThis");
-    def1("negate",     Zero, "retThis");
-    def1("abs",        Zero, "retThis");
-    def2("multiply",   Zero, Complex, "retThis");
-    def2("multiply",   Complex, Zero, "retFirst");
-    def1("square",     Zero, "retThis");
-    def1("reciprocal", Zero, "raiseDivisionByExactZero");
-    def2("divide",     Complex, Zero, "raiseDivisionByExactZero");
-    def2("divide",     Zero, Complex, "Zero_divide");
-    def2("expt",       Complex, Zero, "retOne");
-    def2("expt",       Zero, Complex, "Complex_expt");
-
-    def1("sqrt",       Zero, "retThis");
-    def1("exp",        Zero, "retOne");
-    def1("sin",        Zero, "retThis");
-    def1("cos",        Zero, "retOne");
-    def1("tan",        Zero, "retThis");
-    def1("asin",       Zero, "retThis");
-    def1("atan",       Zero, "retThis");
-
-    def1("isPositive", One, "retTrue");
-    def1("isNegative", One, "retFalse");
-    def1("isUnit",     One, "retTrue");
-    def1("abs",        One, "retThis");
-    def2("multiply",   One, Complex, "retFirst");
-    def2("multiply",   Complex, One, "retThis");
-    def1("reciprocal", One, "retThis");
-    def2("divide",     One, Complex, "reciprocal");
-    def2("divide",     Complex, One, "retThis");
-    def1("square",     One, "retThis");
-    def2("expt",       One, Complex, "retThis");
-    def2("expt",       Complex, One, "retThis");
-    def1("sqrt",       One, "retThis");
-    def1("log",        One, "retZero");
-    def1("acos",       One, "retZero");
-
-    def1("isPositive", MinusOne, "retFalse");
-    def1("isNegative", MinusOne, "retTrue");
-    def1("isUnit",     MinusOne, "retTrue");
-    def1("abs",        MinusOne, "retOne");
-    def2("multiply",   MinusOne, Complex, "negate");
-    def2("multiply",   Complex, MinusOne, "negateThis");
-    def1("reciprocal", MinusOne, "retThis");
-    def1("square",     MinusOne, "retOne");
-    def1("sqrt",       MinusOne, "retI");
-    def2("expt",       Complex, MinusOne, "reciprocalThis");
-    def2("expt",       MinusOne, EI, "MinusOne_expt_EI");
-
-    def1("isZero",     NEI, "retFalse");  // The zero class overrides.
-    def1("isPositive", NEI, "NEI_isPositive");
-    def1("isNegative", NEI, "NEI_isNegative");
-    def1("sign",       NEI, "NEI_sign");
-
-    def1("isEven",     NEI, "NEI_isEven");
-    def1("isOdd",      NEI, "NEI_isOdd");
-
-    def2("eq",         NEI, NEI, "NEI_eq");
-    def2("ne",         NEI, NEI, "NEI_ne");
-    def2("compare",    NEI, NEI, "NEI_compare");
-
-    def2("add",        NEI, NEI, "NEI_add");
-    def1("negate",     NEI, "NEI_negate");
-    def1("abs",        NEI, "NEI_abs");
-    def2("subtract",   NEI, NEI, "NEI_subtract");
-
-    def2("div",        NEI, NEI, "NEI_div");
-    def2("mod",        NEI, NEI, "NEI_mod");
-    def2("divAndMod",  NEI, NEI, "NEI_divAndMod");
-
-    def1("exactIntegerSqrt", NEI, "NEI_exactIntegerSqrt");
-
-    def1("toBigInteger", BigInteger, "retThis");
-    def1("toBigInteger", NEI, "NEI_toBigInteger");
-    def1("toBigInteger", EI, "EI_toBigInteger");
-
-    def2("expt",       Hybrid, Hybrid, "Hybrid_expt");
-
-    def2("multiply",   NEI, NEI, "NEI_multiply");
-    def1("square",     NEI, "NEI_square");
-
-    def1("numberToString", NEI, "NEI_numberToString");
-    def1("numberToString", BigInteger, "BigInteger_numberToString");
-
-    defBigUnary("isZero");
-    defBigUnary("isEven");
-    defBigUnary("isOdd");
-    defBigUnary("sign");
-    defBigUnary("isUnit");
-    defBigUnary("isPositive");
-    defBigUnary("isNegative");
-    defBigUnary("negate");
-    defBigUnary("abs");
-    defBigUnary("square");
-
-    def1("log",        BigInteger, "BigInteger_log");
-    def2("exp10",      NEI, EI, "NEI_exp10");
-    def2("exp10",      BigInteger, EI, "BigInteger_exp10");
-    def1("sqrt",       BigInteger, "BigInteger_sqrt");
-    def1("exactIntegerSqrt", BigInteger, "BigInteger_exactIntegerSqrt");
-    def2("gcdNonnegative", NEI, NEI, "NEI_gcdNonnegative");
-
-    if (isDefaultInteger) {
-        def2("compare",    EI, EI, "EI_compare");
-        def2("add",        EI, EI, "EI_add");
-        def2("subtract",   EI, EI, "EI_subtract");
-        def2("multiply",   EI, EI, "EI_multiply");
-        def2("divAndMod",  EI, EI, "EI_divAndMod");
-        def2("div",        EI, EI, "EI_div");
-        def2("mod",        EI, EI, "EI_mod");
-        def2("gcdNonnegative", EI, EI, "EI_gcdNonnegative");
-    }
 }
 
 /*
@@ -6622,18 +6501,10 @@ return (function() {
 
     // XXX This could use some refactoring.
 
-    plugins.extend("BigInteger", BigInteger);
-    var Integers = implementHybridBigInteger(plugins);
-    var ProtoBigInteger = Integers.NativeExactInteger;
+    var Integers = implementHybridBigInteger(plugins, BigInteger);
+    Integers.install(true);
+    delete(Integers.install);
     plugins.extend(Integers);
-    plugins.extend(implementHybridBigIntegerLibrary(plugins));
-    disp.defClass("HybridBigInteger", {ctor: Integers.HybridBigInteger});
-    disp.defClass("ProtoBigInteger", {ctor: ProtoBigInteger});
-    debug.def(ProtoBigInteger, Integers.NativeExactInteger_debug);
-    disp.defClass("BigInteger", {ctor: BigInteger, base: "HybridBigInteger"});
-    debug.def(BigInteger, Integers.BigInteger_debug);
-    plugins.extend("toBigInteger", disp.defGeneric("toBigInteger", 1));
-    installHybridInteger(plugins);
 
     var Fractions = implementFraction(plugins);
     var Fraction = Fractions.Fraction;
