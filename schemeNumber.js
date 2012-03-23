@@ -680,275 +680,6 @@ function implementUncurry(plugins) {
     return api;
 }
 
-function defineSchemeNumberType(plugins) {
-    "use strict";
-    var g = plugins.get("es5globals");
-    var _NaN = g.NaN;
-    var api = g.Object.create(null);
-    var numberToString = plugins.get("numberToString");
-    var disp = plugins.get("Dispatch");
-
-    function SchemeNumberType(){}
-
-    // Inherit from Number so that "x instanceof Number" holds.
-    // But then override the standard methods, which are compatible
-    // only with native Number objects.
-
-    SchemeNumberType.prototype = new Number();
-
-    // Good defaults.
-    function genericToString(radix) {
-        if (numberToString)
-            return numberToString(this, radix);
-        return "[object SchemeNumber]";
-    }
-    function genericToLocaleString() {
-        return genericToString();
-    }
-    function retNaN() {
-        return _NaN;
-    }
-
-    // Bad default.
-    function genericFormatter() {
-        if (numberToString)
-            return numberToString(this);
-        return "SchemeNumber";
-    }
-
-    SchemeNumberType.prototype.toFixed        = genericFormatter;
-    SchemeNumberType.prototype.toExponential  = genericFormatter;
-    SchemeNumberType.prototype.toPrecision    = genericFormatter;
-    SchemeNumberType.prototype.toString       = genericToString;
-    SchemeNumberType.prototype.toLocaleString = genericToLocaleString;
-    SchemeNumberType.prototype.valueOf        = retNaN;
-
-    disp.defClass("SchemeNumber", { ctor: SchemeNumberType });
-
-    api.SchemeNumberType         = SchemeNumberType;
-    return api;
-}
-
-/*
-    Function: defineAbstractTypes(plugins)
-    Creates a prototype-based type hierarchy corresponding to some of
-    the number classes defined by Scheme.
-
-    The constructors created here ignore their arguments and lack any
-    property other than *prototype* and a few inherited methods noted
-    below.  They may be used as "abstract base classes" to create
-    prototypes of other, more concrete numeric subtypes.
-
-    The hierarchy inherits from the global Number class so that *n
-    instanceof Number* holds for any Scheme number *n*.  The intent is
-    that Scheme numbers should interoperate with native numbers to the
-    extent possible and support the ECMAScript formatting methods
-    *toFixed*, *toExponential*, and *toPrecision*.
-
-    Input:
-
-    *plugins* shall be a <PluginContainer> with the following
-    contents.
-
-    SchemeNumberType - base of the numerical tower
-    Inherits from the built-in *Number* prototype.  Comprises all
-    Scheme numbers.
-
-    Output:
-
-    <defineAbstractTypes> returns an object with the following
-    properties, each a constructor of zero arguments having no side
-    effects.
-
-    Complex - complex number type
-    Inherits from *SchemeNumberType*.
-
-    Real - real number type
-    Inherits from *Complex*.
-
-    InexactReal - inexact real number type
-    Inherits from *Real*.
-
-    ExactReal - exact real number type
-    Inherits from *Real*.
-
-    ExactRational - exact rational number type
-    Inherits from *ExactReal*.
-
-    ExactInteger - exact integer type
-    Inherits from *ExactRational*.
-
-    See Also: <JsDispatch>
-
-    Method: toString()
-    Converts this Scheme number to a string as if by *this.toString(10)*.
-
-    Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
-
-    Method: toString(radix)
-    Converts this Scheme number to a string.
-
-    The *toString* method converts inexact numbers as in JavaScript
-    and exact numbers as if by <fn["number->string"](z, radix)>.
-
-    Method: toFixed(fractionDigits)
-    Returns this Scheme number as a string with *fractionDigits*
-    digits after the decimal point.
-
-    Examples:
-
-    > SchemeNumber("#e1.2").toFixed(2)  // "1.20"
-    > SchemeNumber("2/3").toFixed(20)   // "0.66666666666666666667"
-
-    Compare the native version:
-
-    > (2/3).toFixed(20)                 // "0.66666666666666662966"
-
-    Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
-
-    Method: toLocaleString()
-    Converts this Scheme number to a string as if by *this.toString()*.
-
-    Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
-
-    Method: toExponential(fractionDigits)
-    Converts this Scheme number to scientific "e" notation with
-    *fractionDigits* digits after the decimal point.
-
-    Examples:
-
-    > SchemeNumber("1/11").toExponential(3)  // "9.091e-2"
-    > SchemeNumber("1/2").toExponential(2)   // "5.00e-1"
-
-    Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
-
-    Method: toPrecision(precision)
-    Converts this Scheme number to decimal (possibly "e" notation)
-    with *precision* significant digits.
-
-    Examples:
-
-    > SchemeNumber("12300").toPrecision(2)  // "1.2e+4"
-    > SchemeNumber("12300").toPrecision(4)  // "1.230e+4"
-    > SchemeNumber("12300").toPrecision(5)  // "12300"
-    > SchemeNumber("12300").toPrecision(6)  // "12300.0"
-
-    Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
-
-    Method: valueOf()
-    Converts this Scheme number to a native number with possible loss
-    of precision.
-
-    ECMAScript does not natively support imaginary numbers, so
-    non-reals typically produce *NaN*.
-
-    Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
- */
-function defineAbstractTypes(plugins) {
-    "use strict";
-    var g = plugins.get("es5globals");
-    var api = g.Object.create(null);
-    var SchemeNumberType = plugins.get("SchemeNumberType");
-
-    function Complex(){}             Complex.prototype = new SchemeNumberType();
-    function Real(){}                   Real.prototype = new Complex();
-    function InexactReal(){}     InexactReal.prototype = new Real();
-    function ExactReal(){}         ExactReal.prototype = new Real();
-    function ExactRational(){} ExactRational.prototype = new ExactReal();
-    function ExactInteger(){}   ExactInteger.prototype = new ExactRational();
-
-    api.Complex                  = Complex;
-    api.Real                     = Real;
-    api.InexactReal              = InexactReal;
-    api.ExactReal                = ExactReal;
-    api.ExactRational            = ExactRational;
-    api.ExactInteger             = ExactInteger;
-    return api;
-}
-
-/*
-    Function: installAbstractTypes(plugins)
-    Defines dispatcher classes for the results of
-    <defineAbstractTypes(plugins)>.
-
-    *plugins* shall be a <PluginContainer> with the following
-    contents.
-
-    Dispatch - a <JsDispatch> object.
-    <installAbstractTypes> calls the *Dispatch* object's *defClass*
-    function to register the new types.  The class names used in
-    *Dispatch* are the same as those used in *plugins*, e.g.,
-    "Complex", except that *SchemeNumberType* is registered as simply
-    "SchemeNumber".
-*/
-function installAbstractTypes(plugins) {
-    "use strict";
-    var disp = plugins.get("Dispatch");
-
-    function def(name) {
-        disp.defClass(name, { ctor: plugins.get(name) });
-    }
-    def("Complex");
-    def("Real");
-    def("InexactReal");
-    def("ExactReal");
-    def("ExactRational");
-    def("ExactInteger");
-}
-
-/*
-    Function: defineDebugFunction(plugins)
-    Creates a generic function, *debug*, for inspecting number objects.
-
-    Input:
-
-    *plugins* shall be a <PluginContainer> containing the following
-    element.
-
-    Dispatch - a <JsDispatch> object.
-    <defineDebugFunction> calls the *Dispatch* object's *defGeneric*
-    method to create the *debug* function, and calls the resulting
-    function's *def* method with class name "SchemeNumber" to define a
-    generic implementation of *debug*.
-
-    Output:
-
-    debug - generic function(schemeNumber) -> string
-    Applications must not rely on the returned string's format.
-    Number implementations should specialize this function to provide
-    internal details of use during development.  Developers may obtain
-    this function via *SchemeNumber.plugins.get("debug")*.  Example:
-
-    > SchemeNumber.plugins.get("debug")(SchemeNumber(10))  // "EINative(10)"
-
-    See Also: <JsDispatch>
-*/
-function defineDebugFunction(plugins) {
-    "use strict";
-    var g                = plugins.get("es5globals");
-    var uncurry          = plugins.get("uncurry");
-    var disp             = plugins.get("Dispatch");
-    var SchemeNumberType = plugins.get("SchemeNumberType");
-    var Object_toString  = uncurry(g.Object.prototype.toString);
-    var api = g.Object.create(null);
-
-    // Generic default for classes that don't specialize debug.
-    function SchemeNumber_debug() {
-        var t;
-        try { t = this.toString(); }
-        catch (e) {
-            try { t = Object_toString(this); }
-            catch (e) { t = "?"; }
-        }
-        return "SchemeNumber(" + t + ")";
-    }
-
-    api.debug = disp.defGeneric("debug", 1);
-    api.debug.def(SchemeNumberType, SchemeNumber_debug);
-
-    return api;
-}
-
 /*
     Function: defineGenericFunctions(plugins)
     Creates the generic functions of number subtypes called by
@@ -1263,118 +994,106 @@ function defineGenericFunctions(plugins) {
     return api;
 }
 
-function installStubFunctions(plugins) {
+function defineSchemeNumberType(plugins) {
     "use strict";
     var g = plugins.get("es5globals");
-    var uncurry = plugins.get("uncurry");
-    var Function_apply = uncurry(g.Function.prototype.apply);
-    var Array_concat   = uncurry(g.Array.prototype.concat);
+    var _NaN = g.NaN;
+    var api = g.Object.create(null);
+    var numberToString = plugins.get("numberToString");
+    var disp = plugins.get("Dispatch");
 
-    var SchemeNumberType         = plugins.get("SchemeNumberType");
-    var Complex                  = plugins.get("Complex");
-    var Real                     = plugins.get("Real");
-    var InexactReal              = plugins.get("InexactReal");
-    var ExactReal                = plugins.get("ExactReal");
-    var ExactRational            = plugins.get("ExactRational");
-    var ExactInteger             = plugins.get("ExactInteger");
+    function SchemeNumberType(){}
 
-    function def(name, types) {
-        var func = plugins.get(name);
-        if (!func) {
-            console.log(name, "not found");
-            return;
-        }
-        Function_apply(func.def, func, types /*Array_concat(types, g.undefined)*/);
+    // Inherit from Number so that "x instanceof Number" holds.
+    // But then override the standard methods, which are compatible
+    // only with native Number objects.
+
+    SchemeNumberType.prototype = new Number();
+
+    // Good defaults.
+    function genericToString(radix) {
+        if (numberToString)
+            return numberToString(this, radix);
+        return "[object SchemeNumber]";
+    }
+    function genericToLocaleString() {
+        return genericToString();
+    }
+    function retNaN() {
+        return _NaN;
     }
 
-    // These are the functions that number implementations must implement.
-    // Example:
-    // var disp = SchemeNumber.plugins.get("Dispatch");
-    // disp.defClass("MyComplex", {ctor: MyComplexConstructor,
-    //                             base: Complex});
-    // var add = SchemeNumber.plugins.get("add");
-    // add.def("MyComplex", Complex, add_MyComplex_to_AnyComplex);
-    // add.def(Complex, "MyComplex", add_AnyComplex_to_MyComplex);
+    // Bad default.
+    function genericFormatter() {
+        if (numberToString)
+            return numberToString(this);
+        return "SchemeNumber";
+    }
 
-    def("numberToString", [SchemeNumberType]);
-    def("isExact",        [SchemeNumberType]);
-    def("isInexact",      [SchemeNumberType]);
+    SchemeNumberType.prototype.toFixed        = genericFormatter;
+    SchemeNumberType.prototype.toExponential  = genericFormatter;
+    SchemeNumberType.prototype.toPrecision    = genericFormatter;
+    SchemeNumberType.prototype.toString       = genericToString;
+    SchemeNumberType.prototype.toLocaleString = genericToLocaleString;
+    SchemeNumberType.prototype.valueOf        = retNaN;
 
-    def("isComplex",      [SchemeNumberType]);
-    def("isReal",         [SchemeNumberType]);
-    def("isRational",     [SchemeNumberType]);
-    def("isInteger",      [SchemeNumberType]);
-    def("isZero",         [SchemeNumberType]);
+    disp.defClass("SchemeNumber", { ctor: SchemeNumberType });
 
-    def("toExact",        [SchemeNumberType]);
-    def("toInexact",      [SchemeNumberType]);
-    def("negate",         [SchemeNumberType]);
-    def("reciprocal",     [SchemeNumberType]);
+    api.SchemeNumberType         = SchemeNumberType;
+    return api;
+}
 
-    def("eq",             [SchemeNumberType, SchemeNumberType]);
-    def("ne",             [SchemeNumberType, SchemeNumberType]);
+/*
+    Function: defineDebugFunction(plugins)
+    Creates a generic function, *debug*, for inspecting number objects.
 
-    def("add",            [SchemeNumberType, SchemeNumberType]);
-    def("subtract",       [SchemeNumberType, SchemeNumberType]);
-    def("multiply",       [SchemeNumberType, SchemeNumberType]);
-    def("divide",         [SchemeNumberType, SchemeNumberType]);
+    Input:
 
-    def("square",         [SchemeNumberType]);
+    *plugins* shall be a <PluginContainer> containing the following
+    element.
 
-    def("realPart",       [Complex]);
-    def("imagPart",       [Complex]);
+    Dispatch - a <JsDispatch> object.
+    <defineDebugFunction> calls the *Dispatch* object's *defGeneric*
+    method to create the *debug* function, and calls the resulting
+    function's *def* method with class name "SchemeNumber" to define a
+    generic implementation of *debug*.
 
-    def("expt",           [SchemeNumberType, ExactInteger]);
-    def("expt",           [Complex, Complex]);
+    Output:
 
-    def("exp",            [Complex]);
-    def("magnitude",      [Complex]);
-    def("angle",          [Complex]);
-    def("sqrt",           [Complex]);
+    debug - generic function(schemeNumber) -> string
+    Applications must not rely on the returned string's format.
+    Number implementations should specialize this function to provide
+    internal details of use during development.  Developers may obtain
+    this function via *SchemeNumber.plugins.get("debug")*.  Example:
 
-    def("log",            [Complex]);
-    def("asin",           [Complex]);
-    def("acos",           [Complex]);
-    def("atan",           [Complex]);
+    > SchemeNumber.plugins.get("debug")(SchemeNumber(10))  // "EINative(10)"
 
-    def("sin",            [Complex]);
-    def("cos",            [Complex]);
-    def("tan",            [Complex]);
+    See Also: <JsDispatch>
+*/
+function defineDebugFunction(plugins) {
+    "use strict";
+    var g                = plugins.get("es5globals");
+    var uncurry          = plugins.get("uncurry");
+    var disp             = plugins.get("Dispatch");
+    var SchemeNumberType = plugins.get("SchemeNumberType");
+    var Object_toString  = uncurry(g.Object.prototype.toString);
+    var api = g.Object.create(null);
 
-    def("SN_isFinite",    [Real]);
-    def("SN_isInfinite",  [Real]);
-    def("SN_isNaN",       [Real]);
+    // Generic default for classes that don't specialize debug.
+    function SchemeNumber_debug() {
+        var t;
+        try { t = this.toString(); }
+        catch (e) {
+            try { t = Object_toString(this); }
+            catch (e) { t = "?"; }
+        }
+        return "SchemeNumber(" + t + ")";
+    }
 
-    def("isUnit",         [Real]);
-    def("abs",            [Real]);
-    def("isPositive",     [Real]);
-    def("isNegative",     [Real]);
-    def("sign",           [Real]);
-    def("floor",          [Real]);
-    def("ceiling",        [Real]);
-    def("truncate",       [Real]);
-    def("round",          [Real]);
+    api.debug = disp.defGeneric("debug", 1);
+    api.debug.def(SchemeNumberType, SchemeNumber_debug);
 
-    def("compare",        [Real, Real]);
-    def("gt",             [Real, Real]);
-    def("lt",             [Real, Real]);
-    def("ge",             [Real, Real]);
-    def("le",             [Real, Real]);
-    def("divAndMod",      [Real, Real]);
-    def("div",            [Real, Real]);
-    def("mod",            [Real, Real]);
-    def("atan2",          [Real, Real]);
-
-    def("numerator",      [ExactRational]);
-    def("denominator",    [ExactRational]);
-    def("numeratorAndDenominator", [ExactRational]);
-
-    def("isEven",         [ExactInteger]);
-    def("isOdd",          [ExactInteger]);
-    def("exactIntegerSqrt", [ExactInteger]);
-    def("exp10",          [ExactInteger, ExactInteger]);
-    def("gcdNonnegative", [ExactInteger, ExactInteger]);
-    def("divideReduced",  [ExactInteger, ExactInteger]);
+    return api;
 }
 
 
@@ -4220,6 +3939,287 @@ function implementSchemeNumber(plugins) {
     return SchemeNumber;
 }
 
+/*
+    Function: defineAbstractTypes(plugins)
+    Creates a prototype-based type hierarchy corresponding to some of
+    the number classes defined by Scheme.
+
+    The constructors created here ignore their arguments and lack any
+    property other than *prototype* and a few inherited methods noted
+    below.  They may be used as "abstract base classes" to create
+    prototypes of other, more concrete numeric subtypes.
+
+    The hierarchy inherits from the global Number class so that *n
+    instanceof Number* holds for any Scheme number *n*.  The intent is
+    that Scheme numbers should interoperate with native numbers to the
+    extent possible and support the ECMAScript formatting methods
+    *toFixed*, *toExponential*, and *toPrecision*.
+
+    Input:
+
+    *plugins* shall be a <PluginContainer> with the following
+    contents.
+
+    SchemeNumberType - base of the numerical tower
+    Inherits from the built-in *Number* prototype.  Comprises all
+    Scheme numbers.
+
+    Output:
+
+    <defineAbstractTypes> returns an object with the following
+    properties, each a constructor of zero arguments having no side
+    effects.
+
+    Complex - complex number type
+    Inherits from *SchemeNumberType*.
+
+    Real - real number type
+    Inherits from *Complex*.
+
+    InexactReal - inexact real number type
+    Inherits from *Real*.
+
+    ExactReal - exact real number type
+    Inherits from *Real*.
+
+    ExactRational - exact rational number type
+    Inherits from *ExactReal*.
+
+    ExactInteger - exact integer type
+    Inherits from *ExactRational*.
+
+    See Also: <JsDispatch>
+
+    Method: toString()
+    Converts this Scheme number to a string as if by *this.toString(10)*.
+
+    Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
+
+    Method: toString(radix)
+    Converts this Scheme number to a string.
+
+    The *toString* method converts inexact numbers as in JavaScript
+    and exact numbers as if by <fn["number->string"](z, radix)>.
+
+    Method: toFixed(fractionDigits)
+    Returns this Scheme number as a string with *fractionDigits*
+    digits after the decimal point.
+
+    Examples:
+
+    > SchemeNumber("#e1.2").toFixed(2)  // "1.20"
+    > SchemeNumber("2/3").toFixed(20)   // "0.66666666666666666667"
+
+    Compare the native version:
+
+    > (2/3).toFixed(20)                 // "0.66666666666666662966"
+
+    Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
+
+    Method: toLocaleString()
+    Converts this Scheme number to a string as if by *this.toString()*.
+
+    Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
+
+    Method: toExponential(fractionDigits)
+    Converts this Scheme number to scientific "e" notation with
+    *fractionDigits* digits after the decimal point.
+
+    Examples:
+
+    > SchemeNumber("1/11").toExponential(3)  // "9.091e-2"
+    > SchemeNumber("1/2").toExponential(2)   // "5.00e-1"
+
+    Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
+
+    Method: toPrecision(precision)
+    Converts this Scheme number to decimal (possibly "e" notation)
+    with *precision* significant digits.
+
+    Examples:
+
+    > SchemeNumber("12300").toPrecision(2)  // "1.2e+4"
+    > SchemeNumber("12300").toPrecision(4)  // "1.230e+4"
+    > SchemeNumber("12300").toPrecision(5)  // "12300"
+    > SchemeNumber("12300").toPrecision(6)  // "12300.0"
+
+    Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
+
+    Method: valueOf()
+    Converts this Scheme number to a native number with possible loss
+    of precision.
+
+    ECMAScript does not natively support imaginary numbers, so
+    non-reals typically produce *NaN*.
+
+    Specified by: <ECMA-262, 5th edition at http://www.ecma-international.org/publications/standards/Ecma-262.htm>
+ */
+function defineAbstractTypes(plugins) {
+    "use strict";
+    var g = plugins.get("es5globals");
+    var api = g.Object.create(null);
+    var SchemeNumberType = plugins.get("SchemeNumberType");
+
+    function Complex(){}             Complex.prototype = new SchemeNumberType();
+    function Real(){}                   Real.prototype = new Complex();
+    function InexactReal(){}     InexactReal.prototype = new Real();
+    function ExactReal(){}         ExactReal.prototype = new Real();
+    function ExactRational(){} ExactRational.prototype = new ExactReal();
+    function ExactInteger(){}   ExactInteger.prototype = new ExactRational();
+
+    api.Complex                  = Complex;
+    api.Real                     = Real;
+    api.InexactReal              = InexactReal;
+    api.ExactReal                = ExactReal;
+    api.ExactRational            = ExactRational;
+    api.ExactInteger             = ExactInteger;
+    return api;
+}
+
+/*
+    Function: installAbstractTypes(plugins)
+    Defines dispatcher classes for the results of
+    <defineAbstractTypes(plugins)>.
+
+    *plugins* shall be a <PluginContainer> with the following
+    contents.
+
+    Dispatch - a <JsDispatch> object.
+    <installAbstractTypes> calls the *Dispatch* object's *defClass*
+    function to register the new types.  The class names used in
+    *Dispatch* are the same as those used in *plugins*, e.g.,
+    "Complex", except that *SchemeNumberType* is registered as simply
+    "SchemeNumber".
+*/
+function installAbstractTypes(plugins) {
+    "use strict";
+    var disp = plugins.get("Dispatch");
+
+    function def(name) {
+        disp.defClass(name, { ctor: plugins.get(name) });
+    }
+    def("Complex");
+    def("Real");
+    def("InexactReal");
+    def("ExactReal");
+    def("ExactRational");
+    def("ExactInteger");
+}
+
+function installStubFunctions(plugins) {
+    "use strict";
+    var g = plugins.get("es5globals");
+    var uncurry = plugins.get("uncurry");
+    var Function_apply = uncurry(g.Function.prototype.apply);
+    var Array_concat   = uncurry(g.Array.prototype.concat);
+
+    var SchemeNumberType         = plugins.get("SchemeNumberType");
+    var Complex                  = plugins.get("Complex");
+    var Real                     = plugins.get("Real");
+    var InexactReal              = plugins.get("InexactReal");
+    var ExactReal                = plugins.get("ExactReal");
+    var ExactRational            = plugins.get("ExactRational");
+    var ExactInteger             = plugins.get("ExactInteger");
+
+    function def(name, types) {
+        var func = plugins.get(name);
+        if (!func) {
+            console.log(name, "not found");
+            return;
+        }
+        Function_apply(func.def, func, types /*Array_concat(types, g.undefined)*/);
+    }
+
+    // These are the functions that number implementations must implement.
+    // Example:
+    // var disp = SchemeNumber.plugins.get("Dispatch");
+    // disp.defClass("MyComplex", {ctor: MyComplexConstructor,
+    //                             base: Complex});
+    // var add = SchemeNumber.plugins.get("add");
+    // add.def("MyComplex", Complex, add_MyComplex_to_AnyComplex);
+    // add.def(Complex, "MyComplex", add_AnyComplex_to_MyComplex);
+
+    def("numberToString", [SchemeNumberType]);
+    def("isExact",        [SchemeNumberType]);
+    def("isInexact",      [SchemeNumberType]);
+
+    def("isComplex",      [SchemeNumberType]);
+    def("isReal",         [SchemeNumberType]);
+    def("isRational",     [SchemeNumberType]);
+    def("isInteger",      [SchemeNumberType]);
+    def("isZero",         [SchemeNumberType]);
+
+    def("toExact",        [SchemeNumberType]);
+    def("toInexact",      [SchemeNumberType]);
+    def("negate",         [SchemeNumberType]);
+    def("reciprocal",     [SchemeNumberType]);
+
+    def("eq",             [SchemeNumberType, SchemeNumberType]);
+    def("ne",             [SchemeNumberType, SchemeNumberType]);
+
+    def("add",            [SchemeNumberType, SchemeNumberType]);
+    def("subtract",       [SchemeNumberType, SchemeNumberType]);
+    def("multiply",       [SchemeNumberType, SchemeNumberType]);
+    def("divide",         [SchemeNumberType, SchemeNumberType]);
+
+    def("square",         [SchemeNumberType]);
+
+    def("realPart",       [Complex]);
+    def("imagPart",       [Complex]);
+
+    def("expt",           [SchemeNumberType, ExactInteger]);
+    def("expt",           [Complex, Complex]);
+
+    def("exp",            [Complex]);
+    def("magnitude",      [Complex]);
+    def("angle",          [Complex]);
+    def("sqrt",           [Complex]);
+
+    def("log",            [Complex]);
+    def("asin",           [Complex]);
+    def("acos",           [Complex]);
+    def("atan",           [Complex]);
+
+    def("sin",            [Complex]);
+    def("cos",            [Complex]);
+    def("tan",            [Complex]);
+
+    def("SN_isFinite",    [Real]);
+    def("SN_isInfinite",  [Real]);
+    def("SN_isNaN",       [Real]);
+
+    def("isUnit",         [Real]);
+    def("abs",            [Real]);
+    def("isPositive",     [Real]);
+    def("isNegative",     [Real]);
+    def("sign",           [Real]);
+    def("floor",          [Real]);
+    def("ceiling",        [Real]);
+    def("truncate",       [Real]);
+    def("round",          [Real]);
+
+    def("compare",        [Real, Real]);
+    def("gt",             [Real, Real]);
+    def("lt",             [Real, Real]);
+    def("ge",             [Real, Real]);
+    def("le",             [Real, Real]);
+    def("divAndMod",      [Real, Real]);
+    def("div",            [Real, Real]);
+    def("mod",            [Real, Real]);
+    def("atan2",          [Real, Real]);
+
+    def("numerator",      [ExactRational]);
+    def("denominator",    [ExactRational]);
+    def("numeratorAndDenominator", [ExactRational]);
+
+    def("isEven",         [ExactInteger]);
+    def("isOdd",          [ExactInteger]);
+    def("exactIntegerSqrt", [ExactInteger]);
+    def("exp10",          [ExactInteger, ExactInteger]);
+    def("gcdNonnegative", [ExactInteger, ExactInteger]);
+    def("divideReduced",  [ExactInteger, ExactInteger]);
+}
+
 
 /*
     Function: installGenericFunctions(plugins)
@@ -6367,8 +6367,6 @@ return (function() {
 
 if (typeof exports !== "undefined") {
     exports.SchemeNumber = SchemeNumber;
-    for (var name in SchemeNumber.fn)
-        exports[name] = SchemeNumber.fn[name];
 }
 
 // load for testing:
