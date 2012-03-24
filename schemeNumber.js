@@ -5646,7 +5646,6 @@ function implementBigInteger(plugins, BigInteger) {
     var g                        = plugins.get("es5globals");
     var uncurry                  = plugins.get("uncurry");
     var SchemeNumber             = plugins.get("SchemeNumber");
-    var ExactInteger             = plugins.get("ExactInteger");
     var BigIntegerName           = BigInteger.name || "BigInteger";
     var Number_toString = uncurry(g.Number.prototype.toString);
     var String_replace  = uncurry(g.String.prototype.replace);
@@ -5657,28 +5656,20 @@ function implementBigInteger(plugins, BigInteger) {
     var Math_floor   = g.Math.floor;
     var Math_pow     = g.Math.pow;
 
-    var _parseInt    = g.parseInt;
-
     var api = g.Object.create(null);
 
     var toBigInteger = plugins.get("Dispatch").defGeneric(
         "to" + BigIntegerName, 1);
 
-    var toNativeExactInteger, raise, raiseDivisionByExactZero, numberToString, isExact, isZero, negate, reciprocal, divide, log, isNegative, sign, isEven, exp10, nativeToInexact, inexactRectangular, ONE, PI, INEXACT_ZERO;
+    var raise, numberToString, negate, reciprocal, divide, sign, exp10, nativeToInexact, inexactRectangular, ONE, PI, INEXACT_ZERO;
 
     raise                    = plugins.get("raise");
-    raiseDivisionByExactZero = plugins.get("raiseDivisionByExactZero");
 
     numberToString           = plugins.get("numberToString");
-    isExact                  = plugins.get("isExact");
-    isZero                   = plugins.get("isZero");
     negate                   = plugins.get("negate");
     reciprocal               = plugins.get("reciprocal");
     divide                   = plugins.get("divide");
-    log                      = plugins.get("log");
-    isNegative               = plugins.get("isNegative");
     sign                     = plugins.get("sign");
-    isEven                   = plugins.get("isEven");
     exp10                    = plugins.get("exp10");
 
     function onPluginsChanged(plugins) {
@@ -5709,7 +5700,7 @@ function implementBigInteger(plugins, BigInteger) {
         return BigInteger.parse(Number_toString(n, 16), 16);
     }
 
-    function EI_toBigInteger() {
+    function ExactInteger_toBigInteger() {
         return BigInteger.parse(numberToString(this));
     }
 
@@ -5744,7 +5735,7 @@ function implementBigInteger(plugins, BigInteger) {
     }
 
     function divAndMod_BigInteger(n, d) {
-        var dm = toBigInteger(n).divRem(d);
+        var dm = n.divRem(d);
         if (dm[1].isNegative()) {
             if (d.isNegative())
                 return [dm[0].next(), dm[1].subtract(d)];
@@ -5853,7 +5844,7 @@ function implementBigInteger(plugins, BigInteger) {
         var disp                     = plugins.get("Dispatch");
         var Complex                  = plugins.get("Complex");
         var Real                     = plugins.get("Real");
-        var EI                       = plugins.get("ExactInteger");
+        var ExactInteger             = plugins.get("ExactInteger");
         var debug                    = plugins.get("debug");
         var retThis                  = plugins.get("retThis");
 
@@ -5865,7 +5856,7 @@ function implementBigInteger(plugins, BigInteger) {
         debug.def(BigInteger, BigInteger_debug);
 
         toBigInteger.def(BigInteger, retThis);
-        toBigInteger.def(EI, EI_toBigInteger);
+        toBigInteger.def(ExactInteger, ExactInteger_toBigInteger);
 
         function def1(generic, type, func) {
             plugins.get(generic).def(type, func);
@@ -5901,7 +5892,7 @@ function implementBigInteger(plugins, BigInteger) {
         defBigBinary("multiply");
 
         def1("log",        BigInteger, BigInteger_log);
-        def2("exp10",      BigInteger, EI, BigInteger_exp10);
+        def2("exp10",      BigInteger, ExactInteger, BigInteger_exp10);
         def1("sqrt",       BigInteger, BigInteger_sqrt);
         def1("exactIntegerSqrt", BigInteger, BigInteger_exactIntegerSqrt);
         def2("divAndMod",  BigInteger, BigInteger, BigInteger_divAndMod);
