@@ -119,6 +119,8 @@ function BigInteger(n, s) {
 BigInteger.base = 10000000;
 BigInteger.base_log10 = 7;
 
+BigInteger.init = function() {
+
 // Constant: ZERO
 // <BigInteger> 0.
 BigInteger.ZERO = new BigInteger([], 0);
@@ -190,6 +192,8 @@ BigInteger.small = [
 	new BigInteger([35], 1),
 	new BigInteger([36], 1)
 ];
+}
+BigInteger.init();
 
 // Used for parsing/radix conversion
 BigInteger.digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
