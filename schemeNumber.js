@@ -4792,6 +4792,40 @@ function makeBase() {
 }
 
 /*
+    Function: installDefaultExactInteger(plugins, convert)
+    Allows multiple exact integer implementations to interoperate
+    via conversion to a default one.
+
+    *convert* must be a function that accepts an ExactInteger and
+    returns an equivalent value of standard type.  The following
+    generic functions must be specialized for the standard type:
+    compare add subtract multiply expt exp10 divAndMod div mod
+    gcdNonnegative.
+*/
+function installDefaultExactInteger(plugins, convert) {
+    var ExactInteger = plugins.get("ExactInteger");
+
+    function def(name) {
+        var func = plugins.get(name);
+        function EI_func(n) {
+            return func(convert(this), convert(n));
+        }
+        func.def(ExactInteger, ExactInteger, EI_func);
+    }
+
+    def("compare");
+    def("add");
+    def("subtract");
+    def("multiply");
+    def("expt");
+    def("exp10");
+    def("divAndMod");
+    def("div");
+    def("mod");
+    def("gcdNonnegative");
+}
+
+/*
     Function: implementNativeInexactReal(plugins)
     Returns a collection of functions implementing inexact reals as
     native numbers.
@@ -5605,7 +5639,7 @@ function installFlonum(plugins) {
 
 /*
     Function: implementBigInteger(plugins, BigInteger)
-    Exact integer implementation that uses BigInteger.
+    Exact integer implementation that uses Matthew Crumley's BigInteger.
 */
 function implementBigInteger(plugins, BigInteger) {
     "use strict";
@@ -5627,7 +5661,8 @@ function implementBigInteger(plugins, BigInteger) {
 
     var api = g.Object.create(null);
 
-    var toBigInteger = plugins.get("Dispatch").defGeneric("toBigInteger", 1);
+    var toBigInteger = plugins.get("Dispatch").defGeneric(
+        "to" + BigIntegerName, 1);
 
     var toNativeExactInteger, raise, raiseDivisionByExactZero, numberToString, isExact, isZero, negate, reciprocal, divide, log, isNegative, sign, isEven, exp10, nativeToInexact, inexactRectangular, ONE, PI, INEXACT_ZERO;
 
@@ -5698,27 +5733,14 @@ function implementBigInteger(plugins, BigInteger) {
 
         // If p != p.valueOf() due to inexactness, our result would
         // exhaust memory, since |this| is at least 2.
+        // XXX does not respect maxIntegerDigits.
         p = p.valueOf();
         var a = this.pow(Math_abs(p));
-        return (p > 0 ? a : reciprocal(a));
+        return (p >= 0 ? a : reciprocal(a));
     }
 
     function BigInteger_numberToString(radix) {
         return this.toString(radix);
-    }
-
-    function EI_compare(n) {
-        return toBigInteger(this).compare(toBigInteger(n));
-    }
-
-    function EI_add(n) {
-        return toBigInteger(this).add(toBigInteger(n));
-    }
-    function EI_subtract(n) {
-        return toBigInteger(this).subtract(toBigInteger(n));
-    }
-    function EI_multiply(n) {
-        return toBigInteger(this).multiply(toBigInteger(n));
     }
 
     function divAndMod_BigInteger(n, d) {
@@ -5730,18 +5752,15 @@ function implementBigInteger(plugins, BigInteger) {
         }
         return dm;
     }
-    function divAndMod_EI(n, d) {
-        return divAndMod_BigInteger(toBigInteger(n), toBigInteger(d));
-    }
 
-    function EI_divAndMod(d) {
-        return divAndMod_EI(this, d);
+    function BigInteger_divAndMod(d) {
+        return divAndMod_BigInteger(this, d);
     }
-    function EI_div(d) {
-        return divAndMod_EI(this, d)[0];
+    function BigInteger_div(d) {
+        return divAndMod_BigInteger(this, d)[0];
     }
-    function EI_mod(d) {
-        return divAndMod_EI(this, d)[1];
+    function BigInteger_mod(d) {
+        return divAndMod_BigInteger(this, d)[1];
     }
 
     function BigInteger_log() {
@@ -5755,7 +5774,7 @@ function implementBigInteger(plugins, BigInteger) {
         case -1: return divide(this, exp10(ONE, negate(e)));
         case 1:
             e = +e;
-            if (e > SchemeNumber.maxIntegerDigits)
+            if (e > SchemeNumber.maxIntegerDigits && !this.isZero())
                 integerTooBig(e);
             return this.exp10(e);
         }
@@ -5772,8 +5791,6 @@ function implementBigInteger(plugins, BigInteger) {
     function BigInteger_exactIntegerSqrt() {
 
         // I know of no use cases for this.  Be stupid.  Be correct.
-
-        //assert(this.compareAbs(FIRST_BIG_INTEGER) >= 0);
 
         function doit(n, a) {
             while (true) {
@@ -5798,23 +5815,28 @@ function implementBigInteger(plugins, BigInteger) {
             }
         }
 
-        if (this.isNegative())
+        switch (this.sign()) {
+        case -1:
             raise("&assertion", "negative number", this);
-        var l = this.log() / 2 / Math_LN10;
-        var a = BigInteger(Number_toString(Math_pow(10, l - Math_floor(l)))
-                           + "e" + Math_floor(l));
-        return doit(this, a);
+        case 0:
+            return [ ZERO, ZERO ];
+        case 1: default:
+            var l = this.log() / 2 / Math_LN10;
+            var a = BigInteger(Number_toString(Math_pow(10, l - Math_floor(l)))
+                               + "e" + Math_floor(l));
+            return doit(this, a);
+        }
     }
 
-    function EI_gcdNonnegative(n) {
+    function BigInteger_gcdNonnegative(n) {
         //assert(!isNegative(this));
         //assert(!isNegative(n));
 
-        var a = toBigInteger(this);
+        var a = this;
         if (a.isZero())
             return n;
 
-        var b = toBigInteger(n);
+        var b = n;
         var c;
 
         while (true) {
@@ -5826,7 +5848,7 @@ function implementBigInteger(plugins, BigInteger) {
         }
     }
 
-    function install(isDefaultInteger) {
+    function install() {
         "use strict";
         var disp                     = plugins.get("Dispatch");
         var Complex                  = plugins.get("Complex");
@@ -5835,13 +5857,15 @@ function implementBigInteger(plugins, BigInteger) {
         var debug                    = plugins.get("debug");
         var retThis                  = plugins.get("retThis");
 
-        disp.defClass("BigInteger", {ctor: BigInteger,
-                                     base: "ExactInteger"});
+        disp.defClass("BigInteger", {ctor: BigInteger, base: "ExactInteger"});
 
         // Have BigInteger rebuild its cache since its prototype changed.
         BigInteger.init();
 
         debug.def(BigInteger, BigInteger_debug);
+
+        toBigInteger.def(BigInteger, retThis);
+        toBigInteger.def(EI, EI_toBigInteger);
 
         function def1(generic, type, func) {
             plugins.get(generic).def(type, func);
@@ -5852,9 +5876,10 @@ function implementBigInteger(plugins, BigInteger) {
         function defBigUnary(name) {
             plugins.get(name).def(BigInteger, BigInteger.prototype[name]);
         }
-
-        toBigInteger.def(BigInteger, retThis);
-        toBigInteger.def(EI,         EI_toBigInteger);
+        function defBigBinary(name) {
+            plugins.get(name).def(BigInteger, BigInteger,
+                                  BigInteger.prototype[name]);
+        }
 
         def2("expt",           BigInteger, BigInteger, BigInteger_expt);
         def1("numberToString", BigInteger, BigInteger_numberToString);
@@ -5870,25 +5895,25 @@ function implementBigInteger(plugins, BigInteger) {
         defBigUnary("abs");
         defBigUnary("square");
 
+        defBigBinary("compare");
+        defBigBinary("add");
+        defBigBinary("subtract");
+        defBigBinary("multiply");
+
         def1("log",        BigInteger, BigInteger_log);
         def2("exp10",      BigInteger, EI, BigInteger_exp10);
         def1("sqrt",       BigInteger, BigInteger_sqrt);
         def1("exactIntegerSqrt", BigInteger, BigInteger_exactIntegerSqrt);
-
-        if (isDefaultInteger) {
-            def2("compare",    EI, EI, EI_compare);
-            def2("add",        EI, EI, EI_add);
-            def2("subtract",   EI, EI, EI_subtract);
-            def2("multiply",   EI, EI, EI_multiply);
-            def2("divAndMod",  EI, EI, EI_divAndMod);
-            def2("div",        EI, EI, EI_div);
-            def2("mod",        EI, EI, EI_mod);
-            def2("gcdNonnegative", EI, EI, EI_gcdNonnegative);
-        }
+        def2("divAndMod",  BigInteger, BigInteger, BigInteger_divAndMod);
+        def2("div",        BigInteger, BigInteger, BigInteger_div);
+        def2("mod",        BigInteger, BigInteger, BigInteger_mod);
+        def2("gcdNonnegative", BigInteger, BigInteger,
+             BigInteger_gcdNonnegative);
     }
 
     api.parseExactInteger        = parseExactInteger;
     api.nativeToExactInteger     = nativeToExactInteger;
+    api.importExactInteger       = toBigInteger;
     api.install                  = install;
     return api;
 }
@@ -6114,12 +6139,15 @@ return (function() {
     var disp         = plugins.get("Dispatch");
     var debug        = plugins.get("debug") || {def: function(){}};
 
-    // XXX This could use some refactoring.
-
     var Integers = implementBigInteger(plugins, BigInteger);
-    Integers.install(true);
-    delete(Integers.install);
-    plugins.extend(Integers);
+    Integers.install();
+    plugins.extend(
+        "nativeToExactInteger", Integers.nativeToExactInteger,
+        "parseExactInteger",    Integers.parseExactInteger
+    );
+    installDefaultExactInteger(plugins, Integers.importExactInteger);
+
+    // XXX This could use some refactoring.
 
     var Fractions = implementFraction(plugins);
     var Fraction = Fractions.Fraction;
