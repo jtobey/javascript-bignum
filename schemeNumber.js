@@ -4799,8 +4799,7 @@ function makeBase() {
     *convert* must be a function that accepts an ExactInteger and
     returns an equivalent value of standard type.  The following
     generic functions must be specialized for the standard type:
-    compare add subtract multiply expt exp10 divAndMod div mod
-    gcdNonnegative.
+    compare add subtract multiply expt divAndMod div mod.
 */
 function installDefaultExactInteger(plugins, convert) {
     var ExactInteger = plugins.get("ExactInteger");
@@ -4808,6 +4807,7 @@ function installDefaultExactInteger(plugins, convert) {
     function def(name) {
         var func = plugins.get(name);
         function EI_func(n) {
+            //var debug = plugins.get("debug"); print("calling EI " + name + " " + debug(this) + " " + debug(n));
             return func(convert(this), convert(n));
         }
         func.def(ExactInteger, ExactInteger, EI_func);
@@ -4818,11 +4818,9 @@ function installDefaultExactInteger(plugins, convert) {
     def("subtract");
     def("multiply");
     def("expt");
-    def("exp10");
     def("divAndMod");
     def("div");
     def("mod");
-    def("gcdNonnegative");
 }
 
 /*
@@ -5772,10 +5770,12 @@ function implementBigInteger(plugins, BigInteger) {
     }
 
     function BigInteger_sqrt() {
-        //assert(!isZero(this));
+        var s = this.sign();
+        if (s === 0)
+            return this;
         var mag = nativeToInexact(Math_exp(this.abs().log() / 2));
-        if (this.isNegative())
-            return inexactRectangular(INEXACT_ZERO, mag)
+        if (s < 0)
+            return inexactRectangular(INEXACT_ZERO, mag);
         return mag;
     }
 
@@ -5812,11 +5812,20 @@ function implementBigInteger(plugins, BigInteger) {
         case 0:
             return [ ZERO, ZERO ];
         case 1: default:
-            var l = this.log() / 2 / Math_LN10;
-            var a = BigInteger(Number_toString(Math_pow(10, l - Math_floor(l)))
-                               + "e" + Math_floor(l));
-            return doit(this, a);
+            break;
         }
+        var l = this.log() / 2 / Math_LN10;
+
+        if (l < 7) {
+            // Use native arithmetic.
+            var x = this.valueOf();
+            var f = Math_floor(Math_sqrt(x));
+            return [BigInteger(f), BigInteger(x - f * f)];
+        }
+
+        var a = BigInteger(Number_toString(Math_pow(10, l - Math_floor(l)))
+                           + "e" + Math_floor(l));
+        return doit(this, a);
     }
 
     function BigInteger_gcdNonnegative(n) {
@@ -5842,8 +5851,6 @@ function implementBigInteger(plugins, BigInteger) {
     function install() {
         "use strict";
         var disp                     = plugins.get("Dispatch");
-        var Complex                  = plugins.get("Complex");
-        var Real                     = plugins.get("Real");
         var ExactInteger             = plugins.get("ExactInteger");
         var debug                    = plugins.get("debug");
         var retThis                  = plugins.get("retThis");
