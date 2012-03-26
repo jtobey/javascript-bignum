@@ -1545,6 +1545,18 @@ function implementCoreLibrary(plugins) {
         return x;
     }
 
+    function assertRational(q) {
+        if (!isRational(q))
+            raise("&assertion", "not a rational number", q);
+        return q;
+    }
+
+    function toRational(q) {
+        q = SchemeNumber(q);
+        isRational(q) || assertRational(q);
+        return q;
+    }
+
     function assertInteger(n) {
         n = SchemeNumber(n);
         if (!isInteger(n))
@@ -1800,6 +1812,8 @@ function implementCoreLibrary(plugins) {
     api.isNumber                 = isNumber;
     api.assertReal               = assertReal;
     api.toReal                   = toReal;
+    api.assertRational           = assertRational;
+    api.toRational               = toRational;
     api.assertInteger            = assertInteger;
     api.toInteger                = toInteger;
     api.assertExact              = assertExact;
@@ -2165,7 +2179,7 @@ function implementRnrsBase(plugins) {
     //"use strict";  // Strict mode hinders error reporting.
     var g = plugins.get("es5globals");
     var uncurry = plugins.get("uncurry");
-    var SchemeNumber, stringToNumber, ZERO, ONE, MINUS_ONE, INEXACT_ZERO, NAN, raise, isNumber, assertReal, toReal, toInteger, assertExact, makeRectangular, makePolar;
+    var SchemeNumber, stringToNumber, ZERO, ONE, MINUS_ONE, INEXACT_ZERO, NAN, raise, isNumber, assertReal, toReal, toRational, toInteger, assertExact, makeRectangular, makePolar;
     var numberToString, isExact, isInexact, isComplex, isReal, isRational, isInteger, isZero, toExact, toInexact, negate, reciprocal, eq, ne, add, subtract, multiply, divide, realPart, imagPart, expt, exp, magnitude, angle, sqrt, log, asin, acos, atan, sin, cos, tan, SN_isFinite, SN_isInfinite, SN_isNaN, abs, isPositive, isNegative, floor, ceiling, truncate, round, compare, gt, lt, ge, le, divAndMod, div, mod, atan2, numerator, denominator, isEven, isOdd, exactIntegerSqrt, gcdNonnegative;
     var Array_push = uncurry(g.Array.prototype.push);
 
@@ -2239,6 +2253,7 @@ function implementRnrsBase(plugins) {
         isNumber                 = plugins.get("isNumber");
         assertReal               = plugins.get("assertReal");
         toReal                   = plugins.get("toReal");
+        toRational               = plugins.get("toRational");
         toInteger                = plugins.get("toInteger");
         assertExact              = plugins.get("assertExact");
         makeRectangular          = plugins.get("makeRectangular");
@@ -2259,11 +2274,11 @@ function implementRnrsBase(plugins) {
         "rational-valued?" : fn_isRationalValued,
         "integer-valued?"  : fn_isIntegerValued,
 
-        "exact?"   : makeUnary(isExact),
-        "inexact?" : makeUnary(isInexact),
+        "exact?"   : makeUnary(SchemeNumber, isExact),
+        "inexact?" : makeUnary(SchemeNumber, isInexact),
 
-        inexact : makeUnary(toInexact),
-        exact   : makeUnary(toExact),
+        inexact : makeUnary(SchemeNumber, toInexact),
+        exact   : makeUnary(SchemeNumber, toExact),
 
         "="  : fn_equals,
         "<"  : makeComparator(lt),
@@ -2271,15 +2286,14 @@ function implementRnrsBase(plugins) {
         "<=" : makeComparator(le),
         ">=" : makeComparator(ge),
 
-        "zero?"     : makeUnary(isZero),
-        // XXX All these makeUnary functions should assert their argument type.
-        "positive?" : makeUnary(isPositive),
-        "negative?" : makeUnary(isNegative),
-        "odd?"      : makeUnary(isOdd),
-        "even?"     : makeUnary(isEven),
-        "finite?"   : makeUnary(SN_isFinite),
-        "infinite?" : makeUnary(SN_isInfinite),
-        "nan?"      : makeUnary(SN_isNaN),
+        "zero?"     : makeUnary(SchemeNumber, isZero),
+        "positive?" : makeUnary(toReal, isPositive),
+        "negative?" : makeUnary(toReal, isNegative),
+        "odd?"      : makeUnary(toInteger, isOdd),
+        "even?"     : makeUnary(toInteger, isEven),
+        "finite?"   : makeUnary(toReal, SN_isFinite),
+        "infinite?" : makeUnary(toReal, SN_isInfinite),
+        "nan?"      : makeUnary(toReal, SN_isNaN),
 
         max : makeMaxMin(gt),
         min : makeMaxMin(lt),
@@ -2331,7 +2345,7 @@ function implementRnrsBase(plugins) {
             return divide(SchemeNumber(a), product);
         },
 
-        abs             : makeUnary(abs),
+        abs             : makeUnary(toReal, abs),
         "div-and-mod"   : makeDivMod(false, 2),
         div             : makeDivMod(false, 0),
         mod             : makeDivMod(false, 1),
@@ -2365,14 +2379,14 @@ function implementRnrsBase(plugins) {
             return (exact ? ret : toInexact(ret));
         },
 
-        numerator   : makeUnary(numerator),
-        denominator : makeUnary(denominator),
-        floor       : makeUnary(floor),
-        ceiling     : makeUnary(ceiling),
-        truncate    : makeUnary(truncate),
-        round       : makeUnary(round),
+        numerator   : makeUnary(toRational, numerator),
+        denominator : makeUnary(toRational, denominator),
+        floor       : makeUnary(toReal, floor),
+        ceiling     : makeUnary(toReal, ceiling),
+        truncate    : makeUnary(toReal, truncate),
+        round       : makeUnary(toReal, round),
         rationalize : rationalize,
-        exp         : makeUnary(exp),
+        exp         : makeUnary(SchemeNumber, exp),
 
         log : function(z, base) {
             var ret = log(SchemeNumber(z));
@@ -2383,11 +2397,11 @@ function implementRnrsBase(plugins) {
             }
         },
 
-        sin  : makeUnary(sin),
-        cos  : makeUnary(cos),
-        tan  : makeUnary(tan),
-        asin : makeUnary(asin),
-        acos : makeUnary(acos),
+        sin  : makeUnary(SchemeNumber, sin),
+        cos  : makeUnary(SchemeNumber, cos),
+        tan  : makeUnary(SchemeNumber, tan),
+        asin : makeUnary(SchemeNumber, asin),
+        acos : makeUnary(SchemeNumber, acos),
 
         atan : function(y, x) {
             switch (arguments.length) {
@@ -2397,9 +2411,13 @@ function implementRnrsBase(plugins) {
             }
         },
 
-        sqrt : makeUnary(sqrt),
-        "exact-integer-sqrt" : makeUnary(exactIntegerSqrt),
-        expt : makeBinary(expt),
+        sqrt : makeUnary(SchemeNumber, sqrt),
+        "exact-integer-sqrt" : makeUnary(toInteger, exactIntegerSqrt),
+
+        expt : function(a, b) {
+            arguments.length === 2 || args2(arguments);
+            return expt(SchemeNumber(a), SchemeNumber(b));
+        },
 
         "make-rectangular" : function(x, y) {
             arguments.length === 2 || args2(arguments);
@@ -2411,10 +2429,10 @@ function implementRnrsBase(plugins) {
             return makePolar(toReal(r), toReal(theta));
         },
 
-        "real-part" : makeUnary(realPart),
-        "imag-part" : makeUnary(imagPart),
-        magnitude   : makeUnary(magnitude),
-        angle       : makeUnary(angle),
+        "real-part" : makeUnary(SchemeNumber, realPart),
+        "imag-part" : makeUnary(SchemeNumber, imagPart),
+        magnitude   : makeUnary(SchemeNumber, magnitude),
+        angle       : makeUnary(SchemeNumber, angle),
 
         "number->string" : function(z, radix, precision) {
             var r = radix;
@@ -2532,20 +2550,12 @@ function implementRnrsBase(plugins) {
         return true;
     }
 
-    function makeUnary(func) {
+    function makeUnary(conv, func) {
         function unary(a) {
             arguments.length === 1 || args1(arguments);
-            return func(SchemeNumber(a));
+            return func(conv(a));
         }
         return unary;
-    }
-
-    function makeBinary(func) {
-        function binary(a, b) {
-            arguments.length === 2 || args2(arguments);
-            return func(SchemeNumber(a), SchemeNumber(b));
-        }
-        return binary;
     }
 
     function makeComparator(cmp) {
@@ -6226,6 +6236,7 @@ function configure(conf) {
 
 var SchemeNumber = configure({});
 SchemeNumber.configure = configure;
+return SchemeNumber;
 })();
 
 if (typeof exports !== "undefined") {
