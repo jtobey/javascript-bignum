@@ -4593,6 +4593,8 @@ function installDefaultExactInteger(plugins, convert) {
     def("divAndMod");
     def("div");
     def("mod");
+
+    plugins.extend("canonicalExactInteger", convert);
 }
 
 function installDefaultRational(plugins, convert) {
@@ -4611,6 +4613,8 @@ function installDefaultRational(plugins, convert) {
     def("subtract");
     def("multiply");
     def("divide");
+
+    plugins.extend("canonicalRational", convert);
 }
 
 /*
