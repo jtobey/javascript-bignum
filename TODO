@@ -1,21 +1,17 @@
 TODO:
 
-* Bring the new dispatch system performance up to that of 1.2.x.
-
 * Fix (expt 0 0) in maint branches as per the example in R6RS.
 
 * Backport fix: (angle 1.0) must be inexact.
 
-* Decimal: Relax the constraint that 10 not divide n.
+* Decimal: Test and debug.
 
-* Decimal: Find out why fn["+"]("#e1e-50") loops.
-
-* Provide a choice among different implementations of exact integers,
-  exact rationals, complex numbers, and inexact reals.
+* Provide a choice among different implementations of complex numbers
+  and inexact reals.
 
 * Implement integers using another library, such as Leemon Baird's.
 
-* Consider a BigDecimal class like Java's BigDecimal.
+* Improve performance.
 
 * Reimplement the performance benefit of using Number.prototype, but
   make it optional.
