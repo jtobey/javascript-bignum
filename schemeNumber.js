@@ -223,7 +223,7 @@ function makeContext(opts) {
         },
         defClass: function(name, opts) {
             var ctor, base;
-            var bctor, proto, sub, sepBase, cname, c;
+            var bctor, proto, key, sub, sepBase, cname, c;
             var ometh, meth, func, array, doit, i, indices;
 
             opts.debug && console.log("defClass: ", name);
@@ -3942,9 +3942,6 @@ function implementPluginLibrary(plugins) {
     function isZero_via_sign()     { return sign(this) === 0; }
     function sign_via_compare()    { return compare(this, ZERO); }
 
-    function sqrt_via_toInexact() { return sqrt(toInexact(this)); }
-    function log_via_toInexact()  { return log( toInexact(this)); }
-
     function eq_via_compare(x) { return compare(this, x) === 0; };
     function ne_via_compare(x) { return compare(this, x) !== 0; };
     function gt_via_compare(x) { return compare(this, x) > 0; };
@@ -3996,6 +3993,7 @@ function implementPluginLibrary(plugins) {
 
     function Integer_divide_via_gcd_div(d) {
         //assert(!isZero(d))
+        //require('repl').start();
         var n = this;
         var g = gcdNonnegative(abs(d), abs(n));
         n = div(n, g);
@@ -4028,177 +4026,8 @@ function implementPluginLibrary(plugins) {
                 "/" + numberToString(d, radix));
     }
 
-    //
-    // For rationals with cheap numerator() and denominator().
-    // These funcs belong in a separate library, perhaps after
-    // replacing numerator/denominator with ._n/_d.
-    //
-
-    function Rational_numeratorAndDenominator() {
-        return [numerator(this), denominator(this)];
-    }
-    function Rational_isInteger() {
-        return isUnit(denominator(this));
-    }
-    function Rational_eq(q) {
-        return eq(denominator(this), denominator(q)) &&
-            eq(numerator(this), numerator(q));
-    }
-    function Rational_compare(q) {
-        var signDiff = sign(this) - sign(q);
-        if (signDiff !== 0)
-            return (signDiff > 0 ? 1 : -1);
-        var tn = numerator(this);
-        var qn = numerator(q);
-        var td = denominator(this);
-        var qd = denominator(q);
-        if (qd === td)  // cheap optimization, could be eq(qd,td)
-            return compare(tn, qn);
-        return compare(multiply(tn, qd), multiply(td, qn));
-    }
-    function Rational_sign() {
-        return sign(numerator(this));
-    }
-    function Rational_isPositive() {
-        return isPositive(numerator(this));
-    }
-    function Rational_isNegative() {
-        return isNegative(numerator(this));
-    }
-    function Rational_isZero() {
-        return isZero(numerator(this));
-    }
-    function Rational_negate() {
-        return divideReduced(negate(numerator(this)), denominator(this));
-    }
-    function Rational_square() {
-        return divideReduced(square(numerator(this)),
-                             square(denominator(this)));
-    }
-    function Rational_reciprocal() {
-        var n = numerator(this);
-        switch (sign(n)) {
-        case -1: return divideReduced(negate(denominator(this)), negate(n));
-        case 1: return divideReduced(denominator(this), n);
-        case 0: default: raiseDivisionByExactZero();
-        }
-    }
-    function Rational_add(q) {
-        var n1 = numerator(this);
-        var d1 = denominator(this);
-        var n2 = numerator(q);
-        var d2 = denominator(q);
-        return divide(add(multiply(n1, d2), multiply(n2, d1)),
-                      multiply(d1, d2));
-    }
-    function Rational_subtract(q) {
-        var n1 = numerator(this);
-        var d1 = denominator(this);
-        var n2 = numerator(q);
-        var d2 = denominator(q);
-        return divide(subtract(multiply(n1, d2), multiply(n2, d1)),
-                      multiply(d1, d2));
-    }
-    function Rational_multiply(q) {
-        return divide(multiply(numerator(this), numerator(q)),
-                      multiply(denominator(this), denominator(q)));
-    }
-    function Rational_divide(q) {
-        return divide(multiply(numerator(this), denominator(q)),
-                      multiply(denominator(this), numerator(q)));
-    }
-
-    // Optimize adding integer with fraction, no need to reduce.
-
-    function Rational_add_Integer(n) {
-        var den = denominator(this);
-        return divideReduced(
-            add(numerator(this), multiply(n, den)), den);
-    }
-    function Integer_add_Rational(q) {
-        var den = denominator(q);
-        return divideReduced(
-            add(multiply(this, den), numerator(q)), den);
-    }
-    function Rational_subtract_Integer(n) {
-        var den = denominator(this);
-        return divideReduced(
-            subtract(numerator(this), multiply(n, den)), den);
-    }
-    function Integer_subtract_Rational(q) {
-        var den = denominator(q);
-        return divideReduced(
-            subtract(multiply(this, den), numerator(q)), den);
-    }
-    function ExactRational_expt_EI(p) {
-        var n, d;
-        switch (sign(p)) {
-        case 0: return ONE;
-        case 1:
-            n = numerator(this);
-            d = denominator(this);
-            break;
-        case -1: default:
-            n = denominator(this);
-            d = numerator(this);
-            p = abs(p);
-            if (isNegative(d)) {
-                n = negate(n);
-                d = negate(d);
-            }
-            if (isUnit(d))
-                return expt(n, p);
-        }
-        // Num and den are in lowest terms.
-        return divideReduced(expt(n, p), expt(d, p));
-    }
-
-    function Rational_expt(x) {
-        if (isNegative(this))
-            return Complex_expt_fn(this, x);
-        return divide(expt(numerator(this), x), expt(denominator(this), x));
-    }
-    function Rational_sqrt() {
-        // This rational or its components may be too big for
-        // toInexact(), but its square root may not be.
-        var n = numerator(this), d = denominator(this);
-        var rootN = sqrt(abs(n)), rootD = sqrt(d);
-        var ret;
-        if (SN_isFinite(rootN)) {
-            if (SN_isFinite(rootD))
-                ret = divide(rootN, rootD);
-            else
-                ret = exp(subtract(log(rootN), divide(log(d), TWO)));
-        }
-        else {
-            ret = exp(subtract(divide(log(n), TWO),
-                               SN_isFinite(rootD) ? log(rootD)
-                                                  : divide(log(d), TWO)));
-        }
-        return (isNegative(n) ? makeRectangular(ZERO, ret) : ret);
-    }
-    function Rational_log() {
-        return subtract(log(numerator(this)), log(denominator(this)));
-    }
-    function Rational_floor_via_div() {
-        return div(numerator(this), denominator(this));
-    }
-
-    // Convert exact rational to approximate native number.
-    function Rational_valueOf() {
-        var n = numerator(this);
-        var d = denominator(this);
-        var ret = n / d;
-        if (_isFinite(ret))  // (-)Infinity / Infinity would give NaN.
-            return ret;
-
-        // Numerator or denominator fall outside the native range, but
-        // their quotient may lie within it.  Use logarithms.
-        switch (sign(n)) {
-        case 1:  return Math_exp(log(n) - log(d));
-        case -1: return -Math_exp(log(negate(n)) - log(d));
-        case 0: default:  return 0;
-        }
+    function Integer_numeratorAndDenominator() {
+        return [this, ONE];
     }
 
     //
@@ -4465,8 +4294,6 @@ function implementPluginLibrary(plugins) {
     api.isNegative_via_sign      = isNegative_via_sign;
     api.isZero_via_sign          = isZero_via_sign;
     api.sign_via_compare         = sign_via_compare;
-    api.sqrt_via_toInexact       = sqrt_via_toInexact;
-    api.log_via_toInexact        = log_via_toInexact;
     api.eq_via_compare           = eq_via_compare;
     api.ne_via_compare           = ne_via_compare;
     api.gt_via_compare           = gt_via_compare;
@@ -4480,37 +4307,14 @@ function implementPluginLibrary(plugins) {
     api.ceiling_via_floor        = ceiling_via_floor;
     api.truncate_via_ceiling_floor= truncate_via_ceiling_floor;
     api.round_via_floor_compare_isEven= round_via_floor_compare_isEven;
-    api.ExactRational_numberToString= ExactRational_numberToString;
-    api.Rational_numeratorAndDenominator= Rational_numeratorAndDenominator;
-    api.Rational_isInteger       = Rational_isInteger;
-    api.Rational_eq              = Rational_eq;
-    api.Rational_compare         = Rational_compare;
-    api.Rational_sign            = Rational_sign;
-    api.Rational_isPositive      = Rational_isPositive;
-    api.Rational_isNegative      = Rational_isNegative;
-    api.Rational_isZero          = Rational_isZero;
-    api.Rational_negate          = Rational_negate;
-    api.Rational_square          = Rational_square;
-    api.Rational_reciprocal      = Rational_reciprocal;
 
-    api.Rational_add             = Rational_add;
-    api.Rational_subtract        = Rational_subtract;
-    api.Rational_multiply        = Rational_multiply;
-    api.Rational_divide          = Rational_divide;
     api.divideReduced_via_isUnit = divideReduced_via_isUnit;
     api.Integer_divide_via_gcd_div= Integer_divide_via_gcd_div;
     api.Integer_reciprocal_via_divideReduced
         = Integer_reciprocal_via_divideReduced;
-    api.Rational_add_Integer     = Rational_add_Integer;
-    api.Integer_add_Rational     = Integer_add_Rational;
-    api.Rational_subtract_Integer= Rational_subtract_Integer;
-    api.Integer_subtract_Rational= Integer_subtract_Rational;
-    api.ExactRational_expt_EI    = ExactRational_expt_EI;
+    api.ExactRational_numberToString= ExactRational_numberToString;
+    api.Integer_numeratorAndDenominator= Integer_numeratorAndDenominator;
 
-    api.Rational_expt            = Rational_expt;
-    api.Rational_sqrt            = Rational_sqrt;
-    api.Rational_log             = Rational_log;
-    api.Rational_floor_via_div   = Rational_floor_via_div;
     api.genericExp10             = genericExp10;
     api.expt_N_EI_fn             = expt_N_EI_fn;
     api.expt_N_EI                = expt_N_EI;
@@ -4520,7 +4324,6 @@ function implementPluginLibrary(plugins) {
     api.Real_toExponential       = Real_toExponential;
     api.Real_toPrecision         = Real_toPrecision;
     api.Complex_valueOf          = Complex_valueOf;
-    api.Rational_valueOf         = Rational_valueOf;
 
     return api;
 }
@@ -4654,7 +4457,10 @@ function installGenericFunctions(plugins) {
     def("angle",         [ExactReal], "ExactReal_angle_via_isNegative");
 
     def("isRational",     [ExactRational], "retTrue");
-    def("floor",          [ExactRational], "Rational_floor_via_div");
+    def("divideReduced",  [ExactInteger, ExactInteger],
+        "divideReduced_via_isUnit");
+    def("divide",   [ExactInteger, ExactInteger], "Integer_divide_via_gcd_div");
+    def("reciprocal", [ExactInteger], "Integer_reciprocal_via_divideReduced");
 
     def("isInteger",      [ExactInteger], "retTrue");
     def("numerator",      [ExactInteger], "retThis");
@@ -4666,8 +4472,6 @@ function installGenericFunctions(plugins) {
     def("exp10",          [ExactInteger, ExactInteger], "genericExp10");
     def("gcdNonnegative", [ExactInteger, ExactInteger],
         "gcdNonnegative_via_isZero_mod");
-    def("divideReduced",  [ExactInteger, ExactInteger],
-        "divideReduced_via_isUnit");
 
     // The following expt definition is invalid for (ExactReal, ExactInteger)...
     def("expt", [Complex, Complex], "Complex_expt");
@@ -4680,47 +4484,8 @@ function installGenericFunctions(plugins) {
 
     def("numberToString", [ExactRational], "ExactRational_numberToString");
     def("numberToString", [ExactInteger], undefined);
-    def("numeratorAndDenominator", [ExactRational],
-        "Rational_numeratorAndDenominator");
-    def("isInteger",      [ExactRational], "Rational_isInteger");
-    def("eq",             [ExactRational, ExactRational], "Rational_eq");
-    def("eq",             [ExactInteger, ExactInteger], "eq_via_compare");
-    def("compare",        [ExactRational, ExactRational], "Rational_compare");
-    def("compare",        [ExactInteger, ExactInteger], undefined);
-    def("sign",           [ExactRational], "Rational_sign");
-    def("sign",           [ExactInteger], "sign_via_compare");
-    def("isPositive",     [ExactRational], "Rational_isPositive");
-    def("isPositive",     [ExactInteger], "isPositive_via_sign");
-    def("isNegative",     [ExactRational], "Rational_isNegative");
-    def("isNegative",     [ExactInteger], "isNegative_via_sign");
-    def("isZero",         [ExactRational], "Rational_isZero");
-    def("isZero",         [ExactInteger], "isZero_via_sign");
-    def("negate",         [ExactRational], "Rational_negate");
-    def("negate",         [ExactInteger], undefined);
-    def("square",         [ExactRational], "Rational_square");
-    def("square",         [ExactInteger], "square_via_multiply");
-    def("reciprocal",     [ExactRational], "Rational_reciprocal");
-    def("reciprocal", [ExactInteger], "Integer_reciprocal_via_divideReduced");
-    def("add",      [ExactRational, ExactRational], "Rational_add");
-    def("add",      [ExactRational, ExactInteger], "Rational_add_Integer");
-    def("add",      [ExactInteger, ExactRational], "Integer_add_Rational");
-    def("add",      [ExactInteger, ExactInteger], undefined);
-    def("subtract", [ExactRational, ExactRational], "Rational_subtract");
-    def("subtract", [ExactRational, ExactInteger], "Rational_subtract_Integer");
-    def("subtract", [ExactInteger, ExactRational], "Integer_subtract_Rational");
-    def("subtract", [ExactInteger, ExactInteger], undefined);
-    def("multiply", [ExactRational, ExactRational], "Rational_multiply");
-    def("multiply", [ExactInteger, ExactInteger], undefined);
-    def("divide",   [ExactRational, ExactRational], "Rational_divide");
-    def("divide",   [ExactInteger, ExactInteger], "Integer_divide_via_gcd_div");
-    def("expt",     [ExactRational, ExactReal], "Rational_expt");
-    def("expt",     [ExactInteger, ExactReal], "Complex_expt");
-    def("expt",     [ExactRational, ExactInteger], "ExactRational_expt_EI");
-    def("expt",     [ExactInteger, ExactInteger], "expt_N_EI");
-    def("sqrt",     [ExactRational], "Rational_sqrt");
-    def("sqrt",     [ExactInteger], "sqrt_via_toInexact");
-    def("log",      [ExactRational], "Rational_log");
-    def("log",      [ExactInteger], "log_via_toInexact");
+    def("numeratorAndDenominator", [ExactInteger],
+        "Integer_numeratorAndDenominator");
 }
 
 
@@ -4769,8 +4534,6 @@ function installEcmaMethods(plugins) {
     ExactReal.prototype.toFixed       = plugins.get("Real_toFixed");
     ExactReal.prototype.toExponential = plugins.get("Real_toExponential");
     ExactReal.prototype.toPrecision   = plugins.get("Real_toPrecision");
-
-    ExactRational.prototype.valueOf = plugins.get("Rational_valueOf");
 }
 
 function makeBase() {
@@ -4807,7 +4570,6 @@ function installDefaultExactInteger(plugins, convert) {
     function def(name) {
         var func = plugins.get(name);
         function EI_func(n) {
-            //var debug = plugins.get("debug"); print("calling EI " + name + " " + debug(this) + " " + debug(n));
             return func(convert(this), convert(n));
         }
         func.def(ExactInteger, ExactInteger, EI_func);
@@ -4821,6 +4583,24 @@ function installDefaultExactInteger(plugins, convert) {
     def("divAndMod");
     def("div");
     def("mod");
+}
+
+function installDefaultRational(plugins, convert) {
+    var ExactRational = plugins.get("ExactRational");
+
+    function def(name) {
+        var func = plugins.get(name);
+        function EQ_func(n) {
+            return func(convert(this), convert(n));
+        }
+        func.def(ExactRational, ExactRational, EQ_func);
+    }
+
+    def("compare");
+    def("add");
+    def("subtract");
+    def("multiply");
+    def("divide");
 }
 
 /*
@@ -5653,6 +5433,7 @@ function implementBigInteger(plugins, BigInteger) {
     var Math_exp     = g.Math.exp;
     var Math_floor   = g.Math.floor;
     var Math_pow     = g.Math.pow;
+    var Math_sqrt    = g.Math.sqrt;
 
     var api = g.Object.create(null);
 
@@ -5917,30 +5698,61 @@ function implementBigInteger(plugins, BigInteger) {
 }
 
 /*
-    Function: implementFraction(plugins)
+    Function: defaultRationalFactory(plugins)
 */
-function implementFraction(plugins) {
+function defaultRationalFactory(plugins) {
     "use strict";
-    var ExactRational = plugins.get("ExactRational");
-    var g             = plugins.get("es5globals");
-    var uncurry       = plugins.get("uncurry");
+    var ExactRational            = plugins.get("ExactRational");
+    var g                        = plugins.get("es5globals");
+    var uncurry                  = plugins.get("uncurry");
     var api = g.Object.create(null);
 
     var Math_exp     = g.Math.exp;
     var _isNaN       = g.isNaN;
+    var _isFinite    = g.isFinite;
 
-    var debug, isUnit;
+    var debug, retFalse, isUnit, numeratorAndDenominator, ZERO, ONE, TWO, makeRectangular, eq, compare, add, subtract, multiply, divide, negate, log, exp, isNegative, abs, sqrt, SN_isFinite, sign, div, expt, square, isZero, isPositive, isNegative, raiseDivisionByExactZero;
 
     debug                    = plugins.get("debug");
+    retFalse                 = plugins.get("retFalse");
     isUnit                   = plugins.get("isUnit");
+    numeratorAndDenominator  = plugins.get("numeratorAndDenominator");
+    ZERO                     = plugins.get("ZERO");
+    ONE                      = plugins.get("ONE");
+    TWO                      = plugins.get("TWO");
+    makeRectangular          = plugins.get("makeRectangular");
+    eq                       = plugins.get("eq");
+    compare                  = plugins.get("compare");
+    add                      = plugins.get("add");
+    subtract                 = plugins.get("subtract");
+    multiply                 = plugins.get("multiply");
+    divide                   = plugins.get("divide");
+    negate                   = plugins.get("negate");
+    log                      = plugins.get("log");
+    exp                      = plugins.get("exp");
+    isNegative               = plugins.get("isNegative");
+    abs                      = plugins.get("abs");
+    sqrt                     = plugins.get("sqrt");
+    SN_isFinite              = plugins.get("SN_isFinite");
+    sign                     = plugins.get("sign");
+    div                      = plugins.get("div");
+    expt                     = plugins.get("expt");
+    square                   = plugins.get("square");
+    isZero                   = plugins.get("isZero");
+    isPositive               = plugins.get("isPositive");
+    isNegative               = plugins.get("isNegative");
+    raiseDivisionByExactZero = plugins.get("raiseDivisionByExactZero");
 
     // Fraction: Exact rational as numerator (exact integer) and
-    // denominator (exact positive integer) with no factors in common.
+    // denominator (exact integer greater than one) with no factors in
+    // common.
 
     function Fraction(n, d) {
-        //assert(this instanceof Fraction);
+        //assert(isInteger(n));assert(isExact(n));
+        //assert(isInteger(d));assert(isExact(d));
         //assert(gt(d, ONE));
-        //assert(eq(gcdNonnegative(abs(n), d), ONE));
+        //assert(eq(ONE,gcdNonnegative(abs(n),d)));
+        //assert(this instanceof Fraction);
         this._n = n;
         this._d = d;
     }
@@ -5950,21 +5762,252 @@ function implementFraction(plugins) {
         return "Fraction(" + debug(this._n) + " / " + debug(this._d) + ")";
     }
 
+    // Convert exact rational to approximate native number.
+    function Fraction_valueOf() {
+        var n = this._n;
+        var d = this._d;
+        var ret = n / d;
+        if (_isFinite(ret))  // (-)Infinity / Infinity would give NaN.
+            return ret;
+
+        // Numerator or denominator fall outside the native range, but
+        // their quotient may lie within it.  Use logarithms.
+        switch (sign(n)) {
+        case 1:  return Math_exp(log(n) - log(d));
+        case -1: return -Math_exp(log(negate(n)) - log(d));
+        case 0: default:  return 0;
+        }
+    }
+
+    Fraction.prototype.valueOf = Fraction_valueOf;
+
     function Fraction_numerator()   { return this._n; }
     function Fraction_denominator() { return this._d; }
 
     function divideReducedNotByOne(n, d) {
         return new Fraction(n, d);
     }
+    function _divideReduced(n, d) {
+        return (isUnit(d) ? n : new Fraction(n, d));
+    }
 
-    api.Fraction                  = Fraction;
-    api.Fraction_debug            = Fraction_debug;
-    api.Fraction_numerator        = Fraction_numerator;
-    api.Fraction_denominator      = Fraction_denominator;
-    api.divideReducedNotByOne     = divideReducedNotByOne;
+    var importRational = plugins.get("Dispatch").defGeneric("toFraction", 1);
+
+    function Rational_toFraction() {
+        var nd = numeratorAndDenominator(this);
+        return _divideReduced(nd[0], nd[1]);
+    }
+
+    function Fraction_numeratorAndDenominator() {
+        return [this._n, this._d];
+    }
+
+    function Fraction_eq(q) {
+        return eq(this._d, q._d) &&
+            eq(this._n, q._n);
+    }
+
+    function Fraction_compare(q) {
+        var signDiff = sign(this._n) - sign(q._n);
+        if (signDiff !== 0)
+            return (signDiff > 0 ? 1 : -1);
+        if (q._d === this._d)  // cheap optimization, XXX could be eq(qd,td)
+            return compare(this._n, q._n);
+        return compare(multiply(this._n, q._d), multiply(this._d, q._n));
+    }
+    function Fraction_compare_Integer(n) {
+        return compare(this._n, multiply(this._d, n));
+    }
+    function Integer_compare_Fraction(q) {
+        return compare(multiply(this, q._d), q._n);
+    }
+
+    function Fraction_sign() {
+        return sign(this._n);
+    }
+    function Fraction_isPositive() {
+        return isPositive(this._n);
+    }
+    function Fraction_isNegative() {
+        return isNegative(this._n);
+    }
+    function Fraction_negate() {
+        return divideReducedNotByOne(negate(this._n), this._d);
+    }
+    function Fraction_square() {
+        return divideReducedNotByOne(square(this._n), square(this._d));
+    }
+    function Fraction_reciprocal() {
+        var n = this._n;
+        switch (sign(n)) {
+        case -1: return _divideReduced(negate(this._d), negate(n));
+        case 1: return _divideReduced(this._d, n);
+        case 0: default: raiseDivisionByExactZero();
+        }
+    }
+
+    function Fraction_add(q) {
+        return divide(add(multiply(this._n, q._d), multiply(q._n, this._d)),
+                      multiply(this._d, q._d));
+    }
+    function Fraction_add_Integer(n) {
+        return divideReducedNotByOne(
+            add(this._n, multiply(n, this._d)), this._d);
+    }
+    function Integer_add_Fraction(q) {
+        return divideReducedNotByOne(
+            add(multiply(this, q._d), q._n), q._d);
+    }
+
+    function Fraction_subtract(q) {
+        return divide(subtract(multiply(this._n, q._d),
+                               multiply(q._n, this._d)),
+                      multiply(this._d, q._d));
+    }
+    function Fraction_subtract_Integer(n) {
+        return divideReducedNotByOne(
+            subtract(this._n, multiply(n, this._d)), this._d);
+    }
+    function Integer_subtract_Fraction(q) {
+        return divideReducedNotByOne(
+            subtract(multiply(this, q._d), q._n), q._d);
+    }
+
+    function Fraction_multiply(q) {
+        return divide(multiply(this._n, q._n), multiply(this._d, q._d));
+    }
+    function times_int(n, d, i) {
+        var nd = numeratorAndDenominator(divide(i, d));
+        return _divideReduced(multiply(n, nd[0]), nd[1]);
+    }
+    function Fraction_multiply_Integer(i) {
+        return times_int(this._n, this._d, i);
+    }
+    function Integer_multiply_Fraction(q) {
+        return times_int(q._n, q._d, this);
+    }
+
+    function Fraction_divide(q) {
+        return divide(multiply(this._n, q._d), multiply(this._d, q._n));
+    }
+    function Fraction_divide_Integer(i) {
+        var nd = numeratorAndDenominator(divide(this._n, i));
+        return new Fraction(nd[0], multiply(nd[1], this._d));
+    }
+    function Integer_divide_Fraction(q) {
+        return divide(multiply(this, q._d), q._n);
+    }
+
+    function Fraction_expt_EI(p) {
+        var n, d;
+        switch (sign(p)) {
+        case 0: return ONE;
+        case 1:
+            n = this._n;
+            d = this._d;
+            break;
+        case -1: default:
+            n = this._d;
+            d = this._n;
+            p = abs(p);
+            if (isNegative(d)) {
+                n = negate(n);
+                d = negate(d);
+            }
+            if (isUnit(d))
+                return expt(n, p);
+        }
+        // Num and den are in lowest terms.
+        return divideReducedNotByOne(expt(n, p), expt(d, p));
+    }
+
+    function Fraction_sqrt() {
+        // This rational or its components may be too big for
+        // toInexact(), but its square root may not be.
+        var absN = abs(this._n);
+        var rootN = sqrt(absN), rootD = sqrt(this._d);
+        var ret;
+        if (SN_isFinite(rootN)) {
+            if (SN_isFinite(rootD))
+                ret = divide(rootN, rootD);
+            else
+                ret = exp(subtract(log(rootN), divide(log(this._d), TWO)));
+        }
+        else {
+            ret = exp(subtract(divide(log(absN), TWO),
+                               SN_isFinite(rootD) ? log(rootD)
+                                                  : divide(log(this._d), TWO)));
+        }
+        return (isNegative(this._n) ? makeRectangular(ZERO, ret) : ret);
+    }
+    function Fraction_log() {
+        return subtract(log(this._n), log(this._d));
+    }
+    function Fraction_floor() {
+        return div(this._n, this._d);
+    }
+
+    function install() {
+        var disp = plugins.get("Dispatch");
+        var EI   = plugins.get("ExactInteger");
+
+        disp.defClass("Fraction", {ctor: Fraction});
+
+        importRational.def(Fraction, plugins.get("retThis"));
+        importRational.def(ExactRational, Rational_toFraction);
+
+        function def(name, type1, type2, func) {
+            plugins.get(name).def(type1, type2, func);
+        }
+        function def1(name, func) {
+            plugins.get(name).def(Fraction, func);
+        }
+        function def2(name, func) {
+            plugins.get(name).def(Fraction, Fraction, func);
+        }
+
+        def1("debug",                   Fraction_debug);
+        def1("numerator",               Fraction_numerator);
+        def1("denominator",             Fraction_denominator);
+        def1("numeratorAndDenominator", Fraction_numeratorAndDenominator);
+        def1("isInteger",               retFalse);
+        def2("eq",                      Fraction_eq);
+        def("eq",         Fraction, EI, retFalse);
+        def("eq",         EI, Fraction, retFalse);
+        def2("compare",                 Fraction_compare);
+        def("compare",    Fraction, EI, Fraction_compare_Integer);
+        def("compare",    EI, Fraction, Integer_compare_Fraction);
+        def1("sign",                    Fraction_sign);
+        def1("isPositive",              Fraction_isPositive);
+        def1("isNegative",              Fraction_isNegative);
+        def1("isZero",                  retFalse);
+        def1("isUnit",                  retFalse);
+        def1("floor",                   Fraction_floor);
+        def1("negate",                  Fraction_negate);
+        def1("square",                  Fraction_square);
+        def1("reciprocal",              Fraction_reciprocal);
+        def2("add",                     Fraction_add);
+        def("add",        Fraction, EI, Fraction_add_Integer);
+        def("add",        EI, Fraction, Integer_add_Fraction);
+        def2("subtract",                Fraction_subtract);
+        def("subtract",   Fraction, EI, Fraction_subtract_Integer);
+        def("subtract",   EI, Fraction, Integer_subtract_Fraction);
+        def2("multiply",                Fraction_multiply);
+        def("multiply",   Fraction, EI, Fraction_multiply_Integer);
+        def("multiply",   EI, Fraction, Integer_multiply_Fraction);
+        def2("divide",                  Fraction_divide);
+        def("divide",     Fraction, EI, Fraction_divide_Integer);
+        def("divide",     EI, Fraction, Integer_divide_Fraction);
+        def("expt",       Fraction, EI, Fraction_expt_EI);
+        def1("sqrt",                    Fraction_sqrt);
+        def1("log",                     Fraction_log);
+    }
+
+    api.divideReducedNotByOne    = divideReducedNotByOne;
+    api.importRational           = importRational;
+    api.install                  = install;
     return api;
 }
-
 
 /*
     Function: implementRectangular(plugins)
@@ -6111,33 +6154,39 @@ function installRectangular(plugins) {
     defRect("isInexact");
 }
 
-
-// Grab the BigInteger library.
-var BigInteger;
-if (typeof require !== "undefined")
-    BigInteger = require("./biginteger").BigInteger;
-else
-    BigInteger = this.BigInteger;
-
-if (!BigInteger) {
-    if (typeof load !== "undefined")
-        load("biginteger.js");
-    else if (this.readFile)
-        eval(this.readFile("biginteger.js"));
+function defaultIntegerFactory(plugins) {
+    // Grab the BigInteger library.
+    var BigInteger;
+    if (typeof require !== "undefined")
+        BigInteger = require("./biginteger").BigInteger;
     else
-        throw new Error("BigInteger is not defined.");
+        BigInteger = this.BigInteger;
+
+    if (!BigInteger) {
+        if (typeof load !== "undefined")
+            load("biginteger.js");
+        else if (this.readFile)
+            eval(this.readFile("biginteger.js"));
+        else
+            throw new Error("BigInteger is not defined.");
+    }
+    return implementBigInteger(plugins, BigInteger);
 }
 
-return (function() {
+function configure(conf) {
 
     // Build the SchemeNumber object piece by piece.
 
+    // XXX should probably provide a unique DispatchJs prefix.
     var SchemeNumber = makeBase();
     var plugins      = SchemeNumber.plugins;
     var disp         = plugins.get("Dispatch");
     var debug        = plugins.get("debug") || {def: function(){}};
 
-    var Integers = implementBigInteger(plugins, BigInteger);
+    var integerFactory  = conf.integerFactory  || defaultIntegerFactory;
+    var rationalFactory = conf.rationalFactory || defaultRationalFactory;
+
+    var Integers = integerFactory(plugins);
     Integers.install();
     plugins.extend(
         "nativeToExactInteger", Integers.nativeToExactInteger,
@@ -6145,15 +6194,14 @@ return (function() {
     );
     installDefaultExactInteger(plugins, Integers.importExactInteger);
 
-    // XXX This could use some refactoring.
+    var Rationals = rationalFactory(plugins);
+    Rationals.install();
+    plugins.extend(
+        "divideReducedNotByOne", Rationals.divideReducedNotByOne
+    );
+    installDefaultRational(plugins, Rationals.importRational);
 
-    var Fractions = implementFraction(plugins);
-    var Fraction = Fractions.Fraction;
-    plugins.extend(Fractions);
-    disp.defClass("Fraction", {ctor: Fraction});
-    debug.def(Fraction, Fractions.Fraction_debug);
-    plugins.get("numerator"  ).def(Fraction, Fractions.Fraction_numerator);
-    plugins.get("denominator").def(Fraction, Fractions.Fraction_denominator);
+    // XXX This could use some refactoring.
 
     var Rectangulars = implementRectangular(plugins);
     var Rectangular = Rectangulars.Rectangular;
@@ -6174,7 +6222,10 @@ return (function() {
     // XXX TO DO
 
     return SchemeNumber;
-})();
+}
+
+var SchemeNumber = configure({});
+SchemeNumber.configure = configure;
 })();
 
 if (typeof exports !== "undefined") {
