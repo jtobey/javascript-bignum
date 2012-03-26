@@ -4593,6 +4593,8 @@ function installDefaultExactInteger(plugins, convert) {
     def("divAndMod");
     def("div");
     def("mod");
+    def("gcdNonnegative");
+    def("divideReduced");
 
     plugins.extend("canonicalExactInteger", convert);
 }
