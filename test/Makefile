@@ -1,4 +1,4 @@
-JS = rhino
+JS = node
 RHINO = rhino -f
 RHINO_PIPE = ( rhino 2>/dev/null | grep '^(' ) <
 NODE = node
