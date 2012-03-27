@@ -939,12 +939,13 @@ function defineGenericFunctions(plugins) {
 
     def("realPart", 1);
     def("imagPart", 1);
+    def("magnitude", 1);
+    def("angle", 1);
+    def("conjugate", 1);
 
     def("expt", 2);
 
     def("exp", 1);
-    def("magnitude", 1);
-    def("angle", 1);
     def("sqrt", 1);
 
     def("log", 1);
@@ -3269,13 +3270,14 @@ function installStubFunctions(plugins) {
 
     def("realPart",       [Complex]);
     def("imagPart",       [Complex]);
+    def("magnitude",      [Complex]);
+    def("angle",          [Complex]);
+    def("conjugate",      [Complex]);
 
     def("expt",           [SchemeNumberType, ExactInteger]);
     def("expt",           [Complex, Complex]);
 
     def("exp",            [Complex]);
-    def("magnitude",      [Complex]);
-    def("angle",          [Complex]);
     def("sqrt",           [Complex]);
 
     def("log",            [Complex]);
@@ -4476,6 +4478,7 @@ function installGenericFunctions(plugins) {
     def("isReal",     [Real], "retTrue");
     def("realPart",   [Real], "retThis");
     def("imagPart",   [Real], "retZero");
+    def("conjugate",  [Real], "retThis");
     def("isUnit",     [Real], "isUnit_via_eq");
     def("magnitude",  [Real], "Real_magnitude_via_abs");
     def("isPositive", [Real], "isPositive_via_sign");
@@ -6092,7 +6095,7 @@ function implementRectangular(plugins) {
     var api = g.Object.create(null);
 
     var debug, isZero, isUnit, isPositive, isExact, isInexact;
-    var toInexact, multiply, cos, sin;
+    var toInexact, negate, multiply, cos, sin;
     var ZERO, ONE, MINUS_ONE, INEXACT_ZERO;
 
     debug                    = plugins.get("debug");
@@ -6102,6 +6105,7 @@ function implementRectangular(plugins) {
     isExact                  = plugins.get("isExact");
     isInexact                = plugins.get("isInexact");
     toInexact                = plugins.get("toInexact");
+    negate                   = plugins.get("negate");
     multiply                 = plugins.get("multiply");
     cos                      = plugins.get("cos");
     sin                      = plugins.get("sin");
@@ -6128,6 +6132,12 @@ function implementRectangular(plugins) {
 
     function Rectangular_realPart() { return this._x; }
     function Rectangular_imagPart() { return this._y; }
+
+    function Rectangular_conjugate() {
+        if (isExact(this._x))
+            return exactRectangular(this._x, negate(this._y));
+        return inexactRectangular(this._x, negate(this._y));
+    }
 
     function Rectangular_debug() {
         return "Rectangular(" + debug(this._x) + ", " + debug(this._y) + ")";
@@ -6191,6 +6201,7 @@ function implementRectangular(plugins) {
     api.Rectangular_debug         = Rectangular_debug;
     api.Rectangular_realPart      = Rectangular_realPart;
     api.Rectangular_imagPart      = Rectangular_imagPart;
+    api.Rectangular_conjugate     = Rectangular_conjugate;
     api.exactRectangular          = exactRectangular;
     api.inexactRectangular        = inexactRectangular;
     api.exactPolar                = exactPolar;
@@ -6223,6 +6234,7 @@ function installRectangular(plugins) {
     defRect("imagPart");
     defRect("isExact");
     defRect("isInexact");
+    defRect("conjugate");
 }
 
 function defaultIntegerFactory(plugins) {
