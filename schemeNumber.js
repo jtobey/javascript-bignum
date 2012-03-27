@@ -991,6 +991,22 @@ function defineGenericFunctions(plugins) {
     def("gcdNonnegative", 2);
     def("divideReduced", 2);
 
+    def("bitwiseNot", 1);
+    def("bitwiseAnd", 2);
+    def("bitwiseIor", 2);
+    def("bitwiseXor", 2);
+    def("bitwiseIf", 3);
+    def("bitCount", 1);
+    def("bitLength", 1);
+    def("firstBitSet", 1);
+    def("isBitSet", 1, 2);
+    def("copyBit", 1, 3);  // XXX R6RS contradicts itself
+    def("bitField", 1, 3);
+    def("copyBitField", 2, 4);
+    def("bitShift", 1, 2);
+    def("rotateBitField", 1, 4);
+    def("reverseBitField", 1, 3);
+
     return api;
 }
 
@@ -3305,6 +3321,22 @@ function installStubFunctions(plugins) {
     def("exp10",          [ExactInteger, ExactInteger]);
     def("gcdNonnegative", [ExactInteger, ExactInteger]);
     def("divideReduced",  [ExactInteger, ExactInteger]);
+
+    def("bitwiseNot", [ExactInteger]);
+    def("bitwiseAnd", [ExactInteger, ExactInteger]);
+    def("bitwiseIor", [ExactInteger, ExactInteger]);
+    def("bitwiseXor", [ExactInteger, ExactInteger]);
+    def("bitwiseIf", [ExactInteger, ExactInteger, ExactInteger]);
+    def("bitCount", [ExactInteger]);
+    def("bitLength", [ExactInteger]);
+    def("firstBitSet", [ExactInteger]);
+    def("isBitSet", [ExactInteger]);
+    def("copyBit", [ExactInteger]);
+    def("bitField", [ExactInteger]);
+    def("copyBitField", [ExactInteger, ExactInteger]);
+    def("bitShift", [ExactInteger]);
+    def("rotateBitField", [ExactInteger]);
+    def("reverseBitField", [ExactInteger]);
 }
 
 
