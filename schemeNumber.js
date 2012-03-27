@@ -987,7 +987,7 @@ function defineGenericFunctions(plugins) {
     def("isEven", 1);
     def("isOdd", 1);
     def("exactIntegerSqrt", 1);
-    def("exp10", 2);
+    def("exp10", 1, 2);
     def("gcdNonnegative", 2);
     def("divideReduced", 2);
 
@@ -3318,7 +3318,7 @@ function installStubFunctions(plugins) {
     def("isEven",         [ExactInteger]);
     def("isOdd",          [ExactInteger]);
     def("exactIntegerSqrt", [ExactInteger]);
-    def("exp10",          [ExactInteger, ExactInteger]);
+    def("exp10",          [ExactInteger]);
     def("gcdNonnegative", [ExactInteger, ExactInteger]);
     def("divideReduced",  [ExactInteger, ExactInteger]);
 
@@ -4522,7 +4522,7 @@ function installGenericFunctions(plugins) {
     def("ceiling",        [ExactInteger], "retThis");
     def("round",          [ExactInteger], "retThis");
     def("truncate",       [ExactInteger], "retThis");
-    def("exp10",          [ExactInteger, ExactInteger], "genericExp10");
+    def("exp10",          [ExactInteger], "genericExp10");
     def("gcdNonnegative", [ExactInteger, ExactInteger],
         "gcdNonnegative_via_isZero_mod");
 
@@ -5750,7 +5750,7 @@ function implementBigInteger(plugins, BigInteger) {
         defBigBinary("multiply");
 
         def1("log",        BigInteger, BigInteger_log);
-        def2("exp10",      BigInteger, ExactInteger, BigInteger_exp10);
+        def1("exp10",      BigInteger, BigInteger_exp10);
         def1("sqrt",       BigInteger, BigInteger_sqrt);
         def1("exactIntegerSqrt", BigInteger, BigInteger_exactIntegerSqrt);
         def2("divAndMod",  BigInteger, BigInteger, BigInteger_divAndMod);
