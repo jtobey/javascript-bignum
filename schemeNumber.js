@@ -2667,6 +2667,14 @@ function implementRnrsBase(plugins) {
 
         delta = abs(delta);  // It's what PLT and Mosh seem to do.
 
+        var inexact = isInexact(x) || isInexact(delta);
+        if (inexact) {
+            // Ensure that our algorithm terminates.
+            // XXX What if x or delta is irrational?
+            x = toExact(x);
+            delta = toExact(delta);
+        }
+
         var x0 = subtract(x, delta);
         var x1 = add(x, delta);
         var a = floor(x0);
@@ -2675,8 +2683,9 @@ function implementRnrsBase(plugins) {
         if (ne(a, b)) {
             var negative = isNegative(a);
             if (isNegative(b) != negative)
-                return (isExact(a) ? ZERO : INEXACT_ZERO);
-            return (negative ? b : ceiling(x0));
+                return (inexact ? INEXACT_ZERO : ZERO);
+            a = (negative ? b : ceiling(x0));
+            return inexact ? toInexact(a) : a;
         }
         var cf = [];  // Continued fraction, b implied.
 
@@ -2705,7 +2714,9 @@ function implementRnrsBase(plugins) {
         var i = cf.length;
         while (i--)
             ret = reciprocal(add(ret, cf[i]));
-        return add(ret, b);
+
+        ret = add(ret, b);
+        return (inexact ? toInexact(ret) : ret);
     }
 
     // XXX Should avoid using an object literal in the definition of
@@ -4585,6 +4596,8 @@ function installDefaultExactInteger(plugins, convert) {
         func.def(ExactInteger, ExactInteger, EI_func);
     }
 
+    // XXX Should avoid defining on ExactInteger ops that the
+    // implementation class does not specialize.
     def("compare");
     def("add");
     def("subtract");
@@ -4594,12 +4607,12 @@ function installDefaultExactInteger(plugins, convert) {
     def("div");
     def("mod");
     def("gcdNonnegative");
-    def("divideReduced");
 
     plugins.extend("canonicalExactInteger", convert);
 }
 
-function installDefaultRational(plugins, convert) {
+function installDefaultRational(plugins, convert, divideReduced) {
+    var ExactInteger = plugins.get("ExactInteger");
     var ExactRational = plugins.get("ExactRational");
 
     function def(name) {
@@ -4610,11 +4623,20 @@ function installDefaultRational(plugins, convert) {
         func.def(ExactRational, ExactRational, EQ_func);
     }
 
+    // XXX Should avoid defining on ExactRational ops that the
+    // implementation class does not specialize.
     def("compare");
     def("add");
     def("subtract");
     def("multiply");
     def("divide");
+
+    function EI_divideReduced(n) {
+        return divideReduced(this, n);
+    }
+
+    plugins.get("divideReduced").def(ExactInteger, ExactInteger,
+                                     EI_divideReduced);
 
     plugins.extend("canonicalRational", convert);
 }
@@ -6020,6 +6042,7 @@ function defaultRationalFactory(plugins) {
     }
 
     api.divideReducedNotByOne    = divideReducedNotByOne;
+    api.divideReduced            = _divideReduced;
     api.importRational           = importRational;
     api.install                  = install;
     return api;
@@ -6172,6 +6195,7 @@ function installRectangular(plugins) {
 
 function defaultIntegerFactory(plugins) {
     // Grab the BigInteger library.
+    // XXX should avoid use of globals.
     var BigInteger;
     if (typeof require !== "undefined")
         BigInteger = require("./biginteger").BigInteger;
@@ -6201,6 +6225,7 @@ function configure(conf) {
 
     var integerFactory  = conf.integerFactory  || defaultIntegerFactory;
     var rationalFactory = conf.rationalFactory || defaultRationalFactory;
+    //integerFactory = require('./lib/leemonBigInt').leemonBigIntFactory;
 
     var Integers = integerFactory(plugins);
     Integers.install();
@@ -6215,7 +6240,8 @@ function configure(conf) {
     plugins.extend(
         "divideReducedNotByOne", Rationals.divideReducedNotByOne
     );
-    installDefaultRational(plugins, Rationals.importRational);
+    installDefaultRational(plugins, Rationals.importRational,
+                           Rationals.divideReduced);
 
     // XXX This could use some refactoring.
 

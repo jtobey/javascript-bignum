@@ -6,6 +6,8 @@ TODO:
 
 * Decimal: Test and debug.
 
+* Leemon Baird BigInt wrapper: optimize.
+
 * Provide a choice among different implementations of complex numbers
   and inexact reals.
 
@@ -13,11 +15,14 @@ TODO:
 
 * Improve performance.
 
-* Reimplement the performance benefit of using Number.prototype, but
-  make it optional.
+* Reimplement the performance benefit of using Number.prototype for
+  inexact, but make it optional.
 
 * Consider supporting a configuration where inexact reals are returned
   as primitive numbers but Number.prototype is not used.
+
+* Consider supporting primitive numbers as exact values using
+  Number.prototype.
 
 * Avoid "x in y" out of concern for Object.prototype use.
 

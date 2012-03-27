@@ -205,7 +205,7 @@ if (typeof require === "undefined") {
 }
 
 if (typeof print === "undefined")
-    var print = console.log;
+    var print = function(s) { console.log(s); process.stdout.flush(); };
 
 var fn = SchemeNumber.fn;
 var isNumber = fn["number?"];
