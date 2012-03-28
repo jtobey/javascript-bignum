@@ -5522,12 +5522,15 @@ function implementBigInteger(plugins, BigInteger) {
     var toBigInteger = plugins.get("Dispatch").defGeneric(
         "to" + BigIntegerName, 1);
 
-    var raise, numberToString, negate, reciprocal, divide, sign, exp10, nativeToInexact, inexactRectangular, ZERO, ONE, MINUS_ONE, _2_32, PI, INEXACT_ZERO;
+    var raise, numberToString, isNegative, negate, abs, mod, reciprocal, divide, sign, exp10, nativeToInexact, inexactRectangular, ZERO, ONE, MINUS_ONE, _2_32, PI, INEXACT_ZERO;
 
     raise                    = plugins.get("raise");
 
     numberToString           = plugins.get("numberToString");
+    isNegative               = plugins.get("isNegative");
     negate                   = plugins.get("negate");
+    abs                      = plugins.get("abs");
+    mod                      = plugins.get("mod");
     reciprocal               = plugins.get("reciprocal");
     divide                   = plugins.get("divide");
     sign                     = plugins.get("sign");
@@ -5715,6 +5718,10 @@ function implementBigInteger(plugins, BigInteger) {
         }
     }
 
+    //
+    // BigInteger support for (rnrs arithmetic bitwise), mostly untested XXX.
+    //
+
     function makeBitOp(op) {
         function BigInteger_bitwiseOp(b) {
             var a = this;
@@ -5747,23 +5754,44 @@ function implementBigInteger(plugins, BigInteger) {
     var BigInteger_bitwiseIor = makeBitOp(function(x, y) { return x | y; });
     var BigInteger_bitwiseXor = makeBitOp(function(x, y) { return x ^ y; });
 
+    var bitCountArray, ffsArray;
+
     function addOne(x) { return x + 1; }
-    var BIT_COUNT = [0];
-    while (BIT_COUNT.length < (1 << 8))
-        BIT_COUNT = Array_concat(BIT_COUNT, Array_map(BIT_COUNT, addOne));
+
+    function getBitCountArray() {
+        if (!bitCountArray) {
+            bitCountArray = [0];
+            while (bitCountArray.length < (1 << 8))
+                bitCountArray = Array_concat(bitCountArray,
+                                             Array_map(bitCountArray, addOne));
+        }
+        return bitCountArray;
+    }
+
+    function getFfsArray() {
+        if (!ffsArray) {
+            ffsArray = [0];
+            while (ffsArray.length < (1 << 8)) {
+                ffsArray = ffsArray.concat(ffsArray);
+                ffsArray[0]++;
+            }
+        }
+        return ffsArray;
+    }
 
     function BigInteger_bitCount() {
         //assert(!isNegative(this));
         var a = this;
-        var ret = 0, dm, t;
+        var ret = 0, dm, t, bc;
         while (!a.isZero()) {
             dm = a.divRem(_2_32);
             a = dm[0];
             t = +dm[1];
-            ret += BIT_COUNT[(t >>  0) & 0xff];
-            ret += BIT_COUNT[(t >>  8) & 0xff];
-            ret += BIT_COUNT[(t >> 16) & 0xff];
-            ret += BIT_COUNT[(t >> 24) & 0xff];
+            bc = getBitCountArray();
+            ret += bc[(t >>  0) & 0xff];
+            ret += bc[(t >>  8) & 0xff];
+            ret += bc[(t >> 16) & 0xff];
+            ret += bc[(t >> 24) & 0xff];
         }
         return nativeToExactInteger(ret);
     }
@@ -5796,12 +5824,6 @@ function implementBigInteger(plugins, BigInteger) {
         }
     }
 
-    var FFS = [1, 0];
-    while (FFS.length < (1 << 8)) {
-        FFS = FFS.concat(FFS);
-        FFS[0]++;
-    }
-
     function BigInteger_firstBitSet() {
         var a = this, dm, m, ret;
         if (a.isZero())
@@ -5818,11 +5840,11 @@ function implementBigInteger(plugins, BigInteger) {
             ret += 8;
             m >>= 8;
         }
-        return nativeToExactInteger(ret + FFS[m & 0xff]);
+        return nativeToExactInteger(ret + getFfsArray()[m & 0xff]);
     }
 
     function BigInteger_isBitSet(i) {
-        //assert(!isNegative(n));
+        //assert(!isNegative(this));
         var p2i = BigInteger.pow(2, +i);
         return this.remainder(p2i.add(p2i)).compare(p2i) >= 0;
     }
@@ -5833,8 +5855,71 @@ function implementBigInteger(plugins, BigInteger) {
         switch (setIt - isSet) {
         case 0: return this;
         case 1: return this.add(p2i);
-        case -1: default: return this.subtract(p2i);
+        case -1: return this.subtract(p2i);
         }
+    }
+
+    function BigInteger_bitField(lo, hi) {
+        //assert(!isNegative(this));
+        //assert(le(lo, hi));
+        lo = +lo;
+        var p2width = BigInteger.pow(2, hi - lo);
+        var p2lo = BigInteger.pow(2, lo);
+        return this.quotient(p2lo).remainder(p2width);
+    }
+
+    function BigInteger_copyBitField(from, lo, hi) {
+        //assert(!isNegative(this));
+        //assert(!isNegative(from));
+        //assert(le(lo, hi));
+        lo = +lo;
+        var p2width = BigInteger.pow(2, hi - lo);
+        var p2lo = BigInteger.pow(2, lo);
+        var old = this.quotient(p2lo).remainder(p2width);
+        return this.add(p2lo.multiply(from.subtract(old).quotient(p2width)));
+    }
+
+    function BigInteger_bitShift(count) {
+        var p2 = BigInteger.pow(2, +abs(count));
+        return (isNegative(count) ? this.quotient(p2) : this.multiply(p2));
+    }
+
+    function BigInteger_rotateBitField(lo, hi, count) {
+        //assert(!isNegative(this));
+        //assert(le(lo, hi));
+        lo = +lo;
+        var width = hi - lo;
+        if (width < 2)
+            return this;
+        count = +mod(count, nativeToExactInteger(width));
+        if (count === 0)
+            return this;
+        var p2width = BigInteger.pow(2, width);
+        var p2lo = BigInteger.pow(2, lo);
+        var p2count = BigInteger.pow(2, count);
+        var old = this.quotient(p2lo).remainder(p2width);
+        var tmp = old.multiply(p2count);
+        tmp = tmp.add(tmp.quotient(p2width)).remainder(p2width);
+        return this.add(p2lo.multiply(tmp.subtract(old)));
+    }
+
+    function BigInteger_reverseBitField(lo, hi) {
+        //assert(!isNegative(this));
+        //assert(le(lo, hi));
+        var i;
+        lo = +lo;
+        var p2width = BigInteger.pow(2, hi - lo);
+        var p2lo = BigInteger.pow(2, +lo);
+        var bits = this.quotient(p2lo).remainder(p2width);
+        var string = bits.toString(2);
+        var last = string.length - 1;
+        if (last < 1)
+            return this;
+        var revString = "";
+        for (i = 0; i < string.length; i++)
+            revString += string[last - i];
+        var reversed = BigInteger.parse(revString, 2);
+        return this.add(reversed.subtract(bits).multiply(p2lo));
     }
 
     function install() {
@@ -5904,6 +5989,11 @@ function implementBigInteger(plugins, BigInteger) {
         def1("firstBitSet", BigInteger_firstBitSet);
         def1("isBitSet",   BigInteger_isBitSet);
         def1("copyBit",    BigInteger_copyBit);
+        def1("bitField",   BigInteger_bitField);
+        def2("copyBitField", BigInteger_copyBitField);
+        def1("bitShift",   BigInteger_bitShift);
+        def1("rotateBitField", BigInteger_rotateBitField);
+        def1("reverseBitField", BigInteger_reverseBitField);
     }
 
     api.parseExactInteger        = parseExactInteger;
