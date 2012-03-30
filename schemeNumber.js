@@ -1731,7 +1731,8 @@ function implementCoreLibrary(plugins) {
                     // XXX I don't think this is right.  If Scheme
                     // allows this, then by analogy, nothing requires
                     // (numerator #e0.1) to equal 1.
-                    ret = toExact(ret);
+                    //ret = toExact(ret);
+                    ret = ret;  // ignore #e.
                 return ret;
             }
 
