@@ -6,17 +6,20 @@ TODO:
 
 * Decimal: Test and debug.
 
-* Leemon Baird BigInt wrapper: optimize.
+* Leemon Baird BigInt wrapper: optimize.  Add exactIntegerSqrt.
 
 * Provide a choice among different implementations of complex numbers
   and inexact reals.
 
-* Implement integers using another library, such as Leemon Baird's.
-
-* Improve performance.
+* Support primitive numbers as exact values using conditionals,
+  typeof, and lifting as in js-numbers.
 
 * Reimplement the performance benefit of using Number.prototype for
   inexact, but make it optional.
+
+* Implement (rnrs arithmetic bitwise) functions.
+
+* Think about what to do with "#e1@1".
 
 * Consider supporting a configuration where inexact reals are returned
   as primitive numbers but Number.prototype is not used.
