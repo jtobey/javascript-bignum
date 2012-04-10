@@ -71,6 +71,9 @@ SIMILAR PROJECTS
 * HOP (http://hop.inria.fr/), a framework containing a Scheme-to-JS
   compiler that did NOT implement the numeric tower as of 2011.
 
+* node-gmp (https://github.com/postwait/node-gmp), node.js bindings
+  for the GNU Multiple Precision Arithmetic Library.
+
 * Any others out there???
 
 

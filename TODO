@@ -14,6 +14,15 @@ TODO:
 * Support primitive numbers as exact values using conditionals,
   typeof, and lifting as in js-numbers.
 
+* Create a GMP (GNU Multiple Precision Arithmetic Library) scriptable
+  plugin and integer, rational, and inexact implementations on it.
+  Interface design ideas: Flusspferd (http://flusspferd.github.com/)
+  GMP module, node-gmp (https://github.com/postwait/node-gmp),
+  node-bigint (https://github.com/substack/node-bigint).  Consider
+  hybrid implementations with runtime optimal threshold discovery,
+  since the plugin may or may not be in-process, and in-process calls
+  can be over 100x faster than out-of-process.
+
 * Reimplement the performance benefit of using Number.prototype for
   inexact, but make it optional.
 
@@ -28,6 +37,11 @@ TODO:
   Number.prototype.
 
 * Avoid "x in y" out of concern for Object.prototype use.
+
+* Consider supporting continuation-passing style for the benefit of
+  Scheme(?) and PPAPI.
+
+* Consider merging the plugin architecture into D. Yoo's js-numbers.
 
 * Consider type implementations that dynamically measure usage and
   change representations on-the-fly to improve performance (run-time
