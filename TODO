@@ -14,14 +14,17 @@ TODO:
 * Support primitive numbers as exact values using conditionals,
   typeof, and lifting as in js-numbers.
 
-* Create a GMP (GNU Multiple Precision Arithmetic Library) scriptable
-  plugin and integer, rational, and inexact implementations on it.
-  Interface design ideas: Flusspferd (http://flusspferd.github.com/)
-  GMP module, node-gmp (https://github.com/postwait/node-gmp),
-  node-bigint (https://github.com/substack/node-bigint).  Consider
-  hybrid implementations with runtime optimal threshold discovery,
-  since the plugin may or may not be in-process, and in-process calls
-  can be over 100x faster than out-of-process.
+* Evaluate Nixysa, a NPAPI generator, for the GMP plugin:
+  http://code.google.com/p/nixysa/
+
+* Finish the GMP plugin and create integer, rational, and inexact
+  implementations on it.  Interface design ideas: Flusspferd
+  (http://flusspferd.github.com/) GMP module, node-gmp
+  (https://github.com/postwait/node-gmp), node-bigint
+  (https://github.com/substack/node-bigint).  Consider hybrid
+  implementations with runtime optimal threshold discovery, since the
+  plugin may or may not be in-process, and in-process calls can be
+  over 100x faster than out-of-process.
 
 * Reimplement the performance benefit of using Number.prototype for
   inexact, but make it optional.
