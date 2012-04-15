@@ -229,8 +229,9 @@ call_mpz_get_str (NPObject *npobj,
     NPUTF8* s = sBrowserFuncs->memalloc (len);
     if (s) {
       mpz_get_str (s, base, z->mpz);
-      // Could use STRINGN_TO_NPVARIANT if mpz_sizeinbase is always accurate.
-      STRINGZ_TO_NPVARIANT (s, *result);
+      if (s[0] != '-')
+          len--;
+      STRINGN_TO_NPVARIANT (s, s[len-2] ? len-1 : len-2, *result);
     }
     else
       sBrowserFuncs->setexception (npobj, "out of memory");

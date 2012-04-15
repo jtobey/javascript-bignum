@@ -26,6 +26,8 @@ TODO:
   plugin may or may not be in-process, and in-process calls can be
   over 100x faster than out-of-process.
 
+* Consider avoidance or mitigation of GMP calls to abort().
+
 * Reimplement the performance benefit of using Number.prototype for
   inexact, but make it optional.
 
