@@ -1,6 +1,6 @@
 /* browser (NPAPI) plug-in for multiple precision arithmetic.
 
-   TO DO: random number functions, mpz, mpf.
+   TO DO: random number functions, mpq, mpf.
 
    Copyright(C) 2012 John Tobey, see ../LICENCE
 */
