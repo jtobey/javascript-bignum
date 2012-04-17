@@ -23,7 +23,6 @@ ENTRY3v(mpz_set_str, "mpz_set_str", ID_mpz_set_str, mpz_ptr, char_ptr, int_0_or_
 ENTRY2v(mpz_swap, "mpz_swap", ID_mpz_swap, mpz_ptr, mpz_ptr)
 ENTRY1(mpz_get_d, "mpz_get_d", ID_mpz_get_d, double, mpz_ptr)
 //ENTRY("mpz_get_d_2exp", ID_mpz_get_d_2exp)
-ENTRY("mpz_get_str", ID_mpz_get_str)
 ENTRY3v(mpz_add, "mpz_add", ID_mpz_add, mpz_ptr, mpz_ptr, mpz_ptr)
 ENTRY3v(mpz_add_ui, "mpz_add_ui", ID_mpz_add_ui, mpz_ptr, mpz_ptr, ulong)
 ENTRY3v(mpz_sub, "mpz_sub", ID_mpz_sub, mpz_ptr, mpz_ptr, mpz_ptr)
