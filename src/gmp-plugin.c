@@ -492,9 +492,6 @@ call_ ## id (NPObject *npobj,                                           \
 
 #include "gmp-entries.h"
 
-// XXX I'd like to do mpz_get_d_2exp, but creating an array to hold
-// the two results will be a mild pain.
-
 #define ENTRY(string, id)                               \
     static NPClass id ## _npclass = {                   \
         structVersion   : NP_CLASS_STRUCT_VERSION,      \
@@ -593,6 +590,9 @@ gmp_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
     return true;
 }
 
+/* XXX In Chrome, enumerate on the <embed> object doesn't use this.
+   The gmp object should be a property of the <embed>, not the whole
+   object.  */
 static bool
 gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 {

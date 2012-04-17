@@ -11,11 +11,10 @@ TODO:
 * Provide a choice among different implementations of complex numbers
   and inexact reals.
 
+* Make the gmp object a property of the <embed>, not the whole thing.
+
 * Support primitive numbers as exact values using conditionals,
   typeof, and lifting as in js-numbers.
-
-* Evaluate Nixysa, a NPAPI generator, for the GMP plugin:
-  http://code.google.com/p/nixysa/
 
 * Finish the GMP plugin and create integer, rational, and inexact
   implementations on it.  Interface design ideas: Flusspferd
@@ -27,6 +26,9 @@ TODO:
   over 100x faster than out-of-process.
 
 * Consider avoidance or mitigation of GMP calls to abort().
+
+* Consider squeezing the GMP plugin: create uncommonly used objects on
+  demand.
 
 * Reimplement the performance benefit of using Number.prototype for
   inexact, but make it optional.
