@@ -1,3 +1,9 @@
+/* gmp-constants.h: header private to gmp-plugin.c.
+   C macros as IDL for libgmp.
+
+   Copyright(C) 2012 John Tobey, see ../LICENCE
+*/
+
 #ifndef ENTRY
 # define ENTRY(__string, __id)
 #endif
@@ -160,6 +166,8 @@ ENTRY2(mpz_sizeinbase, "mpz_sizeinbase", ID_mpz_sizeinbase, size_t, mpz_ptr, int
 //ENTRY2v(_mpz_realloc, "_mpz_realloc", ID__mpz_realloc, mpz_ptr, mp_size_t)
 //ENTRY2(mpz_getlimbn, "mpz_getlimbn", ID_mpz_getlimbn, mp_limb_t, mpz_ptr, mp_size_t)
 ENTRY1(mpz_size, "mpz_size", ID_mpz_size, size_t, mpz_ptr)
+
+// XXX mpq, mpf, gmp_randstate, mpfr.
 
 #undef ENTRY
 #undef ENTRY1

@@ -1,5 +1,6 @@
-/* Incomplete, experimental browser (NPAPI) plug-in for multiple
-   precision arithmetic.
+/* browser (NPAPI) plug-in for multiple precision arithmetic.
+
+   TO DO: random number functions, mpz, mpf.
 
    Copyright(C) 2012 John Tobey, see ../LICENCE
 */
@@ -107,6 +108,19 @@ static inline void
 out_bool (int value, NPVariant* result)
 {
     BOOLEAN_TO_NPVARIANT (value, *result);
+}
+
+static inline void
+out_char_ptr (char const* value, NPVariant* result)
+{
+    size_t len = strlen (value);
+    NPUTF8* ret = (NPUTF8*) sBrowserFuncs->memalloc (len + 1);
+    if (ret) {
+        memcpy (ret, value, len + 1);
+        STRINGN_TO_NPVARIANT (ret, len, *result);
+    }
+    else
+        VOID_TO_NPVARIANT (*result);
 }
 
 static NPIdentifier ID_toString;
@@ -529,10 +543,22 @@ gmp_invoke(NPObject *npobj, NPIdentifier name,
 static bool
 gmp_hasProperty(NPObject *npobj, NPIdentifier key)
 {
-    return false
-#define ENTRY(string, id) || key == id
+    NPUTF8* name;
+    bool ret;
+
+#define ENTRY(string, id) if (key == id) return true;
 #include "gmp-entries.h"
+
+    if (!sBrowserFuncs->identifierisstring (key))
+        return false;
+
+    name = sBrowserFuncs->utf8fromidentifier (key);
+    ret = false
+#define CONSTANT(value, string, type) || !strcmp (string, name)
+#include "gmp-constants.h"
         ;
+    sBrowserFuncs->memfree (name);
+    return ret;
 }
 
 static bool
@@ -540,15 +566,30 @@ gmp_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
 {
     GmpInstance* gmpinst = (GmpInstance*) npobj;
     NPObject* func = 0;
+    NPUTF8* name;
+
     if (0 == 1)
         func = func;
 #define ENTRY(string, id) else if (key == id)   \
         func = &gmpinst->id ## _property;
 #include "gmp-entries.h"
-    if (func)
+    if (func) {
         OBJECT_TO_NPVARIANT (sBrowserFuncs->retainobject (func), *result);
-    else
-        VOID_TO_NPVARIANT (*result);
+        return true;
+    }
+
+    if (sBrowserFuncs->identifierisstring (key)) {
+        name = sBrowserFuncs->utf8fromidentifier (key);
+#define CONSTANT(value, string, type)           \
+        if (!strcmp (string, name)) {           \
+            out_ ## type (value, result);       \
+            sBrowserFuncs->memfree (name);      \
+            return true;                        \
+        }
+#include "gmp-constants.h"
+        sBrowserFuncs->memfree (name);
+    }
+    VOID_TO_NPVARIANT (*result);
     return true;
 }
 
@@ -558,12 +599,17 @@ gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
     uint32_t cnt = 0
 #define ENTRY(string, id) +1
 #include "gmp-entries.h"
+#define CONSTANT(value, string, type) +1
+#include "gmp-constants.h"
         ;
     *value = sBrowserFuncs->memalloc (cnt * sizeof (NPIdentifier*));
     *count = cnt;
     cnt = 0;
 #define ENTRY(string, id) (*value)[cnt++] = id;
 #include "gmp-entries.h"
+#define CONSTANT(constval, string, type)                                \
+    (*value)[cnt++] = sBrowserFuncs->getstringidentifier (string);
+#include "gmp-constants.h"
     return true;
 }
 
