@@ -21,21 +21,19 @@
 
 static NPNetscapeFuncs* sBrowserFuncs = NULL;
 
-#define ENTRY(x) static NPIdentifier ID_ ## x;
+#define ENTRY(string, id) static NPIdentifier id;
 #include "gmp-entries.h"
-#undef ENTRY
 
 typedef struct _GmpInstance {
     NPObject npobj;
     NPP instance;
-#define ENTRY(x) NPObject x ## _property;
+#define ENTRY(string, id) NPObject id ## _property;
 #include "gmp-entries.h"
-#undef ENTRY
 } GmpInstance;
 
-#define GET_NPP(prop, name)                                             \
+#define GET_NPP(prop, id)                                               \
     (((GmpInstance*) (((char*) prop) -                                  \
-                      offsetof (GmpInstance, name ## _property)))->instance)
+                      offsetof (GmpInstance, id ## _property)))->instance)
 
 static void
 obj_noop (NPObject *npobj)
@@ -172,14 +170,27 @@ Integer_set_str (Integer* z, const NPString* str, int base)
 }
 
 static bool
-call_mpz (NPObject *npobj,
-          const NPVariant *args, uint32_t argCount, NPVariant *result)
+call_ID_mpz (NPObject *npobj,
+             const NPVariant *args, uint32_t argCount, NPVariant *result)
 {
-    NPP instance = GET_NPP (npobj, mpz);
-    Integer* ret = (Integer*) sBrowserFuncs->createobject
-        (instance, &Integer_npclass);
+    NPP instance;
+    Integer* ret;
 
-    if (ret) {
+    if (argCount != 0) {
+        sBrowserFuncs->setexception (npobj, "invalid argument");
+        return true;
+    }
+
+    instance = GET_NPP (npobj, ID_mpz);
+    ret = (Integer*) sBrowserFuncs->createobject (instance, &Integer_npclass);
+
+    if (ret)
+        OBJECT_TO_NPVARIANT (&ret->npobj, *result);
+    else
+        sBrowserFuncs->setexception (npobj, "out of memory");
+    return true;
+}
+/*
         bool type_ok = true;
         bool value_ok = true;
         // XXX mpz_set and friends will be separate entry points.
@@ -199,22 +210,18 @@ call_mpz (NPObject *npobj,
             type_ok = false;
         if (type_ok) {
             if (value_ok)
-                OBJECT_TO_NPVARIANT (&ret->npobj, *result);
             else
                 sBrowserFuncs->setexception (npobj, "invalid argument");
         }
         else
             sBrowserFuncs->setexception (npobj, "wrong type arguments");
     }
-    else
-        sBrowserFuncs->setexception (npobj, "out of memory");
-    return true;
-}
+ */
 
 // XXX should be the toString method of Integer.
 static bool
-call_mpz_get_str (NPObject *npobj,
-                  const NPVariant *args, uint32_t argCount, NPVariant *result)
+call_ID_mpz_get_str (NPObject *npobj, const NPVariant *args,
+                     uint32_t argCount, NPVariant *result)
 {
     int base = 0;
     if (argCount > 0 && isInteger (&args[0])) {
@@ -241,103 +248,277 @@ call_mpz_get_str (NPObject *npobj,
     return true;
 }
 
-// XXX should be the valueOf method of Integer.
-static bool
-call_mpz_get_d (NPObject *npobj,
-                const NPVariant *args, uint32_t argCount, NPVariant *result)
+typedef unsigned long ulong;
+typedef char const* char_ptr;
+typedef int int_0_or_2_to_62;
+
+static inline bool
+in_mpz_ptr (const NPVariant* var, mpz_ptr* arg)
 {
-    if (argCount == 1 && isInteger (&args[0])) {
-        Integer* z = toInteger (&args[0]);
-        DOUBLE_TO_NPVARIANT (mpz_get_d (z->mpz), *result);
-    }
-    else
-        sBrowserFuncs->setexception (npobj, "wrong type arguments");
+    if (!NPVARIANT_IS_OBJECT (*var)
+        || NPVARIANT_TO_OBJECT (*var)->_class != &Integer_npclass)
+        return false;
+    *arg = &((Integer*) NPVARIANT_TO_OBJECT (*var))->mpz[0];
     return true;
 }
+
+static inline bool
+in_long (const NPVariant* var, long* arg)
+{
+    if (NPVARIANT_IS_INT32 (*var))
+        *arg = (long) NPVARIANT_TO_INT32 (*var);
+    else if (isFiniteDouble (var))
+        *arg = (long) NPVARIANT_TO_DOUBLE (*var);
+    else
+        return false;
+    return true;
+}
+
+static inline bool
+in_ulong (const NPVariant* var, ulong* arg)
+{
+    if (NPVARIANT_IS_INT32 (*var) && NPVARIANT_TO_INT32 (*var) >= 0)
+        *arg = (ulong) NPVARIANT_TO_INT32 (*var);
+    else if (isFiniteDouble (var) &&
+        NPVARIANT_TO_DOUBLE (*var) == (ulong) NPVARIANT_TO_DOUBLE (*var))
+        *arg = (ulong) NPVARIANT_TO_DOUBLE (*var);
+    else
+        return false;
+    return true;
+}
+
+static inline bool
+in_mp_bitcnt_t (const NPVariant* var, mp_bitcnt_t* arg)
+{
+    if (NPVARIANT_IS_INT32 (*var) && NPVARIANT_TO_INT32 (*var) >= 0)
+        *arg = (mp_bitcnt_t) NPVARIANT_TO_INT32 (*var);
+    else if (isFiniteDouble (var) &&
+        NPVARIANT_TO_DOUBLE (*var) == (mp_bitcnt_t) NPVARIANT_TO_DOUBLE (*var))
+        *arg = (mp_bitcnt_t) NPVARIANT_TO_DOUBLE (*var);
+    else
+        return false;
+    return true;
+}
+
+static inline bool
+in_int (const NPVariant* var, int* arg)
+{
+    if (NPVARIANT_IS_INT32 (*var))
+        *arg = (int) NPVARIANT_TO_INT32 (*var);
+    else if (isFiniteDouble (var))
+        *arg = (int) NPVARIANT_TO_DOUBLE (*var);
+    else
+        return false;
+    return true;
+}
+
+static inline bool
+in_int_0_or_2_to_62 (const NPVariant* var, int* arg)
+{
+    return in_int (var, arg) && (*arg == 0 || (*arg >= 2 && *arg <= 62));
+}
+
+static inline bool
+in_double (const NPVariant* var, double* arg)
+{
+    if (NPVARIANT_IS_DOUBLE (*var))
+        *arg = NPVARIANT_TO_DOUBLE (*var);
+    else if (NPVARIANT_IS_INT32 (*var))
+        *arg = (double) NPVARIANT_TO_INT32 (*var);
+    else
+        return false;
+    return true;
+}
+
+static inline bool
+in_char_ptr (const NPVariant* var, char const** arg)
+{
+    if (!NPVARIANT_IS_STRING (*var))
+        return false;
+    *arg = NPVARIANT_TO_STRING (*var).UTF8Characters;
+    return true;
+}
+
+static inline void
+out_double (double value, NPVariant* result)
+{
+    DOUBLE_TO_NPVARIANT (value, *result);
+}
+
+static inline void
+out_int (int value, NPVariant* result)
+{
+    if (value == (int32_t) value)
+        INT32_TO_NPVARIANT (value, *result);
+    else
+        DOUBLE_TO_NPVARIANT ((double) value, *result);
+}
+
+static inline void
+out_ulong (ulong value, NPVariant* result)
+{
+    if (value == (int32_t) value)
+        INT32_TO_NPVARIANT (value, *result);
+    else
+        DOUBLE_TO_NPVARIANT ((double) value, *result);
+}
+
+static inline void
+out_bool (int value, NPVariant* result)
+{
+    BOOLEAN_TO_NPVARIANT (value, *result);
+}
+
+#define ENTRY1(name, string, id, rett, t0)                              \
+static bool                                                             \
+call_ ## id (NPObject *npobj,                                           \
+             const NPVariant *args, uint32_t argCount, NPVariant *result) \
+{                                                                       \
+    t0 a0;                                                              \
+    if (argCount == 1                                                   \
+        && in_ ## t0 (&args[0], &a0)                                    \
+        )                                                               \
+        out_ ## rett (name (a0), result);                               \
+    else                                                                \
+        sBrowserFuncs->setexception (npobj, "wrong type arguments");    \
+    return true;                                                        \
+}
+
+#define ENTRY2v(name, string, id, t0, t1)                               \
+static bool                                                             \
+call_ ## id (NPObject *npobj,                                           \
+             const NPVariant *args, uint32_t argCount, NPVariant *result) \
+{                                                                       \
+    t0 a0;                                                              \
+    t1 a1;                                                              \
+    if (argCount == 2                                                   \
+        && in_ ## t0 (&args[0], &a0)                                    \
+        && in_ ## t1 (&args[1], &a1)                                    \
+        )                                                               \
+    {                                                                   \
+        name (a0, a1);                                                  \
+        VOID_TO_NPVARIANT (*result);                                    \
+    }                                                                   \
+    else                                                                \
+        sBrowserFuncs->setexception (npobj, "wrong type arguments");    \
+    return true;                                                        \
+}
+
+#define ENTRY2(name, string, id, rett, t0, t1)                          \
+static bool                                                             \
+call_ ## id (NPObject *npobj,                                           \
+             const NPVariant *args, uint32_t argCount, NPVariant *result) \
+{                                                                       \
+    t0 a0;                                                              \
+    t1 a1;                                                              \
+    if (argCount == 2                                                   \
+        && in_ ## t0 (&args[0], &a0)                                    \
+        && in_ ## t1 (&args[1], &a1)                                    \
+        )                                                               \
+        out_ ## rett (name (a0, a1), result);                           \
+    else                                                                \
+        sBrowserFuncs->setexception (npobj, "wrong type arguments");    \
+    return true;                                                        \
+}
+
+#define ENTRY3v(name, string, id, t0, t1, t2)                           \
+static bool                                                             \
+call_ ## id (NPObject *npobj,                                           \
+             const NPVariant *args, uint32_t argCount, NPVariant *result) \
+{                                                                       \
+    t0 a0;                                                              \
+    t1 a1;                                                              \
+    t2 a2;                                                              \
+    if (argCount == 3                                                   \
+        && in_ ## t0 (&args[0], &a0)                                    \
+        && in_ ## t1 (&args[1], &a1)                                    \
+        && in_ ## t2 (&args[2], &a2)                                    \
+        )                                                               \
+    {                                                                   \
+        name (a0, a1, a2);                                              \
+        VOID_TO_NPVARIANT (*result);                                    \
+    }                                                                   \
+    else                                                                \
+        sBrowserFuncs->setexception (npobj, "wrong type arguments");    \
+    return true;                                                        \
+}
+
+#define ENTRY3(name, string, id, rett, t0, t1, t2)                      \
+static bool                                                             \
+call_ ## id (NPObject *npobj,                                           \
+             const NPVariant *args, uint32_t argCount, NPVariant *result) \
+{                                                                       \
+    t0 a0;                                                              \
+    t1 a1;                                                              \
+    t2 a2;                                                              \
+    if (argCount == 3                                                   \
+        && in_ ## t0 (&args[0], &a0)                                    \
+        && in_ ## t1 (&args[1], &a1)                                    \
+        && in_ ## t2 (&args[2], &a2)                                    \
+        )                                                               \
+        out_ ## rett (name (a0, a1, a2), result);                       \
+    else                                                                \
+        sBrowserFuncs->setexception (npobj, "wrong type arguments");    \
+    return true;                                                        \
+}
+
+#define ENTRY4v(name, string, id, t0, t1, t2, t3)                       \
+static bool                                                             \
+call_ ## id (NPObject *npobj,                                           \
+             const NPVariant *args, uint32_t argCount, NPVariant *result) \
+{                                                                       \
+    t0 a0;                                                              \
+    t1 a1;                                                              \
+    t2 a2;                                                              \
+    t3 a3;                                                              \
+    if (argCount == 4                                                   \
+        && in_ ## t0 (&args[0], &a0)                                    \
+        && in_ ## t1 (&args[1], &a1)                                    \
+        && in_ ## t2 (&args[2], &a2)                                    \
+        && in_ ## t3 (&args[3], &a3)                                    \
+        )                                                               \
+    {                                                                   \
+        name (a0, a1, a2, a3);                                          \
+        VOID_TO_NPVARIANT (*result);                                    \
+    }                                                                   \
+    else                                                                \
+        sBrowserFuncs->setexception (npobj, "wrong type arguments");    \
+    return true;                                                        \
+}
+
+#define ENTRY4(name, string, id, rett, t0, t1, t2, t3)                  \
+static bool                                                             \
+call_ ## id (NPObject *npobj,                                           \
+             const NPVariant *args, uint32_t argCount, NPVariant *result) \
+{                                                                       \
+    t0 a0;                                                              \
+    t1 a1;                                                              \
+    t2 a2;                                                              \
+    t3 a3;                                                              \
+    if (argCount == 4                                                   \
+        && in_ ## t0 (&args[0], &a0)                                    \
+        && in_ ## t1 (&args[1], &a1)                                    \
+        && in_ ## t2 (&args[2], &a2)                                    \
+        && in_ ## t3 (&args[3], &a3)                                    \
+        )                                                               \
+        out_ ## rett (name (a0, a1, a2, a3), result);                   \
+    else                                                                \
+        sBrowserFuncs->setexception (npobj, "wrong type arguments");    \
+    return true;                                                        \
+}
+
+#include "gmp-entries.h"
 
 // XXX I'd like to do mpz_get_d_2exp, but creating an array to hold
 // the two results will be a mild pain.
 
-#define FUNC_VOID_MPZ_MPZ(name)                                         \
-    static bool                                                         \
-    call_ ## name (NPObject *npobj,                                     \
-                   const NPVariant *args, uint32_t argCount,            \
-                   NPVariant *result)                                   \
-    {                                                                   \
-        if (argCount == 2 && isInteger (&args[0]) &&                    \
-            isInteger (&args[1])) {                                     \
-            name (toInteger (&args[0])->mpz, toInteger (&args[1])->mpz); \
-            VOID_TO_NPVARIANT (*result);                                \
-        }                                                               \
-        else                                                            \
-            sBrowserFuncs->setexception (npobj, "wrong type arguments"); \
-        return true;                                                    \
-    }
-
-#define FUNC_VOID_MPZ_MPZ_MPZ(name)                                     \
-    static bool                                                         \
-    call_ ## name (NPObject *npobj,                                     \
-                   const NPVariant *args, uint32_t argCount,            \
-                   NPVariant *result)                                   \
-    {                                                                   \
-        if (argCount == 3 && isInteger (&args[0]) &&                    \
-            isInteger (&args[1]) && isInteger (&args[2])) {             \
-            name (toInteger (&args[0])->mpz, toInteger (&args[1])->mpz, \
-                  toInteger (&args[2])->mpz);                           \
-            VOID_TO_NPVARIANT (*result);                                \
-        }                                                               \
-        else                                                            \
-            sBrowserFuncs->setexception (npobj, "wrong type arguments"); \
-        return true;                                                    \
-    }
-
-#define FUNC_VOID_MPZ_MPZ_MPZ_MPZ(name)                                 \
-    static bool                                                         \
-    call_ ## name (NPObject *npobj,                                     \
-                   const NPVariant *args, uint32_t argCount,            \
-                   NPVariant *result)                                   \
-    {                                                                   \
-        if (argCount == 4 && isInteger (&args[0]) &&                    \
-            isInteger (&args[1]) && isInteger (&args[2]) &&             \
-            isInteger (&args[3])) {                                     \
-            name (toInteger (&args[0])->mpz, toInteger (&args[1])->mpz, \
-                  toInteger (&args[2])->mpz, toInteger (&args[3])->mpz); \
-            VOID_TO_NPVARIANT (*result);                                \
-        }                                                               \
-        else                                                            \
-            sBrowserFuncs->setexception (npobj, "wrong type arguments"); \
-        return true;                                                    \
-    }
-
-FUNC_VOID_MPZ_MPZ_MPZ (mpz_add)
-// XXX mpz_add_ui
-FUNC_VOID_MPZ_MPZ_MPZ (mpz_sub)
-// XXX mpz_sub_ui
-// XXX mpz_ui_sub
-FUNC_VOID_MPZ_MPZ_MPZ (mpz_mul)
-// XXX mpz_mul_si
-// XXX mpz_mul_ui
-FUNC_VOID_MPZ_MPZ_MPZ (mpz_addmul)
-// XXX mpz_addmul_ui
-FUNC_VOID_MPZ_MPZ_MPZ (mpz_submul)
-// XXX mpz_submul_ui
-// XXX mpz_mul_2exp
-FUNC_VOID_MPZ_MPZ (mpz_neg)
-FUNC_VOID_MPZ_MPZ (mpz_abs)
-FUNC_VOID_MPZ_MPZ_MPZ (mpz_cdiv_q)
-FUNC_VOID_MPZ_MPZ_MPZ (mpz_cdiv_r)
-FUNC_VOID_MPZ_MPZ_MPZ_MPZ (mpz_cdiv_qr)
-// XXX more functions
-// XXX consider C++ for easy type checking and extraction.  Could
-// gmp-entries.h produce these functions, given a few more ENTRY args?
-
-#define ENTRY(x)                                        \
-    static NPClass x ## _npclass = {                    \
+#define ENTRY(string, id)                               \
+    static NPClass id ## _npclass = {                   \
         structVersion   : NP_CLASS_STRUCT_VERSION,      \
         deallocate      : obj_noop,                     \
         invalidate      : obj_noop,                     \
         hasMethod       : obj_id_false,                 \
-        invokeDefault   : call_ ## x,                   \
+        invokeDefault   : call_ ## id,                  \
         hasProperty     : obj_id_false,                 \
         getProperty     : obj_id_var_void,              \
         setProperty     : setProperty_ro,               \
@@ -345,7 +526,6 @@ FUNC_VOID_MPZ_MPZ_MPZ_MPZ (mpz_cdiv_qr)
         enumerate       : enumerate_empty               \
     };
 #include "gmp-entries.h"
-#undef ENTRY
 
 static NPObject*
 gmp_allocate (NPP instance, NPClass *aClass)
@@ -354,11 +534,10 @@ gmp_allocate (NPP instance, NPClass *aClass)
         sBrowserFuncs->memalloc (sizeof (GmpInstance));
     if (ret) {
         ret->instance = instance;
-#define ENTRY(x)                                        \
-        ret->x ## _property._class = &x ## _npclass;    \
-        ret->x ## _property.referenceCount = 1;
+#define ENTRY(string, id)                                \
+        ret->id ## _property._class = &id ## _npclass;   \
+        ret->id ## _property.referenceCount = 1;
 #include "gmp-entries.h"
-#undef ENTRY
     }
     return &ret->npobj;
 }
@@ -379,25 +558,24 @@ gmp_invoke(NPObject *npobj, NPIdentifier name,
 }
 
 static bool
-gmp_hasProperty(NPObject *npobj, NPIdentifier name)
+gmp_hasProperty(NPObject *npobj, NPIdentifier key)
 {
     return false
-#define ENTRY(x) || name == ID_ ## x
+#define ENTRY(string, id) || key == id
 #include "gmp-entries.h"
-#undef ENTRY
         ;
 }
 
 static bool
-gmp_getProperty(NPObject *npobj, NPIdentifier name, NPVariant *result)
+gmp_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
 {
     GmpInstance* gmpinst = (GmpInstance*) npobj;
     NPObject* func = 0;
     if (0 == 1)
         func = func;
-#define ENTRY(x) else if (name == ID_ ## x) func = &gmpinst->x ## _property;
+#define ENTRY(string, id) else if (key == id)   \
+        func = &gmpinst->id ## _property;
 #include "gmp-entries.h"
-#undef ENTRY
     if (func)
         OBJECT_TO_NPVARIANT (sBrowserFuncs->retainobject (func), *result);
     else
@@ -409,16 +587,14 @@ static bool
 gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 {
     uint32_t cnt = 0
-#define ENTRY(x) +1
+#define ENTRY(string, id) +1
 #include "gmp-entries.h"
-#undef ENTRY
         ;
     *value = sBrowserFuncs->memalloc (cnt * sizeof (NPIdentifier*));
     *count = cnt;
     cnt = 0;
-#define ENTRY(x) (*value)[cnt++] = ID_ ## x;
+#define ENTRY(string, id) (*value)[cnt++] = id;
 #include "gmp-entries.h"
-#undef ENTRY
     return true;
 }
 
@@ -484,9 +660,8 @@ NP_Initialize(NPNetscapeFuncs* bFuncs, NPPluginFuncs* pFuncs)
     pFuncs->destroy = npp_Destroy;
     pFuncs->getvalue = npp_GetValue;
 
-#define ENTRY(x) ID_ ## x = sBrowserFuncs->getstringidentifier (# x);
+#define ENTRY(str, id) id = sBrowserFuncs->getstringidentifier (str);
 #include "gmp-entries.h"
-#undef ENTRY
 
     return NPERR_NO_ERROR;
 }
