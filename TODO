@@ -16,7 +16,7 @@ TODO:
 * Support primitive numbers as exact values using conditionals,
   typeof, and lifting as in js-numbers.
 
-* Finish the GMP plugin and create integer, rational, and inexact
+* Finish the GMP plugin and create integer and rational
   implementations on it.  Interface design ideas: Flusspferd
   (http://flusspferd.github.com/) GMP module, node-gmp
   (https://github.com/postwait/node-gmp), node-bigint
@@ -29,6 +29,9 @@ TODO:
 
 * Consider squeezing the GMP plugin: create uncommonly used objects on
   demand.
+
+* Create an MPFR plugin or add MPFR functions to the GMP plugin.
+  Create a high-precision inexact number implementation on MPFR.
 
 * Reimplement the performance benefit of using Number.prototype for
   inexact, but make it optional.
