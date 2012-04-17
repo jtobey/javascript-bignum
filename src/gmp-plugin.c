@@ -21,63 +21,44 @@
 
 static NPNetscapeFuncs* sBrowserFuncs = NULL;
 
-static bool
-isFiniteDouble (const NPVariant* arg)
-{
-    double x;
-    if (!NPVARIANT_IS_DOUBLE (*arg))
-        return false;
-    x = NPVARIANT_TO_DOUBLE (*arg);
-    return x == x && finite (x);
-}
 /* Argument conversion. */
 
 typedef unsigned long ulong;
 typedef char const* char_ptr;
-typedef int int_0_or_2_to_62;
 
-static inline bool
-in_long (const NPVariant* var, long* arg)
-{
-    if (NPVARIANT_IS_INT32 (*var))
-        *arg = (long) NPVARIANT_TO_INT32 (*var);
-    else if (isFiniteDouble (var))
-        *arg = (long) NPVARIANT_TO_DOUBLE (*var);
-    else
-        return false;
-    return true;
-}
+#define DEFINE_IN_NUMBER(type)                                          \
+    static inline bool                                                  \
+    in_ ## type (const NPVariant* var, type* arg)                       \
+    {                                                                   \
+        if (NPVARIANT_IS_INT32 (*var) &&                                \
+            NPVARIANT_TO_INT32 (*var) == (type) NPVARIANT_TO_INT32 (*var)) \
+            *arg = (type) NPVARIANT_TO_INT32 (*var);                    \
+        else if (NPVARIANT_IS_DOUBLE (*var) &&                          \
+            NPVARIANT_TO_DOUBLE (*var) == (type) NPVARIANT_TO_DOUBLE (*var)) \
+            *arg = (type) NPVARIANT_TO_DOUBLE (*var);                   \
+        else                                                            \
+            return false;                                               \
+        return true;                                                    \
+    }
 
-static inline bool
-in_ulong (const NPVariant* var, ulong* arg)
-{
-    if (NPVARIANT_IS_INT32 (*var) && NPVARIANT_TO_INT32 (*var) >= 0)
-        *arg = (ulong) NPVARIANT_TO_INT32 (*var);
-    else if (isFiniteDouble (var) &&
-        NPVARIANT_TO_DOUBLE (*var) == (ulong) NPVARIANT_TO_DOUBLE (*var))
-        *arg = (ulong) NPVARIANT_TO_DOUBLE (*var);
-    else
-        return false;
-    return true;
-}
+#define DEFINE_IN_UNSIGNED(type)                                        \
+    static inline bool                                                  \
+    in_ ## type (const NPVariant* var, type* arg)                       \
+    {                                                                   \
+        if (NPVARIANT_IS_INT32 (*var) && NPVARIANT_TO_INT32 (*var) >= 0 && \
+            NPVARIANT_TO_INT32 (*var) == (type) NPVARIANT_TO_INT32 (*var)) \
+            *arg = (type) NPVARIANT_TO_INT32 (*var);                    \
+        else if (NPVARIANT_IS_DOUBLE (*var) &&                          \
+            NPVARIANT_TO_DOUBLE (*var) == (type) NPVARIANT_TO_DOUBLE (*var)) \
+            *arg = (type) NPVARIANT_TO_DOUBLE (*var);                   \
+        else                                                            \
+            return false;                                               \
+        return true;                                                    \
+    }
 
-static inline bool
-in_int (const NPVariant* var, int* arg)
-{
-    if (NPVARIANT_IS_INT32 (*var))
-        *arg = (int) NPVARIANT_TO_INT32 (*var);
-    else if (isFiniteDouble (var))
-        *arg = (int) NPVARIANT_TO_DOUBLE (*var);
-    else
-        return false;
-    return true;
-}
-
-static inline bool
-in_int_0_or_2_to_62 (const NPVariant* var, int* arg)
-{
-    return in_int (var, arg) && (*arg == 0 || (*arg >= 2 && *arg <= 62));
-}
+DEFINE_IN_NUMBER (int)
+DEFINE_IN_NUMBER (long)
+DEFINE_IN_UNSIGNED (ulong)
 
 static inline bool
 in_double (const NPVariant* var, double* arg)
@@ -100,19 +81,6 @@ in_char_ptr (const NPVariant* var, char const** arg)
     return true;
 }
 
-static inline bool
-in_mp_bitcnt_t (const NPVariant* var, mp_bitcnt_t* arg)
-{
-    if (NPVARIANT_IS_INT32 (*var) && NPVARIANT_TO_INT32 (*var) >= 0)
-        *arg = (mp_bitcnt_t) NPVARIANT_TO_INT32 (*var);
-    else if (isFiniteDouble (var) &&
-        NPVARIANT_TO_DOUBLE (*var) == (mp_bitcnt_t) NPVARIANT_TO_DOUBLE (*var))
-        *arg = (mp_bitcnt_t) NPVARIANT_TO_DOUBLE (*var);
-    else
-        return false;
-    return true;
-}
-
 /* Return value conversion. */
 
 static inline void
@@ -121,23 +89,19 @@ out_double (double value, NPVariant* result)
     DOUBLE_TO_NPVARIANT (value, *result);
 }
 
-static inline void
-out_int (int value, NPVariant* result)
-{
-    if (value == (int32_t) value)
-        INT32_TO_NPVARIANT (value, *result);
-    else
-        DOUBLE_TO_NPVARIANT ((double) value, *result);
-}
-
-static inline void
-out_ulong (ulong value, NPVariant* result)
-{
-    if (value == (int32_t) value)
-        INT32_TO_NPVARIANT (value, *result);
-    else
-        DOUBLE_TO_NPVARIANT ((double) value, *result);
-}
+#define DEFINE_OUT_NUMBER(type)                                 \
+    static inline void                                          \
+    out_ ## type (type value, NPVariant* result)                \
+    {                                                           \
+        if (value == (int32_t) value)                           \
+            INT32_TO_NPVARIANT (value, *result);                \
+        else                                                    \
+            DOUBLE_TO_NPVARIANT ((double) value, *result);      \
+    }
+DEFINE_OUT_NUMBER(ulong)
+DEFINE_OUT_NUMBER(long)
+DEFINE_OUT_NUMBER(int)
+DEFINE_OUT_NUMBER(size_t)
 
 static inline void
 out_bool (int value, NPVariant* result)
@@ -296,6 +260,25 @@ in_mpz_ptr (const NPVariant* var, mpz_ptr* arg)
     *arg = &((Integer*) NPVARIANT_TO_OBJECT (*var))->mpz[0];
     return true;
 }
+
+typedef int int_0_or_2_to_62;
+typedef int int_2_to_62;
+
+static inline bool
+in_int_0_or_2_to_62 (const NPVariant* var, int* arg)
+{
+    return in_int (var, arg) && (*arg == 0 || (*arg >= 2 && *arg <= 62));
+}
+
+static inline bool
+in_int_2_to_62 (const NPVariant* var, int* arg)
+{
+    return in_int (var, arg) && *arg >= 2 && *arg <= 62;
+}
+
+DEFINE_IN_UNSIGNED (mp_bitcnt_t)
+//DEFINE_IN_UNSIGNED (mp_size_t)
+DEFINE_OUT_NUMBER(mp_bitcnt_t)
 
 static bool
 Integer_toString (NPObject *npobj, const NPVariant *args,
@@ -462,6 +445,32 @@ call_ ## id (NPObject *npobj,                                           \
         && in_ ## t3 (&args[3], &a3)                                    \
         )                                                               \
         out_ ## rett (name (a0, a1, a2, a3), result);                   \
+    else                                                                \
+        sBrowserFuncs->setexception (npobj, "wrong type arguments");    \
+    return true;                                                        \
+}
+
+#define ENTRY5v(name, string, id, t0, t1, t2, t3, t4)                   \
+static bool                                                             \
+call_ ## id (NPObject *npobj,                                           \
+             const NPVariant *args, uint32_t argCount, NPVariant *result) \
+{                                                                       \
+    t0 a0;                                                              \
+    t1 a1;                                                              \
+    t2 a2;                                                              \
+    t3 a3;                                                              \
+    t4 a4;                                                              \
+    if (argCount == 5                                                   \
+        && in_ ## t0 (&args[0], &a0)                                    \
+        && in_ ## t1 (&args[1], &a1)                                    \
+        && in_ ## t2 (&args[2], &a2)                                    \
+        && in_ ## t3 (&args[3], &a3)                                    \
+        && in_ ## t4 (&args[4], &a4)                                    \
+        )                                                               \
+    {                                                                   \
+        name (a0, a1, a2, a3, a4);                                      \
+        VOID_TO_NPVARIANT (*result);                                    \
+    }                                                                   \
     else                                                                \
         sBrowserFuncs->setexception (npobj, "wrong type arguments");    \
     return true;                                                        \
