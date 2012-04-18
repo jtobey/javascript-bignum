@@ -25,7 +25,7 @@ static NPNetscapeFuncs* sBrowserFuncs = NULL;
 /* Argument conversion. */
 
 typedef unsigned long ulong;
-typedef char const* char_ptr;
+typedef char const* stringz;
 
 #define DEFINE_IN_NUMBER(type)                                          \
     static inline bool                                                  \
@@ -74,7 +74,7 @@ in_double (const NPVariant* var, double* arg)
 }
 
 static inline bool
-in_char_ptr (const NPVariant* var, char const** arg)
+in_stringz (const NPVariant* var, char const** arg)
 {
     if (!NPVARIANT_IS_STRING (*var))
         return false;
@@ -111,7 +111,7 @@ out_bool (int value, NPVariant* result)
 }
 
 static inline void
-out_char_ptr (char const* value, NPVariant* result)
+out_stringz (char const* value, NPVariant* result)
 {
     size_t len = strlen (value);
     NPUTF8* ret = (NPUTF8*) sBrowserFuncs->memalloc (len + 1);

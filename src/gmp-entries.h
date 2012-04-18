@@ -37,7 +37,7 @@ ENTRY2v(mpz_set_d, "mpz_set_d", ID_mpz_set_d, mpz_ptr, double)
 //ENTRY2v(mpz_set_q, "mpz_set_q", ID_mpz_set_q, mpz_ptr, mpq_ptr)
 //ENTRY2v(mpz_set_f, "mpz_set_f", ID_mpz_set_f, mpz_ptr, mpf_ptr)
 // mpz_init_set*: C-specific.
-ENTRY3v(mpz_set_str, "mpz_set_str", ID_mpz_set_str, mpz_ptr, char_ptr, int_0_or_2_to_62)
+ENTRY3v(mpz_set_str, "mpz_set_str", ID_mpz_set_str, mpz_ptr, stringz, int_0_or_2_to_62)
 ENTRY2v(mpz_swap, "mpz_swap", ID_mpz_swap, mpz_ptr, mpz_ptr)
 ENTRY1(mpz_get_ui, "mpz_get_ui", ID_mpz_get_ui, ulong, mpz_ptr)
 ENTRY1(mpz_get_si, "mpz_get_si", ID_mpz_get_si, long, mpz_ptr)
