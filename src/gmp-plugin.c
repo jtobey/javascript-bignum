@@ -74,7 +74,7 @@ in_double (const NPVariant* var, double* arg)
 }
 
 static inline bool
-in_stringz (const NPVariant* var, char const** arg)
+in_stringz (const NPVariant* var, stringz* arg)
 {
     if (!NPVARIANT_IS_STRING (*var))
         return false;
@@ -111,7 +111,7 @@ out_bool (int value, NPVariant* result)
 }
 
 static inline void
-out_stringz (char const* value, NPVariant* result)
+out_stringz (stringz value, NPVariant* result)
 {
     size_t len = strlen (value);
     NPUTF8* ret = (NPUTF8*) sBrowserFuncs->memalloc (len + 1);
@@ -120,6 +120,7 @@ out_stringz (char const* value, NPVariant* result)
         STRINGN_TO_NPVARIANT (ret, len, *result);
     }
     else
+        /* XXX Should make npobj an argument to converters so this can throw. */
         VOID_TO_NPVARIANT (*result);
 }
 
