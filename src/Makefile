@@ -1,6 +1,6 @@
 # Experimental browser plugin, tested only on Linux.
 
-CFLAGS = -Wall -fPIC -g -DXP_UNIX=1
+CFLAGS = -std=c99 -Wall -fPIC -g -DXP_UNIX=1
 
 libgmp-plugin.so: gmp-plugin.o
 	$(CC) $(CFLAGS) -shared $^ -lgmp -lm -o $@
