@@ -40,7 +40,7 @@ ENTRY2v(mpz_set, "mpz_set", np_mpz_set, mpz_ptr, mpz_ptr)
 ENTRY2v(mpz_set_ui, "mpz_set_ui", np_mpz_set_ui, mpz_ptr, ulong)
 ENTRY2v(mpz_set_si, "mpz_set_si", np_mpz_set_si, mpz_ptr, long)
 ENTRY2v(mpz_set_d, "mpz_set_d", np_mpz_set_d, mpz_ptr, double)
-//ENTRY2v(mpz_set_q, "mpz_set_q", np_mpz_set_q, mpz_ptr, mpq_ptr)
+ENTRY2v(mpz_set_q, "mpz_set_q", np_mpz_set_q, mpz_ptr, mpq_ptr)
 //ENTRY2v(mpz_set_f, "mpz_set_f", np_mpz_set_f, mpz_ptr, mpf_ptr)
 // mpz_init_set*: C-specific.
 ENTRY3(mpz_set_str, "mpz_set_str", np_mpz_set_str, int, mpz_ptr, stringz, int_0_or_2_to_62)
