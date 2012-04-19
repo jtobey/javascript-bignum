@@ -567,6 +567,15 @@ Entry_invokeDefault (NPObject *npobj,
 
     switch (CONTAINING (Entry, npobj, npobj)->number) {
 
+#define ENTRY1v(name, string, id, t0)                                   \
+    case __LINE__:                                                      \
+    if (argCount != 1                                                   \
+        || !in_ ## t0 (&args[0], &a0 ## t0)                             \
+        ) break;                                                        \
+    name (a0 ## t0);                                                    \
+    VOID_TO_NPVARIANT (*result);                                        \
+    return true;
+
 #define ENTRY1(name, string, id, rett, t0)                              \
     case __LINE__:                                                      \
     if (argCount != 1                                                   \

@@ -13,6 +13,7 @@
 #endif
 
 #ifndef ENTRY1
+# define ENTRY1v(__name, __string, __id, __t0) ENTRY (__string, __id)
 # define ENTRY1(__name, __string, __id, __r, __t0) ENTRY (__string, __id)
 # define ENTRY2v(__name, __string, __id, __t0, __t1) ENTRY (__string, __id)
 # define ENTRY2(__name, __string, __id, __r, __t0, __t1) ENTRY (__string, __id)
@@ -42,7 +43,7 @@ ENTRY2v(mpz_set_d, "mpz_set_d", np_mpz_set_d, mpz_ptr, double)
 //ENTRY2v(mpz_set_q, "mpz_set_q", np_mpz_set_q, mpz_ptr, mpq_ptr)
 //ENTRY2v(mpz_set_f, "mpz_set_f", np_mpz_set_f, mpz_ptr, mpf_ptr)
 // mpz_init_set*: C-specific.
-ENTRY3v(mpz_set_str, "mpz_set_str", np_mpz_set_str, mpz_ptr, stringz, int_0_or_2_to_62)
+ENTRY3(mpz_set_str, "mpz_set_str", np_mpz_set_str, int, mpz_ptr, stringz, int_0_or_2_to_62)
 ENTRY2v(mpz_swap, "mpz_swap", np_mpz_swap, mpz_ptr, mpz_ptr)
 ENTRY1(mpz_get_ui, "mpz_get_ui", np_mpz_get_ui, ulong, mpz_ptr)
 ENTRY1(mpz_get_si, "mpz_get_si", np_mpz_get_si, long, mpz_ptr)
@@ -173,6 +174,33 @@ ENTRY2(mpz_sizeinbase, "mpz_sizeinbase", np_mpz_sizeinbase, size_t, mpz_ptr, int
 ENTRY1(mpz_size, "mpz_size", np_mpz_size, size_t, mpz_ptr)
 
 CTOR("mpq", npobjMpq)
+ENTRY1v(mpq_canonicalize, "mpq_canonicalize", np_mpq_canonicalize, mpq_ptr)
+ENTRY2v(mpq_set, "mpq_set", np_mpq_set, mpq_ptr, mpq_ptr)
+ENTRY2v(mpq_set_z, "mpq_set_z", np_mpq_set_z, mpq_ptr, mpz_ptr)
+ENTRY3v(mpq_set_ui, "mpq_set_ui", np_mpq_set_ui, mpq_ptr, ulong, ulong)
+ENTRY3v(mpq_set_si, "mpq_set_si", np_mpq_set_si, mpq_ptr, long, long)
+ENTRY3(mpq_set_str, "mpq_set_str", np_mpq_set_str, int, mpq_ptr, stringz, int_0_or_2_to_62)
+ENTRY2v(mpq_swap, "mpq_swap", np_mpq_swap, mpq_ptr, mpq_ptr)
+ENTRY3v(mpq_add, "mpq_add", np_mpq_add, mpq_ptr, mpq_ptr, mpq_ptr)
+ENTRY3v(mpq_sub, "mpq_sub", np_mpq_sub, mpq_ptr, mpq_ptr, mpq_ptr)
+ENTRY3v(mpq_mul, "mpq_mul", np_mpq_mul, mpq_ptr, mpq_ptr, mpq_ptr)
+ENTRY3v(mpq_mul_2exp, "mpq_mul_2exp", np_mpq_mul_2exp, mpq_ptr, mpq_ptr, mp_bitcnt_t)
+ENTRY3v(mpq_div, "mpq_div", np_mpq_div, mpq_ptr, mpq_ptr, mpq_ptr)
+ENTRY3v(mpq_div_2exp, "mpq_div_2exp", np_mpq_div_2exp, mpq_ptr, mpq_ptr, mp_bitcnt_t)
+ENTRY2v(mpq_neg, "mpq_neg", np_mpq_neg, mpq_ptr, mpq_ptr)
+ENTRY2v(mpq_abs, "mpq_abs", np_mpq_abs, mpq_ptr, mpq_ptr)
+ENTRY2v(mpq_inv, "mpq_inv", np_mpq_inv, mpq_ptr, mpq_ptr)
+ENTRY2(mpq_cmp, "mpq_cmp", np_mpq_cmp, int, mpq_ptr, mpq_ptr)
+ENTRY3(mpq_cmp_si, "mpq_cmp_si", np_mpq_cmp_si, int, mpq_ptr, long, long)
+ENTRY3(mpq_cmp_ui, "mpq_cmp_ui", np_mpq_cmp_ui, int, mpq_ptr, ulong, ulong)
+ENTRY1(mpq_sgn, "mpq_sgn", np_mpq_sgn, int, mpq_ptr)
+ENTRY2(mpq_equal, "mpq_equal", np_mpq_equal, int, mpq_ptr, mpq_ptr)
+// mpq_numref, mpq_denref: would require some design thought.
+ENTRY2v(mpq_get_num, "mpq_get_num", np_mpq_get_num, mpz_ptr, mpq_ptr)
+ENTRY2v(mpq_get_den, "mpq_get_den", np_mpq_get_den, mpz_ptr, mpq_ptr)
+ENTRY2v(mpq_set_num, "mpq_set_num", np_mpq_set_num, mpq_ptr, mpz_ptr)
+ENTRY2v(mpq_set_den, "mpq_set_den", np_mpq_set_den, mpq_ptr, mpz_ptr)
+
 CTOR("mpf", npobjMpf)
 CTOR("randstate", npobjRandstate)
 CTOR("mpfr", npobjMpfr)
@@ -181,6 +209,7 @@ CTOR("mpfr", npobjMpfr)
 
 #undef ENTRY
 #undef CTOR
+#undef ENTRY1v
 #undef ENTRY1
 #undef ENTRY2v
 #undef ENTRY2
