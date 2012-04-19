@@ -7,9 +7,6 @@
 
 #include <gmp.h>
 
-/* Break the GMP abstraction just this once. */
-typedef __gmp_randstate_struct* x_gmp_randstate_ptr;
-
 #include <npapi.h>
 #include <npfunctions.h>
 
@@ -76,14 +73,36 @@ in_double (const NPVariant* var, double* arg)
     return true;
 }
 
+/* Chrome does not terminate its NPString with NUL.  Cope.  */
+
 static inline bool
 in_stringz (const NPVariant* var, stringz* arg)
 {
+    const NPString* npstr;
+    NPUTF8* str;
+
     if (!NPVARIANT_IS_STRING (*var))
         return false;
-    *arg = NPVARIANT_TO_STRING (*var).UTF8Characters;
+    npstr = &NPVARIANT_TO_STRING (*var);
+    str = sBrowserFuncs->memalloc (npstr->UTF8Length + 1);
+    if (!str)
+        return false;  // XXX Should throw.
+    *arg = str;
+    strncpy (str, npstr->UTF8Characters, npstr->UTF8Length);
+    str[npstr->UTF8Length] = '\0';
     return true;
 }
+
+static inline void
+del_stringz (stringz arg)
+{
+    sBrowserFuncs->memfree ((char*) arg);
+}
+
+#define del_int(arg)
+#define del_long(arg)
+#define del_ulong(arg)
+#define del_double(arg)
 
 /* Return value conversion. */
 
@@ -321,15 +340,18 @@ in_int_0_or_2_to_62 (const NPVariant* var, int* arg)
 {
     return in_int (var, arg) && (*arg == 0 || (*arg >= 2 && *arg <= 62));
 }
+#define del_int_0_or_2_to_62(arg)
 
 static inline bool
 in_int_2_to_62 (const NPVariant* var, int* arg)
 {
     return in_int (var, arg) && *arg >= 2 && *arg <= 62;
 }
+#define del_int_2_to_62(arg)
 
 DEFINE_IN_UNSIGNED (mp_bitcnt_t)
 DEFINE_OUT_NUMBER (mp_bitcnt_t)
+#define del_mp_bitcnt_t(arg)
 
 static bool
 mpp_toString (NPObject *npobj, mpz_ptr mpp, const NPVariant *args,
@@ -428,6 +450,8 @@ in_mpz_ptr (const NPVariant* var, mpz_ptr* arg)
     return true;
 }
 
+#define del_mpz_ptr(arg)
+
 typedef struct _Rational {
     NPObject npobj;
     mpq_t mp;
@@ -524,6 +548,8 @@ in_mpq_ptr (const NPVariant* var, mpq_ptr* arg)
     *arg = &((Rational*) NPVARIANT_TO_OBJECT (*var))->mp[0];
     return true;
 }
+
+#define del_mpq_ptr(arg)
 
 static void
 Mpq_numref_deallocate (NPObject *npobj)
@@ -726,6 +752,8 @@ in_mpf_ptr (const NPVariant* var, mpf_ptr* arg)
     return true;
 }
 
+#define del_mpf_ptr(arg)
+
 typedef struct _Entry {
     NPObject npobj;
     int number;
@@ -755,6 +783,8 @@ Entry_invokeDefault (NPObject *npobj,
                      const NPVariant *args, uint32_t argCount,
                      NPVariant *result)
 {
+    bool ok = false;
+
 #if __GNUC__
 #define UNUSED __attribute__ ((unused))
 #else
@@ -771,8 +801,7 @@ Entry_invokeDefault (NPObject *npobj,
     mpf_ptr aN ## mpf_ptr UNUSED; \
     mp_bitcnt_t aN ## mp_bitcnt_t UNUSED; \
     int_0_or_2_to_62 aN ## int_0_or_2_to_62 UNUSED; \
-    int_2_to_62 aN ## int_2_to_62 UNUSED; \
-    x_gmp_randstate_ptr aN ## x_gmp_randstate_ptr UNUSED
+    int_2_to_62 aN ## int_2_to_62 UNUSED;
 
     ARGN(a0);
     ARGN(a1);
@@ -783,106 +812,127 @@ Entry_invokeDefault (NPObject *npobj,
     switch (CONTAINING (Entry, npobj, npobj)->number) {
 
 #define ENTRY1v(name, string, id, t0)                                   \
-    case __LINE__:                                                      \
-    if (argCount != 1                                                   \
-        || !in_ ## t0 (&args[0], &a0 ## t0)                             \
-        ) break;                                                        \
-    name (a0 ## t0);                                                    \
-    VOID_TO_NPVARIANT (*result);                                        \
-    return true;
+        case __LINE__:                                                  \
+            if (argCount != 1 || !in_ ## t0 (&args[0], &a0 ## t0))      \
+                break;                                                  \
+            name (a0 ## t0);                                            \
+            VOID_TO_NPVARIANT (*result);                                \
+            ok = true;                                                  \
+            del_ ## t0 (a0 ## t0);                                      \
+            break;
 
 #define ENTRY1(name, string, id, rett, t0)                              \
-    case __LINE__:                                                      \
-    if (argCount != 1                                                   \
-        || !in_ ## t0 (&args[0], &a0 ## t0)                             \
-        ) break;                                                        \
-    out_ ## rett (name (a0 ## t0), result);                             \
-    return true;
+        case __LINE__:                                                  \
+            if (argCount != 1 || !in_ ## t0 (&args[0], &a0 ## t0))      \
+                break;                                                  \
+            out_ ## rett (name (a0 ## t0), result);                     \
+            ok = true;                                                  \
+            del_ ## t0 (a0 ## t0);                                      \
+            break;
 
 #define ENTRY2v(name, string, id, t0, t1)                               \
-    case __LINE__:                                                      \
-    if (argCount != 2                                                   \
-        || !in_ ## t0 (&args[0], &a0 ## t0)                             \
-        || !in_ ## t1 (&args[1], &a1 ## t1)                             \
-        ) break;                                                        \
-    name (a0 ## t0, a1 ## t1);                                          \
-    VOID_TO_NPVARIANT (*result);                                        \
-    return true;
+        case __LINE__:                                                  \
+            if (argCount != 2 || !in_ ## t0 (&args[0], &a0 ## t0)) break; \
+            if (!in_ ## t1 (&args[1], &a1 ## t1)) goto del0_ ## id;     \
+            name (a0 ## t0, a1 ## t1);                                  \
+            VOID_TO_NPVARIANT (*result);                                \
+            ok = true;                                                  \
+            del_ ## t1 (a1 ## t1);                                      \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                         \
+            break;
 
 #define ENTRY2(name, string, id, rett, t0, t1)                          \
-    case __LINE__:                                                      \
-    if (argCount != 2                                                   \
-        || !in_ ## t0 (&args[0], &a0 ## t0)                             \
-        || !in_ ## t1 (&args[1], &a1 ## t1)                             \
-        ) break;                                                        \
-    out_ ## rett (name (a0 ## t0, a1 ## t1), result);                   \
-    return true;
+        case __LINE__:                                                  \
+            if (argCount != 2 || !in_ ## t0 (&args[0], &a0 ## t0)) break; \
+            if (!in_ ## t1 (&args[1], &a1 ## t1)) goto del0_ ## id;     \
+            out_ ## rett (name (a0 ## t0, a1 ## t1), result);           \
+            ok = true;                                                  \
+            del_ ## t1 (a1 ## t1);                                      \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                         \
+            break;
 
 #define ENTRY3v(name, string, id, t0, t1, t2)                           \
-    case __LINE__:                                                      \
-    if (argCount != 3                                                   \
-        || !in_ ## t0 (&args[0], &a0 ## t0)                             \
-        || !in_ ## t1 (&args[1], &a1 ## t1)                             \
-        || !in_ ## t2 (&args[2], &a2 ## t2)                             \
-        ) break;                                                        \
-    name (a0 ## t0, a1 ## t1, a2 ## t2);                                \
-    VOID_TO_NPVARIANT (*result);                                        \
-    return true;
+        case __LINE__:                                                  \
+            if (argCount != 3 || !in_ ## t0 (&args[0], &a0 ## t0)) break; \
+            if (!in_ ## t1 (&args[1], &a1 ## t1)) goto del0_ ## id;     \
+            if (!in_ ## t2 (&args[2], &a2 ## t2)) goto del1_ ## id;     \
+            name (a0 ## t0, a1 ## t1, a2 ## t2);                        \
+            VOID_TO_NPVARIANT (*result);                                \
+            ok = true;                                                  \
+            del_ ## t2 (a2 ## t2);                                      \
+            del1_ ## id: del_ ## t1 (a1 ## t1);                         \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                         \
+            break;
 
 #define ENTRY3(name, string, id, rett, t0, t1, t2)                      \
-    case __LINE__:                                                      \
-    if (argCount != 3                                                   \
-        || !in_ ## t0 (&args[0], &a0 ## t0)                             \
-        || !in_ ## t1 (&args[1], &a1 ## t1)                             \
-        || !in_ ## t2 (&args[2], &a2 ## t2)                             \
-        ) break;                                                        \
-    out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2), result);         \
-    return true;
+        case __LINE__:                                                  \
+            if (argCount != 3 || !in_ ## t0 (&args[0], &a0 ## t0)) break; \
+            if (!in_ ## t1 (&args[1], &a1 ## t1)) goto del0_ ## id;     \
+            if (!in_ ## t2 (&args[2], &a2 ## t2)) goto del1_ ## id;     \
+            out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2), result); \
+            ok = true;                                                  \
+            del_ ## t2 (a2 ## t2);                                      \
+            del1_ ## id: del_ ## t1 (a1 ## t1);                         \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                         \
+            break;
 
 #define ENTRY4v(name, string, id, t0, t1, t2, t3)                       \
-    case __LINE__:                                                      \
-    if (argCount != 4                                                   \
-        || !in_ ## t0 (&args[0], &a0 ## t0)                             \
-        || !in_ ## t1 (&args[1], &a1 ## t1)                             \
-        || !in_ ## t2 (&args[2], &a2 ## t2)                             \
-        || !in_ ## t3 (&args[3], &a3 ## t3)                             \
-        ) break;                                                        \
-    name (a0 ## t0, a1 ## t1, a2 ## t2, a3 ## t3);                      \
-    VOID_TO_NPVARIANT (*result);                                        \
-    return true;
+        case __LINE__:                                                  \
+            if (argCount != 4 || !in_ ## t0 (&args[0], &a0 ## t0)) break; \
+            if (!in_ ## t1 (&args[1], &a1 ## t1)) goto del0_ ## id;     \
+            if (!in_ ## t2 (&args[2], &a2 ## t2)) goto del1_ ## id;     \
+            if (!in_ ## t3 (&args[3], &a3 ## t3)) goto del2_ ## id;     \
+            name (a0 ## t0, a1 ## t1, a2 ## t2, a3 ## t3);              \
+            VOID_TO_NPVARIANT (*result);                                \
+            ok = true;                                                  \
+            del_ ## t3 (a3 ## t3);                                      \
+            del2_ ## id: del_ ## t2 (a2 ## t2);                         \
+            del1_ ## id: del_ ## t1 (a1 ## t1);                         \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                         \
+            break;
 
 #define ENTRY4(name, string, id, rett, t0, t1, t2, t3)                  \
-    case __LINE__:                                                      \
-    if (argCount != 4                                                   \
-        || !in_ ## t0 (&args[0], &a0 ## t0)                             \
-        || !in_ ## t1 (&args[1], &a1 ## t1)                             \
-        || !in_ ## t2 (&args[2], &a2 ## t2)                             \
-        || !in_ ## t3 (&args[3], &a3 ## t3)                             \
-        ) break;                                                        \
-    out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2, a3 ## t3), result); \
-    return true;
+        case __LINE__:                                                  \
+            if (argCount != 4 || !in_ ## t0 (&args[0], &a0 ## t0)) break; \
+            if (!in_ ## t1 (&args[1], &a1 ## t1)) goto del0_ ## id;     \
+            if (!in_ ## t2 (&args[2], &a2 ## t2)) goto del1_ ## id;     \
+            if (!in_ ## t3 (&args[3], &a3 ## t3)) goto del2_ ## id;     \
+            out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2,           \
+                                a3 ## t3), result);                     \
+            ok = true;                                                  \
+            del_ ## t3 (a3 ## t3);                                      \
+            del2_ ## id: del_ ## t2 (a2 ## t2);                         \
+            del1_ ## id: del_ ## t1 (a1 ## t1);                         \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                         \
+            break;
 
 #define ENTRY5v(name, string, id, t0, t1, t2, t3, t4)                   \
-    case __LINE__:                                                      \
-    if (argCount != 5                                                   \
-        || !in_ ## t0 (&args[0], &a0 ## t0)                             \
-        || !in_ ## t1 (&args[1], &a1 ## t1)                             \
-        || !in_ ## t2 (&args[2], &a2 ## t2)                             \
-        || !in_ ## t3 (&args[3], &a3 ## t3)                             \
-        || !in_ ## t4 (&args[4], &a4 ## t4)                             \
-        ) break;                                                        \
-    name (a0 ## t0, a1 ## t1, a2 ## t2, a3 ## t3, a4 ## t4);            \
-    VOID_TO_NPVARIANT (*result);                                        \
-    return true;
+        case __LINE__:                                                  \
+            if (argCount != 5 || !in_ ## t0 (&args[0], &a0 ## t0)) break; \
+            if (!in_ ## t1 (&args[1], &a1 ## t1)) goto del0_ ## id;     \
+            if (!in_ ## t2 (&args[2], &a2 ## t2)) goto del1_ ## id;     \
+            if (!in_ ## t3 (&args[3], &a3 ## t3)) goto del2_ ## id;     \
+            if (!in_ ## t4 (&args[4], &a4 ## t4)) goto del3_ ## id;     \
+            name (a0 ## t0, a1 ## t1, a2 ## t2, a3 ## t3, a4 ## t4);    \
+            VOID_TO_NPVARIANT (*result);                                \
+            ok = true;                                                  \
+            del_ ## t4 (a4 ## t4);                                      \
+            del3_ ## id: del_ ## t3 (a3 ## t3);                         \
+            del2_ ## id: del_ ## t2 (a2 ## t2);                         \
+            del1_ ## id: del_ ## t1 (a1 ## t1);                         \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                         \
+            break;
 
 #include "gmp-entries.h"
 
     default:
         sBrowserFuncs->setexception (npobj, "internal error, bad entry number");
-        return true;
+        ok = true;                                                          \
+    break;
     }
 
-    sBrowserFuncs->setexception (npobj, "wrong type arguments");
+    if (!ok)
+        sBrowserFuncs->setexception (npobj, "wrong type arguments");
     return true;
 }
 
