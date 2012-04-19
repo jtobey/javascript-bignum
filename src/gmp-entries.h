@@ -1,4 +1,4 @@
-/* gmp-constants.h: header private to gmp-plugin.c.
+/* gmp-entries.h: header private to gmp-plugin.c.
    C macros as IDL for libgmp.
 
    Copyright(C) 2012 John Tobey, see ../LICENCE
@@ -205,7 +205,7 @@ CTOR("mpf", npobjMpf)
 CTOR("randstate", npobjRandstate)
 CTOR("mpfr", npobjMpfr)
 
-// XXX mpq, mpf, gmp_randstate, and mpfr operations.
+// XXX mpf, gmp_randstate, and mpfr operations.
 
 #undef ENTRY
 #undef CTOR
