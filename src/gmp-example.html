@@ -1,0 +1,20 @@
+<html>
+<head>
+<embed type="application/x-gmplib" id="lib" width="0" height="0">
+<script>
+function onload() {
+    var lib = document.getElementById("lib");
+    var gmp = lib.gmp;
+    var ret = gmp.mpz();
+    gmp.mpz_set_str(ret,"0x10000000000000000",0);
+    gmp.mpz_add_ui(ret,ret,1);
+    gmp.mpz_mul(ret,ret,ret);
+    gmp.mpz_pow_ui(ret,ret,2);
+    alert(ret.toString(16));
+}
+</script>
+</head>
+<body onload="onload()">
+<p>Nothing to see here.</p>
+</body>
+</html>
