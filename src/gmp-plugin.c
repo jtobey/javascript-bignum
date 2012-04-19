@@ -140,11 +140,6 @@ typedef struct _TopObject {
 #define CONTAINING(outer, member, ptr)                          \
     ((outer*) (((char*) ptr) - offsetof (outer, member)))
 
-static void
-obj_noop (NPObject *npobj)
-{
-}
-
 static bool
 obj_id_false(NPObject *npobj, NPIdentifier name)
 {
@@ -195,6 +190,14 @@ enumerate_only_toString(NPObject *npobj, NPIdentifier **value, uint32_t *count)
     return true;
 }
 
+static void
+obj_invalidate (NPObject *npobj)
+{
+#if DEBUG_ALLOC
+    //fprintf (stderr, "invalidate %p\n", npobj);
+#endif  /* DEBUG_ALLOC */
+}
+
 typedef struct _Integer {
     NPObject npobj;
     mpz_t mp;
@@ -204,6 +207,9 @@ static NPObject*
 Integer_allocate (NPP npp, NPClass *aClass)
 {
     Integer* ret = (Integer*) sBrowserFuncs->memalloc (sizeof (Integer));
+#if DEBUG_ALLOC
+    fprintf (stderr, "Integer allocate %p\n", ret);
+#endif  /* DEBUG_ALLOC */
     if (ret)
         mpz_init (ret->mp);
     return &ret->npobj;
@@ -212,6 +218,9 @@ Integer_allocate (NPP npp, NPClass *aClass)
 static void
 Integer_deallocate (NPObject *npobj)
 {
+#if DEBUG_ALLOC
+    fprintf (stderr, "Integer deallocate %p\n", npobj);
+#endif  /* DEBUG_ALLOC */
     if (npobj)
         mpz_clear (((Integer*) npobj)->mp);
     sBrowserFuncs->memfree (npobj);
@@ -235,7 +244,7 @@ static NPClass Integer_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     allocate        : Integer_allocate,
     deallocate      : Integer_deallocate,
-    invalidate      : obj_noop,
+    invalidate      : obj_invalidate,
     hasMethod       : hasMethod_only_toString,
     invoke          : Integer_invoke,
     hasProperty     : obj_id_false,
@@ -248,8 +257,26 @@ static NPClass Integer_npclass = {
 static void
 Mpz_deallocate (NPObject *npobj)
 {
-    sBrowserFuncs->releaseobject
-        (&CONTAINING (TopObject, npobjMpz, npobj)->npobjTop);
+    TopObject* top = CONTAINING (TopObject, npobjMpz, npobj);
+#if DEBUG_ALLOC
+    fprintf (stderr, "Mpz deallocate %p; %u\n", npobj, (unsigned int) top->npobjTop.referenceCount);
+#endif  /* DEBUG_ALLOC */
+
+    /* Decrement the top object's reference count.  In theory, this
+       could be dangerous, and the top object should implement
+       invalidate() and somehow inform objects referring to it not to
+       bother.  Quoth npruntime.h: "The runtime will typically return
+       immediately, with 0 or NULL, from an attempt to dispatch to [an
+       invalidated] NPObject, but this behavior should not be depended
+       upon."  I choose to depend on it anyway, because I consider
+       browsers more likely to cope with calls on freed objects than
+       to call my invalidate() at a useful time.  Browsers appear to
+       call invalidate() immediately before deallocate(), which is
+       useless.  Trying to keep a list of live objects or note when
+       NPP_Destroy has been called on an object's instance would
+       complicate and slow down the code too much.
+     */
+    sBrowserFuncs->releaseobject (&top->npobjTop);
 }
 
 static bool
@@ -276,7 +303,7 @@ Mpz_invokeDefault (NPObject *npobj,
 static NPClass Mpz_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     deallocate      : Mpz_deallocate,
-    invalidate      : obj_noop,
+    invalidate      : obj_invalidate,
     hasMethod       : obj_id_false,
     invokeDefault   : Mpz_invokeDefault,
     hasProperty     : obj_id_false,
@@ -340,6 +367,9 @@ static NPObject*
 MpzRef_allocate (NPP npp, NPClass *aClass)
 {
     MpzRef* ret = (MpzRef*) sBrowserFuncs->memalloc (sizeof (MpzRef));
+#if DEBUG_ALLOC
+    fprintf (stderr, "MpzRef allocate %p\n", ret);
+#endif  /* DEBUG_ALLOC */
     if (ret)
         ret->owner = 0;
     return &ret->npobj;
@@ -349,7 +379,12 @@ static void
 MpzRef_deallocate (NPObject *npobj)
 {
     MpzRef* ref = (MpzRef*) npobj;
+#if DEBUG_ALLOC
+    fprintf (stderr, "MpzRef deallocate %p; %p\n", npobj, ref->owner);
+#endif  /* DEBUG_ALLOC */
     if (ref->owner)
+        /* Decrement the Rational's reference count.  See comments in
+           Mpz_deallocate.  */
         sBrowserFuncs->releaseobject (ref->owner);
     sBrowserFuncs->memfree (npobj);
 }
@@ -369,7 +404,7 @@ static NPClass MpzRef_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     allocate        : MpzRef_allocate,
     deallocate      : MpzRef_deallocate,
-    invalidate      : obj_noop,
+    invalidate      : obj_invalidate,
     hasMethod       : hasMethod_only_toString,
     invoke          : MpzRef_invoke,
     hasProperty     : obj_id_false,
@@ -402,6 +437,9 @@ static NPObject*
 Rational_allocate (NPP npp, NPClass *aClass)
 {
     Rational* ret = (Rational*) sBrowserFuncs->memalloc (sizeof (Rational));
+#if DEBUG_ALLOC
+    fprintf (stderr, "Rational allocate %p\n", ret);
+#endif  /* DEBUG_ALLOC */
     if (ret)
         mpq_init (ret->mp);
     return &ret->npobj;
@@ -410,6 +448,9 @@ Rational_allocate (NPP npp, NPClass *aClass)
 static void
 Rational_deallocate (NPObject *npobj)
 {
+#if DEBUG_ALLOC
+    fprintf (stderr, "Rational deallocate %p\n", npobj);
+#endif  /* DEBUG_ALLOC */
     if (npobj)
         mpq_clear (((Rational*) npobj)->mp);
     sBrowserFuncs->memfree (npobj);
@@ -419,7 +460,7 @@ static NPClass Rational_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     allocate        : Rational_allocate,
     deallocate      : Rational_deallocate,
-    invalidate      : obj_noop,
+    invalidate      : obj_invalidate,
     hasMethod       : obj_id_false,
     hasProperty     : obj_id_false,
     getProperty     : obj_id_var_void,
@@ -431,8 +472,13 @@ static NPClass Rational_npclass = {
 static void
 Mpq_deallocate (NPObject *npobj)
 {
-    sBrowserFuncs->releaseobject
-        (&CONTAINING (TopObject, npobjMpq, npobj)->npobjTop);
+    TopObject* top = CONTAINING (TopObject, npobjMpq, npobj);
+#if DEBUG_ALLOC
+    fprintf (stderr, "Mpq deallocate %p; %u\n", npobj, (unsigned int) top->npobjTop.referenceCount);
+#endif  /* DEBUG_ALLOC */
+    /* Decrement the top object's reference count.  See comments in
+       Mpz_deallocate.  */
+    sBrowserFuncs->releaseobject (&top->npobjTop);
 }
 
 static bool
@@ -459,7 +505,7 @@ Mpq_invokeDefault (NPObject *npobj,
 static NPClass Mpq_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     deallocate      : Mpq_deallocate,
-    invalidate      : obj_noop,
+    invalidate      : obj_invalidate,
     hasMethod       : obj_id_false,
     invokeDefault   : Mpq_invokeDefault,
     hasProperty     : obj_id_false,
@@ -482,8 +528,13 @@ in_mpq_ptr (const NPVariant* var, mpq_ptr* arg)
 static void
 Mpq_numref_deallocate (NPObject *npobj)
 {
-    sBrowserFuncs->releaseobject
-        (&CONTAINING (TopObject, npobjMpq_numref, npobj)->npobjTop);
+    TopObject* top = CONTAINING (TopObject, npobjMpq_numref, npobj);
+#if DEBUG_ALLOC
+    fprintf (stderr, "Mpq_numref deallocate %p; %u\n", npobj, (unsigned int) top->npobjTop.referenceCount);
+#endif  /* DEBUG_ALLOC */
+    /* Decrement the top object's reference count.  See comments in
+       Mpz_deallocate.  */
+    sBrowserFuncs->releaseobject (&top->npobjTop);
 }
 
 static bool
@@ -503,7 +554,8 @@ Mpq_numref_invokeDefault (NPObject *npobj,
     ret = (MpzRef*) sBrowserFuncs->createobject (instance, &MpzRef_npclass);
 
     if (ret) {
-        ret->owner = NPVARIANT_TO_OBJECT (args[0]);
+        ret->owner = sBrowserFuncs->retainobject
+            (NPVARIANT_TO_OBJECT (args[0]));
         ret->mpp = &(mpq_numref (q))[0];
         OBJECT_TO_NPVARIANT (&ret->npobj, *result);
     }
@@ -515,7 +567,7 @@ Mpq_numref_invokeDefault (NPObject *npobj,
 static NPClass Mpq_numref_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     deallocate      : Mpq_numref_deallocate,
-    invalidate      : obj_noop,
+    invalidate      : obj_invalidate,
     hasMethod       : obj_id_false,
     invokeDefault   : Mpq_numref_invokeDefault,
     hasProperty     : obj_id_false,
@@ -542,7 +594,8 @@ Mpq_denref_invokeDefault (NPObject *npobj,
     ret = (MpzRef*) sBrowserFuncs->createobject (instance, &MpzRef_npclass);
 
     if (ret) {
-        ret->owner = NPVARIANT_TO_OBJECT (args[0]);
+        ret->owner = sBrowserFuncs->retainobject
+            (NPVARIANT_TO_OBJECT (args[0]));
         ret->mpp = &(mpq_denref (q))[0];
         OBJECT_TO_NPVARIANT (&ret->npobj, *result);
     }
@@ -554,14 +607,19 @@ Mpq_denref_invokeDefault (NPObject *npobj,
 static void
 Mpq_denref_deallocate (NPObject *npobj)
 {
-    sBrowserFuncs->releaseobject
-        (&CONTAINING (TopObject, npobjMpq_denref, npobj)->npobjTop);
+    TopObject* top = CONTAINING (TopObject, npobjMpq_denref, npobj);
+#if DEBUG_ALLOC
+    fprintf (stderr, "Mpq_denref deallocate %p; %u\n", npobj, (unsigned int) top->npobjTop.referenceCount);
+#endif  /* DEBUG_ALLOC */
+    /* Decrement the top object's reference count.  See comments in
+       Mpz_deallocate.  */
+    sBrowserFuncs->releaseobject (&top->npobjTop);
 }
 
 static NPClass Mpq_denref_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     deallocate      : Mpq_denref_deallocate,
-    invalidate      : obj_noop,
+    invalidate      : obj_invalidate,
     hasMethod       : obj_id_false,
     invokeDefault   : Mpq_denref_invokeDefault,
     hasProperty     : obj_id_false,
@@ -580,6 +638,9 @@ static NPObject*
 Float_allocate (NPP npp, NPClass *aClass)
 {
     Float* ret = (Float*) sBrowserFuncs->memalloc (sizeof (Float));
+#if DEBUG_ALLOC
+    fprintf (stderr, "Float allocate %p\n", ret);
+#endif  /* DEBUG_ALLOC */
     if (ret)
         mpf_init (ret->mp);
     return &ret->npobj;
@@ -588,6 +649,9 @@ Float_allocate (NPP npp, NPClass *aClass)
 static void
 Float_deallocate (NPObject *npobj)
 {
+#if DEBUG_ALLOC
+    fprintf (stderr, "Float deallocate %p\n", npobj);
+#endif  /* DEBUG_ALLOC */
     if (npobj)
         mpf_clear (((Float*) npobj)->mp);
     sBrowserFuncs->memfree (npobj);
@@ -597,7 +661,7 @@ static NPClass Float_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     allocate        : Float_allocate,
     deallocate      : Float_deallocate,
-    invalidate      : obj_noop,
+    invalidate      : obj_invalidate,
     hasMethod       : obj_id_false,
     hasProperty     : obj_id_false,
     getProperty     : obj_id_var_void,
@@ -609,8 +673,13 @@ static NPClass Float_npclass = {
 static void
 Mpf_deallocate (NPObject *npobj)
 {
-    sBrowserFuncs->releaseobject
-        (&CONTAINING (TopObject, npobjMpf, npobj)->npobjTop);
+    TopObject* top = CONTAINING (TopObject, npobjMpf, npobj);
+#if DEBUG_ALLOC
+    fprintf (stderr, "Mpf deallocate %p; %u\n", npobj, (unsigned int) top->npobjTop.referenceCount);
+#endif  /* DEBUG_ALLOC */
+    /* Decrement the top object's reference count.  See comments in
+       Mpz_deallocate.  */
+    sBrowserFuncs->releaseobject (&top->npobjTop);
 }
 
 static bool
@@ -637,7 +706,7 @@ Mpf_invokeDefault (NPObject *npobj,
 static NPClass Mpf_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     deallocate      : Mpf_deallocate,
-    invalidate      : obj_noop,
+    invalidate      : obj_invalidate,
     hasMethod       : obj_id_false,
     invokeDefault   : Mpf_invokeDefault,
     hasProperty     : obj_id_false,
@@ -666,12 +735,18 @@ static NPObject*
 Entry_allocate (NPP npp, NPClass *aClass)
 {
     Entry* ret = (Entry*) sBrowserFuncs->memalloc (sizeof (Entry));
+#if DEBUG_ALLOC
+    fprintf (stderr, "Entry allocate %p\n", ret);
+#endif  /* DEBUG_ALLOC */
     return &ret->npobj;
 }
 
 static void
 Entry_deallocate (NPObject *npobj)
 {
+#if DEBUG_ALLOC
+    fprintf (stderr, "Entry deallocate %p\n", npobj);
+#endif  /* DEBUG_ALLOC */
     sBrowserFuncs->memfree (npobj);
 }
 
@@ -815,7 +890,7 @@ static NPClass Entry_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     allocate        : Entry_allocate,
     deallocate      : Entry_deallocate,
-    invalidate      : obj_noop,
+    invalidate      : obj_invalidate,
     hasMethod       : obj_id_false,
     invokeDefault   : Entry_invokeDefault,
     hasProperty     : obj_id_false,
@@ -828,8 +903,13 @@ static NPClass Entry_npclass = {
 static void
 Gmp_deallocate (NPObject *npobj)
 {
-    sBrowserFuncs->releaseobject
-        (&CONTAINING (TopObject, npobjGmp, npobj)->npobjTop);
+    TopObject* top = CONTAINING (TopObject, npobjGmp, npobj);
+#if DEBUG_ALLOC
+    fprintf (stderr, "Gmp deallocate %p; %u\n", npobj, (unsigned int) top->npobjTop.referenceCount);
+#endif  /* DEBUG_ALLOC */
+    /* Decrement the top object's reference count.  See comments in
+       Mpz_deallocate.  */
+    sBrowserFuncs->releaseobject (&top->npobjTop);
 }
 
 static bool
@@ -933,7 +1013,7 @@ Gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 static NPClass Gmp_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     deallocate      : Gmp_deallocate,
-    invalidate      : obj_noop,
+    invalidate      : obj_invalidate,
     hasMethod       : obj_id_false,
     hasProperty     : Gmp_hasProperty,
     getProperty     : Gmp_getProperty,
@@ -947,6 +1027,9 @@ TopObject_allocate (NPP instance, NPClass *aClass)
 {
     TopObject* ret = (TopObject*)
         sBrowserFuncs->memalloc (sizeof (TopObject));
+#if DEBUG_ALLOC
+    fprintf (stderr, "TopObject allocate %p\n", ret);
+#endif  /* DEBUG_ALLOC */
     if (ret) {
         memset (ret, '\0', sizeof *ret);
         ret->instance = instance;
@@ -963,6 +1046,9 @@ TopObject_allocate (NPP instance, NPClass *aClass)
 static void
 TopObject_deallocate (NPObject *npobj)
 {
+#if DEBUG_ALLOC
+    fprintf (stderr, "TopObject deallocate %p\n", npobj);
+#endif  /* DEBUG_ALLOC */
     sBrowserFuncs->memfree (npobj);
 }
 
@@ -997,7 +1083,7 @@ static NPClass TopObject_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     allocate        : TopObject_allocate,
     deallocate      : TopObject_deallocate,
-    invalidate      : obj_noop,
+    invalidate      : obj_invalidate,
     hasMethod       : obj_id_false,
     hasProperty     : TopObject_hasProperty,
     getProperty     : TopObject_getProperty,
@@ -1022,6 +1108,9 @@ npp_New(NPMIMEType pluginType, NPP instance, uint16_t mode,
 static NPError
 npp_Destroy(NPP instance, NPSavedData** save) {
     void* data = instance->pdata;
+#if DEBUG_ALLOC
+    fprintf (stderr, "npp_Destroy: pdata=%p\n", data);
+#endif  /* DEBUG_ALLOC */
     instance->pdata = 0;
     if (data)
         sBrowserFuncs->releaseobject ((NPObject*) data);
