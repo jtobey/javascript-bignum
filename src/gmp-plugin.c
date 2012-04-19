@@ -217,15 +217,16 @@ Integer_deallocate (NPObject *npobj)
     sBrowserFuncs->memfree (npobj);
 }
 
-static bool Integer_toString (NPObject *npobj, const NPVariant *args,
-                              uint32_t argCount, NPVariant *result);
+static bool mpp_toString (NPObject *npobj, mpz_ptr mpp, const NPVariant *args,
+                          uint32_t argCount, NPVariant *result);
 
 static bool
 Integer_invoke (NPObject *npobj, NPIdentifier name,
                 const NPVariant *args, uint32_t argCount, NPVariant *result)
 {
+    Integer* z = (Integer*) npobj;
     if (name == ID_toString)
-        return Integer_toString (npobj, args, argCount, result);
+        return mpp_toString (npobj, z->mp, args, argCount, result);
     sBrowserFuncs->setexception (npobj, "no such method");
     return true;
 }
@@ -259,7 +260,7 @@ Mpz_invokeDefault (NPObject *npobj,
     Integer* ret;
 
     if (argCount != 0) {
-        sBrowserFuncs->setexception (npobj, "invalid argument");
+        sBrowserFuncs->setexception (npobj, "wrong type arguments");
         return true;
     }
 
@@ -285,16 +286,6 @@ static NPClass Mpz_npclass = {
     enumerate       : enumerate_empty
 };
 
-static inline bool
-in_mpz_ptr (const NPVariant* var, mpz_ptr* arg)
-{
-    if (!NPVARIANT_IS_OBJECT (*var)
-        || NPVARIANT_TO_OBJECT (*var)->_class != &Integer_npclass)
-        return false;
-    *arg = &((Integer*) NPVARIANT_TO_OBJECT (*var))->mp[0];
-    return true;
-}
-
 typedef int int_0_or_2_to_62;
 typedef int int_2_to_62;
 
@@ -314,25 +305,19 @@ DEFINE_IN_UNSIGNED (mp_bitcnt_t)
 DEFINE_OUT_NUMBER (mp_bitcnt_t)
 
 static bool
-Integer_toString (NPObject *npobj, const NPVariant *args,
-                  uint32_t argCount, NPVariant *result)
+mpp_toString (NPObject *npobj, mpz_ptr mpp, const NPVariant *args,
+              uint32_t argCount, NPVariant *result)
 {
     int base = 0;
-
-    if (npobj->_class != &Integer_npclass) {
-        sBrowserFuncs->setexception (npobj, "wrong type argument");
-        return true;
-    }
 
     if (argCount == 0 || !in_int (&args[0], &base))
         base = 10;
 
     if (base >= -36 && base <= 62 && base != 0 && base != -1 && base != 1) {
-        Integer* z = (Integer*) npobj;
-        size_t len = mpz_sizeinbase (z->mp, base) + 2;
+        size_t len = mpz_sizeinbase (mpp, base) + 2;
         NPUTF8* s = sBrowserFuncs->memalloc (len);
         if (s) {
-            mpz_get_str (s, base, z->mp);
+            mpz_get_str (s, base, mpp);
             if (s[0] != '-')
                 len--;
             STRINGN_TO_NPVARIANT (s, s[len-2] ? len-1 : len-2, *result);
@@ -342,6 +327,69 @@ Integer_toString (NPObject *npobj, const NPVariant *args,
     }
     else
         sBrowserFuncs->setexception (npobj, "invalid argument");
+    return true;
+}
+
+typedef struct _MpzRef {
+    NPObject npobj;
+    mpz_ptr mpp;
+    NPObject* owner;
+} MpzRef;
+
+static NPObject*
+MpzRef_allocate (NPP npp, NPClass *aClass)
+{
+    MpzRef* ret = (MpzRef*) sBrowserFuncs->memalloc (sizeof (MpzRef));
+    if (ret)
+        ret->owner = 0;
+    return &ret->npobj;
+}
+
+static void
+MpzRef_deallocate (NPObject *npobj)
+{
+    MpzRef* ref = (MpzRef*) npobj;
+    if (ref->owner)
+        sBrowserFuncs->releaseobject (ref->owner);
+    sBrowserFuncs->memfree (npobj);
+}
+
+static bool
+MpzRef_invoke (NPObject *npobj, NPIdentifier name,
+               const NPVariant *args, uint32_t argCount, NPVariant *result)
+{
+    MpzRef* ref = (MpzRef*) npobj;
+    if (name == ID_toString)
+        return mpp_toString (npobj, ref->mpp, args, argCount, result);
+    sBrowserFuncs->setexception (npobj, "no such method");
+    return true;
+}
+
+static NPClass MpzRef_npclass = {
+    structVersion   : NP_CLASS_STRUCT_VERSION,
+    allocate        : MpzRef_allocate,
+    deallocate      : MpzRef_deallocate,
+    invalidate      : obj_noop,
+    hasMethod       : hasMethod_only_toString,
+    invoke          : MpzRef_invoke,
+    hasProperty     : obj_id_false,
+    getProperty     : obj_id_var_void,
+    setProperty     : setProperty_ro,
+    removeProperty  : removeProperty_ro,
+    enumerate       : enumerate_only_toString
+};
+
+static inline bool
+in_mpz_ptr (const NPVariant* var, mpz_ptr* arg)
+{
+    if (!NPVARIANT_IS_OBJECT (*var))
+        return false;
+    if (NPVARIANT_TO_OBJECT (*var)->_class == &Integer_npclass)
+        *arg = &((Integer*) NPVARIANT_TO_OBJECT (*var))->mp[0];
+    else if (NPVARIANT_TO_OBJECT (*var)->_class == &MpzRef_npclass)
+        *arg = ((MpzRef*) NPVARIANT_TO_OBJECT (*var))->mpp;
+    else
+        return false;
     return true;
 }
 
@@ -430,6 +478,98 @@ in_mpq_ptr (const NPVariant* var, mpq_ptr* arg)
     *arg = &((Rational*) NPVARIANT_TO_OBJECT (*var))->mp[0];
     return true;
 }
+
+static void
+Mpq_numref_deallocate (NPObject *npobj)
+{
+    sBrowserFuncs->releaseobject
+        (&CONTAINING (TopObject, npobjMpq_numref, npobj)->npobjTop);
+}
+
+static bool
+Mpq_numref_invokeDefault (NPObject *npobj,
+                          const NPVariant *args, uint32_t argCount,
+                          NPVariant *result)
+{
+    NPP instance = CONTAINING (TopObject, npobjMpq_numref, npobj)->instance;
+    mpq_ptr q;
+    MpzRef* ret;
+
+    if (argCount != 1 || !in_mpq_ptr (&args[0], &q)) {
+        sBrowserFuncs->setexception (npobj, "wrong type arguments");
+        return true;
+    }
+
+    ret = (MpzRef*) sBrowserFuncs->createobject (instance, &MpzRef_npclass);
+
+    if (ret) {
+        ret->owner = NPVARIANT_TO_OBJECT (args[0]);
+        ret->mpp = &(mpq_numref (q))[0];
+        OBJECT_TO_NPVARIANT (&ret->npobj, *result);
+    }
+    else
+        sBrowserFuncs->setexception (npobj, "out of memory");
+    return true;
+}
+
+static NPClass Mpq_numref_npclass = {
+    structVersion   : NP_CLASS_STRUCT_VERSION,
+    deallocate      : Mpq_numref_deallocate,
+    invalidate      : obj_noop,
+    hasMethod       : obj_id_false,
+    invokeDefault   : Mpq_numref_invokeDefault,
+    hasProperty     : obj_id_false,
+    getProperty     : obj_id_var_void,
+    setProperty     : setProperty_ro,
+    removeProperty  : removeProperty_ro,
+    enumerate       : enumerate_empty
+};
+
+static bool
+Mpq_denref_invokeDefault (NPObject *npobj,
+                          const NPVariant *args, uint32_t argCount,
+                          NPVariant *result)
+{
+    NPP instance = CONTAINING (TopObject, npobjMpq_denref, npobj)->instance;
+    mpq_ptr q;
+    MpzRef* ret;
+
+    if (argCount != 1 || !in_mpq_ptr (&args[0], &q)) {
+        sBrowserFuncs->setexception (npobj, "wrong type arguments");
+        return true;
+    }
+
+    ret = (MpzRef*) sBrowserFuncs->createobject (instance, &MpzRef_npclass);
+
+    if (ret) {
+        ret->owner = NPVARIANT_TO_OBJECT (args[0]);
+        ret->mpp = &(mpq_denref (q))[0];
+        OBJECT_TO_NPVARIANT (&ret->npobj, *result);
+    }
+    else
+        sBrowserFuncs->setexception (npobj, "out of memory");
+    return true;
+}
+
+static void
+Mpq_denref_deallocate (NPObject *npobj)
+{
+    sBrowserFuncs->releaseobject
+        (&CONTAINING (TopObject, npobjMpq_denref, npobj)->npobjTop);
+}
+
+static NPClass Mpq_denref_npclass = {
+    structVersion   : NP_CLASS_STRUCT_VERSION,
+    deallocate      : Mpq_denref_deallocate,
+    invalidate      : obj_noop,
+    hasMethod       : obj_id_false,
+    invokeDefault   : Mpq_denref_invokeDefault,
+    hasProperty     : obj_id_false,
+    getProperty     : obj_id_var_void,
+    setProperty     : setProperty_ro,
+    removeProperty  : removeProperty_ro,
+    enumerate       : enumerate_empty
+};
 
 typedef struct _Float {
     NPObject npobj;
@@ -813,6 +953,8 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->npobjGmp._class = &Gmp_npclass;
         ret->npobjMpz._class = &Mpz_npclass;
         ret->npobjMpq._class = &Mpq_npclass;
+        ret->npobjMpq_numref._class = &Mpq_numref_npclass;
+        ret->npobjMpq_denref._class = &Mpq_denref_npclass;
         ret->npobjMpf._class = &Mpf_npclass;
     }
     return &ret->npobjTop;

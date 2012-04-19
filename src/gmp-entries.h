@@ -174,6 +174,8 @@ ENTRY2(mpz_sizeinbase, "mpz_sizeinbase", np_mpz_sizeinbase, size_t, mpz_ptr, int
 ENTRY1(mpz_size, "mpz_size", np_mpz_size, size_t, mpz_ptr)
 
 CTOR("mpq", npobjMpq)
+CTOR("mpq_numref", npobjMpq_numref)
+CTOR("mpq_denref", npobjMpq_denref)
 ENTRY1v(mpq_canonicalize, "mpq_canonicalize", np_mpq_canonicalize, mpq_ptr)
 ENTRY2v(mpq_set, "mpq_set", np_mpq_set, mpq_ptr, mpq_ptr)
 ENTRY2v(mpq_set_z, "mpq_set_z", np_mpq_set_z, mpq_ptr, mpz_ptr)

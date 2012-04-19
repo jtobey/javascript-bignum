@@ -14,11 +14,17 @@ TODO:
 * Support primitive numbers as exact values using conditionals,
   typeof, and lifting as in js-numbers.
 
-* Finish the GMP plugin and create integer and rational
-  implementations on it.  Interface design ideas: Flusspferd
-  (http://flusspferd.github.com/) GMP module, node-gmp
-  (https://github.com/postwait/node-gmp), node-bigint
-  (https://github.com/substack/node-bigint).
+* This returns 5 (correctly) on FF but 3 on Chrome:
+    var ret = gmp.mpq();
+    gmp.mpq_set_str(ret,"2/3",0);
+    var nr = gmp.mpq_numref(ret);
+    gmp.mpz_add(nr,nr,gmp.mpq_denref(ret));
+    return nr.toString();
+
+* Create integer and rational implementations using the GMP plug-in.
+  Interface design ideas: Flusspferd (http://flusspferd.github.com/)
+  GMP module, node-gmp (https://github.com/postwait/node-gmp),
+  node-bigint (https://github.com/substack/node-bigint).
 
 * On GMP, consider hybrid implementations with runtime optimal
   threshold discovery, since the plugin may or may not be in-process,
@@ -30,8 +36,11 @@ TODO:
 * Add MPFR functions to the GMP plugin.  Create a high-precision
   inexact number implementation on MPFR.
 
-* FF in-process crash on exit, perhaps printing "out of memory": var
-  a=[]; for (var i in lib) {a.push(i)} alert(a);
+* FF in-process crash on exit, perhaps printing "out of memory":
+    var a=[]; for (var i in lib) {a.push(i)} alert(a);
+  Also crash on exit after running the mpq_numref example above.
+
+* Consider adding GMP bindings for randstate and mpf_t.
 
 * Reimplement the performance benefit of using Number.prototype for
   inexact, but make it optional.
