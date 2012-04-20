@@ -385,69 +385,6 @@ static NPClass Integer_npclass = {
 };
 
 /*
- * The mpz() function's class.
- */
-
-static void
-Mpz_deallocate (NPObject *npobj)
-{
-    TopObject* top = CONTAINING (TopObject, npobjMpz, npobj);
-#if DEBUG_ALLOC
-    fprintf (stderr, "Mpz deallocate %p; %u\n", npobj, (unsigned int) top->npobjTop.referenceCount);
-#endif  /* DEBUG_ALLOC */
-
-    /* Decrement the top object's reference count.  In theory, this
-       could be dangerous, and the top object should implement
-       invalidate() and somehow inform objects referring to it not to
-       bother.  Quoth npruntime.h: "The runtime will typically return
-       immediately, with 0 or NULL, from an attempt to dispatch to [an
-       invalidated] NPObject, but this behavior should not be depended
-       upon."  I choose to depend on it anyway, because I consider
-       browsers more likely to cope with calls on freed objects than
-       to call my invalidate() at a useful time.  Browsers appear to
-       call invalidate() immediately before deallocate(), which is
-       useless.  Trying to keep a list of live objects or note when
-       NPP_Destroy has been called on an object's instance would
-       complicate and slow down the code too much.
-     */
-    sBrowserFuncs->releaseobject (&top->npobjTop);
-}
-
-static bool
-Mpz_invokeDefault (NPObject *npobj,
-                   const NPVariant *args, uint32_t argCount, NPVariant *result)
-{
-    NPP instance = CONTAINING (TopObject, npobjMpz, npobj)->instance;
-    Integer* ret;
-
-    if (argCount != 0) {
-        sBrowserFuncs->setexception (npobj, "wrong type arguments");
-        return true;
-    }
-
-    ret = (Integer*) sBrowserFuncs->createobject (instance, &Integer_npclass);
-
-    if (ret)
-        OBJECT_TO_NPVARIANT (&ret->npobj, *result);
-    else
-        sBrowserFuncs->setexception (npobj, "out of memory");
-    return true;
-}
-
-static NPClass Mpz_npclass = {
-    structVersion   : NP_CLASS_STRUCT_VERSION,
-    deallocate      : Mpz_deallocate,
-    invalidate      : obj_invalidate,
-    hasMethod       : obj_id_false,
-    invokeDefault   : Mpz_invokeDefault,
-    hasProperty     : obj_id_false,
-    getProperty     : obj_id_var_void,
-    setProperty     : setProperty_ro,
-    removeProperty  : removeProperty_ro,
-    enumerate       : enumerate_empty
-};
-
-/*
  * GMP-specific scalar types.
  */
 
@@ -560,8 +497,9 @@ in_mpz_ptr (const NPVariant* var, int count, mpz_ptr* arg)
 #define del_mpz_ptr(arg)
 
 DEFINE_OBJECT_TYPE (new_mpz, Integer, mpz_ptr, mp[0])
-#define in_new_mpz(var, count, arg) IN_NEW (new_mpz, var, arg)
+#define in_new_mpz(var, count, arg) IN_NEW (new_mpz, arg)
 #define out_new_mpz OUT_NEW
+
 /*
  * Rational objects wrap mpq_t.
  */
@@ -620,58 +558,8 @@ in_mpq_ptr (const NPVariant* var, int count, mpq_ptr* arg)
 #define del_mpq_ptr(arg)
 
 DEFINE_OBJECT_TYPE (new_mpq, Rational, mpq_ptr, mp[0])
-#define in_new_mpq(var, count, arg) IN_NEW (new_mpq, var, arg)
+#define in_new_mpq(var, count, arg) IN_NEW (new_mpq, arg)
 #define out_new_mpq OUT_NEW
-
-/*
- * The mpq() function's class.
- */
-
-static void
-Mpq_deallocate (NPObject *npobj)
-{
-    TopObject* top = CONTAINING (TopObject, npobjMpq, npobj);
-#if DEBUG_ALLOC
-    fprintf (stderr, "Mpq deallocate %p; %u\n", npobj, (unsigned int) top->npobjTop.referenceCount);
-#endif  /* DEBUG_ALLOC */
-    /* Decrement the top object's reference count.  See comments in
-       Mpz_deallocate.  */
-    sBrowserFuncs->releaseobject (&top->npobjTop);
-}
-
-static bool
-Mpq_invokeDefault (NPObject *npobj,
-                   const NPVariant *args, uint32_t argCount, NPVariant *result)
-{
-    NPP instance = CONTAINING (TopObject, npobjMpq, npobj)->instance;
-    Rational* ret;
-
-    if (argCount != 0) {
-        sBrowserFuncs->setexception (npobj, "invalid argument");
-        return true;
-    }
-
-    ret = (Rational*) sBrowserFuncs->createobject (instance, &Rational_npclass);
-
-    if (ret)
-        OBJECT_TO_NPVARIANT (&ret->npobj, *result);
-    else
-        sBrowserFuncs->setexception (npobj, "out of memory");
-    return true;
-}
-
-static NPClass Mpq_npclass = {
-    structVersion   : NP_CLASS_STRUCT_VERSION,
-    deallocate      : Mpq_deallocate,
-    invalidate      : obj_invalidate,
-    hasMethod       : obj_id_false,
-    invokeDefault   : Mpq_invokeDefault,
-    hasProperty     : obj_id_false,
-    getProperty     : obj_id_var_void,
-    setProperty     : setProperty_ro,
-    removeProperty  : removeProperty_ro,
-    enumerate       : enumerate_empty
-};
 
 /*
  * The mpq_numref function's class.
@@ -842,55 +730,9 @@ in_mpf_ptr (const NPVariant* var, int count, mpf_ptr* arg)
 
 #define del_mpf_ptr(arg)
 
-/*
- * The mpf() function's class.
- */
-
-static void
-Mpf_deallocate (NPObject *npobj)
-{
-    TopObject* top = CONTAINING (TopObject, npobjMpf, npobj);
-#if DEBUG_ALLOC
-    fprintf (stderr, "Mpf deallocate %p; %u\n", npobj, (unsigned int) top->npobjTop.referenceCount);
-#endif  /* DEBUG_ALLOC */
-    /* Decrement the top object's reference count.  See comments in
-       Mpz_deallocate.  */
-    sBrowserFuncs->releaseobject (&top->npobjTop);
-}
-
-static bool
-Mpf_invokeDefault (NPObject *npobj,
-                   const NPVariant *args, uint32_t argCount, NPVariant *result)
-{
-    NPP instance = CONTAINING (TopObject, npobjMpf, npobj)->instance;
-    Float* ret;
-
-    if (argCount != 0) {
-        sBrowserFuncs->setexception (npobj, "invalid argument");
-        return true;
-    }
-
-    ret = (Float*) sBrowserFuncs->createobject (instance, &Float_npclass);
-
-    if (ret)
-        OBJECT_TO_NPVARIANT (&ret->npobj, *result);
-    else
-        sBrowserFuncs->setexception (npobj, "out of memory");
-    return true;
-}
-
-static NPClass Mpf_npclass = {
-    structVersion   : NP_CLASS_STRUCT_VERSION,
-    deallocate      : Mpf_deallocate,
-    invalidate      : obj_invalidate,
-    hasMethod       : obj_id_false,
-    invokeDefault   : Mpf_invokeDefault,
-    hasProperty     : obj_id_false,
-    getProperty     : obj_id_var_void,
-    setProperty     : setProperty_ro,
-    removeProperty  : removeProperty_ro,
-    enumerate       : enumerate_empty
-};
+DEFINE_OBJECT_TYPE (new_mpf, Float, mpf_ptr, mp[0])
+#define in_new_mpf(var, count, arg) IN_NEW (new_mpf, arg)
+#define out_new_mpf OUT_NEW
 
 /*
  * Rand objects wrap gmp_randstate_t.
@@ -950,91 +792,9 @@ in_x_gmp_randstate_ptr (const NPVariant* var, int count,
 
 #define del_x_gmp_randstate_ptr(arg)
 
-static void
-x_gmp_randinit_default (x_gmp_randstate_ptr state)
-{
-    gmp_randclear (state);
-    gmp_randinit_default (state);
-}
-
-static void
-x_gmp_randinit_mt (x_gmp_randstate_ptr state)
-{
-    gmp_randclear (state);
-    gmp_randinit_mt (state);
-}
-
-static void
-x_gmp_randinit_lc_2exp (x_gmp_randstate_ptr state, mpz_ptr a, ulong c,
-                        mp_bitcnt_t m2exp)
-{
-    gmp_randclear (state);
-    gmp_randinit_lc_2exp (state, a, c, m2exp);
-}
-
-static int
-x_gmp_randinit_lc_2exp_size (x_gmp_randstate_ptr state, mp_bitcnt_t size)
-{
-    gmp_randclear (state);
-    return gmp_randinit_lc_2exp_size (state, size);
-}
-
-static void
-x_gmp_randinit_set (x_gmp_randstate_ptr rop, x_gmp_randstate_ptr op)
-{
-    gmp_randclear (rop);
-    gmp_randinit_set (rop, op);
-}
-
-/*
- * The randstate() function's class.
- */
-
-static void
-Randstate_deallocate (NPObject *npobj)
-{
-    TopObject* top = CONTAINING (TopObject, npobjRandstate, npobj);
-#if DEBUG_ALLOC
-    fprintf (stderr, "Randstate deallocate %p; %u\n", npobj, (unsigned int) top->npobjTop.referenceCount);
-#endif  /* DEBUG_ALLOC */
-    /* Decrement the top object's reference count.  See comments in
-       Mpz_deallocate.  */
-    sBrowserFuncs->releaseobject (&top->npobjTop);
-}
-
-static bool
-Randstate_invokeDefault (NPObject *npobj,
-                   const NPVariant *args, uint32_t argCount, NPVariant *result)
-{
-    NPP instance = CONTAINING (TopObject, npobjRandstate, npobj)->instance;
-    Rand* ret;
-
-    if (argCount != 0) {
-        sBrowserFuncs->setexception (npobj, "invalid argument");
-        return true;
-    }
-
-    ret = (Rand*) sBrowserFuncs->createobject (instance, &Rand_npclass);
-
-    if (ret)
-        OBJECT_TO_NPVARIANT (&ret->npobj, *result);
-    else
-        sBrowserFuncs->setexception (npobj, "out of memory");
-    return true;
-}
-
-static NPClass Randstate_npclass = {
-    structVersion   : NP_CLASS_STRUCT_VERSION,
-    deallocate      : Randstate_deallocate,
-    invalidate      : obj_invalidate,
-    hasMethod       : obj_id_false,
-    invokeDefault   : Randstate_invokeDefault,
-    hasProperty     : obj_id_false,
-    getProperty     : obj_id_var_void,
-    setProperty     : setProperty_ro,
-    removeProperty  : removeProperty_ro,
-    enumerate       : enumerate_empty
-};
+DEFINE_OBJECT_TYPE (new_rand, Rand, x_gmp_randstate_ptr, state[0])
+#define in_new_rand(var, count, arg) IN_NEW (new_rand, arg)
+#define out_new_rand OUT_NEW
 
 /*
  * Class of ordinary functions like mpz_add.
@@ -1101,10 +861,12 @@ Entry_invokeDefault (NPObject *vEntry,
     (vArgNumber++,                                                      \
      in_ ## t (&vArgs[vArgNumber-1], vArgCount + 1 - vArgNumber, &a ## t))
 
-#define IN_NEW(func, var, arg) (vArgNumber--, func (vEntry, vResult, arg))
+#define IN_NEW(func, arg) (vArgNumber--, func (vEntry, vResult, arg))
 
     mpz_ptr a0new_mpz;
     mpq_ptr a0new_mpq;
+    mpf_ptr a0new_mpf;
+    x_gmp_randstate_ptr a0new_rand;
 
     switch (CONTAINING (Entry, npobj, vEntry)->number) {
 
@@ -1333,12 +1095,8 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         memset (ret, '\0', sizeof *ret);
         ret->instance                      = instance;
         ret->npobjGmp._class               = &Gmp_npclass;
-        ret->npobjMpz._class               = &Mpz_npclass;
-        ret->npobjMpq._class               = &Mpq_npclass;
         ret->npobjMpq_numref._class        = &Mpq_numref_npclass;
         ret->npobjMpq_denref._class        = &Mpq_denref_npclass;
-        ret->npobjMpf._class               = &Mpf_npclass;
-        ret->npobjRandstate._class         = &Randstate_npclass;
         ret->Entry_npclass.structVersion   = NP_CLASS_STRUCT_VERSION;
         ret->Entry_npclass.allocate        = Entry_allocate;
         ret->Entry_npclass.deallocate      = Entry_deallocate;

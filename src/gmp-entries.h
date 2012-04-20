@@ -25,8 +25,6 @@
 
 // http://gmplib.org/manual/Integer-Functions.html
 
-// The mpz() function is deprecated!
-CTOR("mpz", npobjMpz)
 ENTRY1(mpz_init, "mpz_init", np_mpz_init, new_mpz, new_mpz)
 // mpz_inits: C-specific.
 // mpz_init2: use mpz + mpz_realloc2.
@@ -178,8 +176,6 @@ ENTRY1(mpz_size, "mpz_size", np_mpz_size, size_t, mpz_ptr)
 
 ENTRY1(mpq_canonicalize, "mpq_canonicalize", np_mpq_canonicalize, void, mpq_ptr)
 ENTRY1(mpq_init, "mpq_init", np_mpq_init, new_mpq, new_mpq)
-CTOR("mpq", npobjMpq)
-// mpq_init: C-specific; use mpq().
 // mpq_inits: C-specific.
 // mpq_clear: called automatically.
 // mpq_clears: C-specific.
@@ -215,22 +211,19 @@ ENTRY2(mpq_set_num, "mpq_set_num", np_mpq_set_num, void, mpq_ptr, mpz_ptr)
 ENTRY2(mpq_set_den, "mpq_set_den", np_mpq_set_den, void, mpq_ptr, mpz_ptr)
 // mpq_out_str, mpq_inp_str: not relevant to plugin.
 
-CTOR("mpf", npobjMpf)
+ENTRY1(mpf_init, "mpf_init", np_mpf_init, new_mpf, new_mpf)
 
-CTOR("randstate", npobjRandstate)
-ENTRY1(x_gmp_randinit_default, "gmp_randinit_default", np_gmp_randinit_default, void, x_gmp_randstate_ptr)
-ENTRY1(x_gmp_randinit_mt, "gmp_randinit_mt", np_gmp_randinit_mt, void, x_gmp_randstate_ptr)
-ENTRY4(x_gmp_randinit_lc_2exp, "gmp_randinit_lc_2exp", np_gmp_randinit_lc_2exp, void, x_gmp_randstate_ptr, mpz_ptr, ulong, mp_bitcnt_t)
-ENTRY2(x_gmp_randinit_lc_2exp_size, "gmp_randinit_lc_2exp_size", np_gmp_randinit_lc_2exp_size, int, x_gmp_randstate_ptr, mp_bitcnt_t)
-ENTRY2(x_gmp_randinit_set, "gmp_randinit_set", np_gmp_randinit_set, void, x_gmp_randstate_ptr, x_gmp_randstate_ptr)
+ENTRY1(gmp_randinit_default, "gmp_randinit_default", np_gmp_randinit_default, new_rand, new_rand)
+ENTRY1(gmp_randinit_mt, "gmp_randinit_mt", np_gmp_randinit_mt, new_rand, new_rand)
+ENTRY4(gmp_randinit_lc_2exp, "gmp_randinit_lc_2exp", np_gmp_randinit_lc_2exp, new_rand, new_rand, mpz_ptr, ulong, mp_bitcnt_t)
+//ENTRY2(gmp_randinit_lc_2exp_size, "gmp_randinit_lc_2exp_size", np_gmp_randinit_lc_2exp_size, int/new_rand, new_rand, mp_bitcnt_t)
+ENTRY2(gmp_randinit_set, "gmp_randinit_set", np_gmp_randinit_set, new_rand, new_rand, x_gmp_randstate_ptr)
 // gmp_randinit: obsolete and variadic.
 // gmp_randclear: called automatically.
 ENTRY2(gmp_randseed, "gmp_randseed", np_gmp_randseed, void, x_gmp_randstate_ptr, mpz_ptr)
 ENTRY2(gmp_randseed_ui, "gmp_randseed_ui", np_gmp_randseed_ui, void, x_gmp_randstate_ptr, ulong)
 ENTRY2(gmp_urandomb_ui, "gmp_urandomb_ui", np_gmp_urandomb_ui, ulong, x_gmp_randstate_ptr, ulong)
 ENTRY2(gmp_urandomm_ui, "gmp_urandomm_ui", np_gmp_urandomm_ui, ulong, x_gmp_randstate_ptr, ulong)
-
-//CTOR("mpfr", npobjMpfr)
 
 // XXX mpf and mpfr operations.
 
