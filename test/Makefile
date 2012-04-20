@@ -27,6 +27,10 @@ ecma-node: jstest.js $(JSDEP)
 ecma-rhino: jstest.js $(JSDEP)
 	$(RHINO) $<
 
+test-sn.html: gen-test.pl node.out.good
+	./gen-test.pl html < node.out.good > $@.tmp
+	mv $@.tmp $@
+
 test-sn.%: gen-test.pl
 	./$< $* > $@.tmp
 	mv $@.tmp $@

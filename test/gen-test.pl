@@ -150,6 +150,8 @@ for my $code (sort(keys(%DATA))) {
     &splice_subtypes($code);
 }
 
+my $num_tests = 0;
+
 sub prolog_scheme {
     print(<<'END');
 #!r6rs
@@ -193,6 +195,50 @@ sub gen_scheme {
     print(qq/))\n/);
 }
 
+sub prolog_html {
+    print(<<'END');
+<html><head>
+<script src="../biginteger.js"></script>
+<script src="../schemeNumber.js"></script>
+<script>
+var expected, okElt, triedElt, timeElt, ok, tried, started;
+function expect(output, fname, a, b, c) {
+    expected = output;
+    switch (arguments.length) {
+    case 2: test(fname);          break;
+    case 3: test(fname, a);       break;
+    case 4: test(fname, a, b);    break;
+    case 5: test(fname, a, b, c); break;
+    }
+}
+function update_stats() {
+    triedElt.innerHTML = String(tried);
+    okElt.innerHTML = String(ok);
+    timeElt.innerHTML = String(((new Date).getTime() - started) / 1000);
+}
+function show_result(expr, out) {
+    tried++;
+    if (out == expected)
+        ok++;
+    else
+        console.log(expr + " " + out + ", expected " + expected);
+    if (tried % 100 === 0)
+        update_stats();
+}
+END
+    setup_js();
+    print(<<'END');
+function run_tests() {
+    okElt = document.getElementById('ok');
+    triedElt = document.getElementById('tried');
+    timeElt = document.getElementById('time');
+    ok = 0;
+    tried = 0;
+    alert("Click OK to start");
+    started = (new Date).getTime();
+END
+}
+
 sub prolog_js {
     print(<<'END');
 var BigInteger, SchemeNumber;
@@ -203,10 +249,20 @@ if (typeof require === "undefined") {
 } else {
     SchemeNumber = require('../schemeNumber').SchemeNumber;
 }
+var show_result;
+if (typeof print !== "undefined")
+    show_result = function(expr, out) { print(expr + " " + out) };
+else
+    show_result = function(expr, out) {
+        console.log(expr + " " + out);
+        process.stdout.flush();
+    };
+END
+    setup_js();
+}
 
-if (typeof print === "undefined")
-    var print = function(s) { console.log(s); process.stdout.flush(); };
-
+sub setup_js {
+    print(<<'END');
 var fn = SchemeNumber.fn;
 var isNumber = fn["number?"];
 var ns = fn["number->string"];
@@ -221,16 +277,16 @@ function myNs(a) {
     return ns(a);  // Omit extra arguments.
 }
 function test(fname, a, b, c) {
-    var line = "(" + fname;
+    var expr = "(" + fname;
     var len = arguments.length;
     for (var i = 1; i < len; i++) {
         var arg = arguments[i];
-        line += " " + arg;
+        expr += " " + arg;
         var num = nums[arg];
         arguments[i] = (num === undefined ? arg : nums[arg]);
     }
-    line += ") ";
-    var x;
+    expr += ")";
+    var x, out;
     try {
         switch(len) {
         case 1: x = fn[fname]();        break;
@@ -239,16 +295,16 @@ function test(fname, a, b, c) {
         case 4: x = fn[fname](a, b, c); break;
         default: x = "Error - unhandled case " + len + " arguments";
         }
-        if (isNumber(x)) line += ns(x);
-        else if (x === true) line += "#t";
-        else if (x === false) line += "#f";
-        else if (x instanceof Array) line += x.map(myNs).join(",");
-        else line += '"' + x + '"';
+        if (isNumber(x)) out = ns(x);
+        else if (x === true) out = "#t";
+        else if (x === false) out = "#f";
+        else if (x instanceof Array) out = x.map(myNs).join(",");
+        else out = '"' + x + '"';
     }
     catch(e) {
-        line += e;
+        out = e;
     }
-    print(line);
+    show_result(expr, out);
 }
 END
 }
@@ -258,11 +314,41 @@ sub gen_js {
     print(qq/test("/ . join('", "', $fn, @args) . qq/");\n/);
 }
 
+sub gen_html {
+    # XXX Perl can't find the right answers, expect them on stdin.
+    my $line = <>;
+    return if !defined($line);
+    if ($line !~ /^\((.*)\) (.+)$/) {
+        warn("ignored line: $line");
+        return;
+    }
+    my ($answer, $fn, @args) = ($2, split(/ /, $1));
+    $answer =~ s/\"/\\\"/g;
+    print(qq/expect("/ . join('", "', $answer, $fn, @args) . qq/");\n/);
+    $num_tests++;
+}
+
 sub epilog_js {
     print(<<'END');
 for (var i in this) {
     print(i);
 }
+END
+}
+
+sub epilog_html {
+    print(<<END);
+    update_stats();
+    document.getElementById('done').innerHTML = " Done!";
+}
+</script>
+</head><body onload="run_tests()">
+<p>Passed
+<span id="ok">0</span> of
+<span id="tried">0</span> in
+<span id="time">0</span> sec...
+<span id="done"></span></p>
+</body></html>
 END
 }
 
@@ -298,6 +384,11 @@ elsif ($lang eq 'js') {
     &gen_all(\&gen_js);
     &epilog_js();
 }
+elsif ($lang eq 'html') {
+    &prolog_html();
+    &gen_all(\&gen_html);
+    &epilog_html();
+}
 else {
-    die("Usage: $0 { scheme | js }\n");
+    die("Usage: $0 { scheme | js | html }\n");
 }
