@@ -34,6 +34,7 @@ static NPIdentifier ID_toString;
 typedef struct _TopObject {
     NPObject npobjTop;
     NPP instance;
+    bool destroying;
     NPObject npobjGmp;
     NPClass Entry_npclass;
 #define CTOR(string, id) NPObject id;
@@ -1402,23 +1403,29 @@ npp_New(NPMIMEType pluginType, NPP instance, uint16_t mode,
 
 static NPError
 npp_Destroy(NPP instance, NPSavedData** save) {
-    void* data = instance->pdata;
+    TopObject* top = (TopObject*) instance->pdata;
 #if DEBUG_ALLOC
-    fprintf (stderr, "npp_Destroy: pdata=%p\n", data);
+    fprintf (stderr, "npp_Destroy: pdata=%p\n", top);
 #endif  /* DEBUG_ALLOC */
     instance->pdata = 0;
-    if (data)
-        sBrowserFuncs->releaseobject ((NPObject*) data);
+    if (top) {
+        top->destroying = true;
+        sBrowserFuncs->releaseobject (&top->npobjTop);
+    }
     return NPERR_NO_ERROR;
 }
 
 static NPError
 npp_GetValue(NPP instance, NPPVariable variable, void *value) {
+    TopObject* top = (TopObject*) instance->pdata;
     switch (variable) {
     case NPPVpluginScriptableNPObject:
-        *((NPObject**)value) =
-            sBrowserFuncs->retainobject ((NPObject*) instance->pdata);
-        break;
+        if (top) {
+            *((NPObject**)value) =
+                sBrowserFuncs->retainobject (&top->npobjTop);
+            break;
+        }
+        // FALL THROUGH
     default:
         return NPERR_GENERIC_ERROR;
     }
