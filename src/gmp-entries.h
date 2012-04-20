@@ -203,6 +203,7 @@ ENTRY3(mpq_cmp_si, "mpq_cmp_si", np_mpq_cmp_si, int, mpq_ptr, long, long)
 ENTRY3(mpq_cmp_ui, "mpq_cmp_ui", np_mpq_cmp_ui, int, mpq_ptr, ulong, ulong)
 ENTRY1(mpq_sgn, "mpq_sgn", np_mpq_sgn, int, mpq_ptr)
 ENTRY2(mpq_equal, "mpq_equal", np_mpq_equal, int, mpq_ptr, mpq_ptr)
+// XXX I'd like to get rid of the CTOR macro but keep the meaning of mpq_numref.
 CTOR("mpq_numref", npobjMpq_numref)
 CTOR("mpq_denref", npobjMpq_denref)
 ENTRY2(mpq_get_num, "mpq_get_num", np_mpq_get_num, void, mpz_ptr, mpq_ptr)

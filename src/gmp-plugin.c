@@ -384,6 +384,10 @@ static NPClass Integer_npclass = {
     enumerate       : enumerate_only_toString
 };
 
+DEFINE_OBJECT_TYPE (new_mpz, Integer, mpz_ptr, mp[0])
+#define in_new_mpz(var, count, arg) IN_NEW (new_mpz, arg)
+#define out_new_mpz OUT_NEW
+
 /*
  * GMP-specific scalar types.
  */
@@ -495,10 +499,6 @@ in_mpz_ptr (const NPVariant* var, int count, mpz_ptr* arg)
 }
 
 #define del_mpz_ptr(arg)
-
-DEFINE_OBJECT_TYPE (new_mpz, Integer, mpz_ptr, mp[0])
-#define in_new_mpz(var, count, arg) IN_NEW (new_mpz, arg)
-#define out_new_mpz OUT_NEW
 
 /*
  * Rational objects wrap mpq_t.
