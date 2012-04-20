@@ -13,7 +13,7 @@
       mpf_set_prec_raw - maybe
       mpf_init_set_str - maybe
       mpf_get_d_2exp
-      mpf_get_str (perhaps as toString)
+      mpf_get_str - maybe
       gmp_randinit_lc_2exp_size
 
    NOT TO DO:
@@ -282,7 +282,7 @@ ENTRY1(mpf_get_d, "mpf_get_d", np_mpf_get_d, double, mpf_ptr)
 // mpf_get_d_2exp: XXX would return two values
 ENTRY1(mpf_get_si, "mpf_get_si", np_mpf_get_si, long, mpf_ptr)
 ENTRY1(mpf_get_ui, "mpf_get_ui", np_mpf_get_ui, ulong, mpf_ptr)
-// mpf_get_str: XXX unimplemented, a bit tricky.
+// mpf_get_str: XXX unimplemented for specific length; use toString method.
 ENTRY3(mpf_add, "mpf_add", np_mpf_add, void, mpf_ptr, mpf_ptr, mpf_ptr)
 ENTRY3(mpf_add_ui, "mpf_add_ui", np_mpf_add_ui, void, mpf_ptr, mpf_ptr, ulong)
 ENTRY3(mpf_sub, "mpf_sub", np_mpf_sub, void, mpf_ptr, mpf_ptr, mpf_ptr)

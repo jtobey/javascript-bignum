@@ -1,6 +1,6 @@
 /* browser (NPAPI) plug-in for multiple precision arithmetic.
 
-   TO DO: random number functions, mpf, mpfr.
+   TO DO: see list in gmp-entries.h
 
    Copyright(C) 2012 John Tobey, see ../LICENCE
 */
@@ -98,10 +98,12 @@ typedef char const* stringz;
 DEFINE_IN_NUMBER (int)
 DEFINE_IN_NUMBER (long)
 DEFINE_IN_UNSIGNED (ulong)
+DEFINE_IN_UNSIGNED (size_t)
 
 #define del_int(arg)
 #define del_long(arg)
 #define del_ulong(arg)
+#define del_size_t(arg)
 
 static bool
 in_double (const NPVariant* var, int count, double* arg)
@@ -183,6 +185,7 @@ out_double (double value, NPVariant* result)
                 VOID_TO_NPVARIANT (*result);                            \
         }                                                               \
     }
+
 DEFINE_OUT_NUMBER(ulong)
 DEFINE_OUT_NUMBER(long)
 DEFINE_OUT_NUMBER(int)
@@ -718,17 +721,99 @@ Float_deallocate (NPObject *npobj)
     sBrowserFuncs->memfree (npobj);
 }
 
+/* XXX toString should behave a little differently.  toExponential would
+   be closer, but not exactly this.  */
+static bool
+float_toString (NPObject *npobj, mpf_ptr mpp, const NPVariant *args,
+                uint32_t argCount, NPVariant *result)
+{
+    int base;
+    size_t n_digits;
+    mp_exp_t expt;
+    char* str;
+    size_t allocated;
+    void *(*alloc_func_ptr) (size_t);
+    void *(*realloc_func_ptr) (void *, size_t, size_t);
+    void (*free_func_ptr) (void *, size_t);
+
+    if (in_int (args, argCount, &base)) {
+        args++;
+        argCount--;
+    }
+    else
+        base = 10;
+
+    if (!in_size_t (args, argCount, &n_digits))
+        n_digits = 0;
+
+    if (base >= -62 && base <= 62 && base != 0 && base != -1 && base != 1) {
+        NPUTF8* s;
+
+        str = mpf_get_str (NULL, &expt, base, n_digits, mpp);
+        if (!str) {
+            sBrowserFuncs->setexception (npobj, "out of memory");
+            return true;
+        }
+        allocated = strlen (str) + 1;
+        if (allocated == 1) {
+            s = sBrowserFuncs->memalloc (sizeof "0");
+            if (s) {
+                strcpy (s, "0");
+                STRINGZ_TO_NPVARIANT (s, *result);
+            }
+            else
+                sBrowserFuncs->setexception (npobj, "out of memory");
+        }
+        else {
+            size_t len = allocated + 4 + 3 * sizeof expt;
+            size_t pos = 0;
+
+            s = sBrowserFuncs->memalloc (len);
+            if (s) {
+                if (str[pos] == '-') {
+                    s[pos] = str[pos];
+                    pos++;
+                }
+                sprintf (&s[pos], "%c.%se%ld", str[pos], str + pos + 1,
+                         (long) expt - 1);
+                STRINGZ_TO_NPVARIANT (s, *result);
+            }
+            else
+                sBrowserFuncs->setexception (npobj, "out of memory");
+        }
+
+        mp_get_memory_functions (&alloc_func_ptr, &realloc_func_ptr,
+                                 &free_func_ptr);
+        (*free_func_ptr) (str, allocated);
+    }
+    else
+        sBrowserFuncs->setexception (npobj, "invalid argument");
+    return true;
+}
+
+static bool
+Float_invoke (NPObject *npobj, NPIdentifier name,
+              const NPVariant *args, uint32_t argCount, NPVariant *result)
+{
+    Float* z = (Float*) npobj;
+    if (name == ID_toString)
+        return float_toString (npobj, z->mp, args, argCount, result);
+    sBrowserFuncs->setexception (npobj, "no such method");
+    return true;
+}
+
 static NPClass Float_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     allocate        : Float_allocate,
     deallocate      : Float_deallocate,
     invalidate      : obj_invalidate,
-    hasMethod       : obj_id_false,
+    hasMethod       : hasMethod_only_toString,
+    invoke          : Float_invoke,
     hasProperty     : obj_id_false,
     getProperty     : obj_id_var_void,
     setProperty     : setProperty_ro,
     removeProperty  : removeProperty_ro,
-    enumerate       : enumerate_empty
+    enumerate       : enumerate_only_toString
 };
 
 static bool

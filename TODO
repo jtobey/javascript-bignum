@@ -23,8 +23,8 @@ TODO:
   threshold discovery, since the plugin may or may not be in-process,
   and in-process calls can be over 100x faster than out-of-process.
 
-* Consider avoidance or mitigation of GMP calls to abort() and
-  division-by-zero.
+* Consider avoidance or mitigation of GMP calls to abort(),
+  division-by-zero, square-root-of-negative, anything else?
 
 * Add MPFR functions to the GMP plugin.  Create a high-precision
   inexact number implementation on MPFR.
