@@ -208,6 +208,37 @@ out_stringz (stringz value, NPVariant* result)
         VOID_TO_NPVARIANT (*result);
 }
 
+#define OUT_NEW(value, result)                                          \
+    do {                                                                \
+        value;                                                          \
+        sBrowserFuncs->retainobject (NPVARIANT_TO_OBJECT (*result));    \
+    } while (0)
+
+#define DEFINE_OBJECT_TYPE(ctor, name, type, field)                     \
+    static bool                                                         \
+    ctor (NPObject* entry, NPVariant* result, type* arg)                \
+    {                                                                   \
+        TopObject* top = CONTAINING                                     \
+            (TopObject, Entry_npclass, entry->_class);                  \
+        name* ret = (name*) sBrowserFuncs->createobject                 \
+            (top->instance, &name ## _npclass);                         \
+                                                                        \
+        if (!ret) {                                                     \
+            sBrowserFuncs->setexception (entry, "out of memory");       \
+            return false;                                               \
+        }                                                               \
+        OBJECT_TO_NPVARIANT (&ret->npobj, *result);                     \
+        *arg = &ret->field;                                             \
+        return true;                                                    \
+    }                                                                   \
+                                                                        \
+    static void                                                         \
+    del_ ## ctor (type arg)                                             \
+    {                                                                   \
+        sBrowserFuncs->releaseobject                                    \
+            (&CONTAINING (name, field, arg)->npobj);                    \
+    }
+
 /*
  * Generic NPClass methods.
  */
@@ -528,36 +559,9 @@ in_mpz_ptr (const NPVariant* var, int count, mpz_ptr* arg)
 
 #define del_mpz_ptr(arg)
 
-static bool
-new_mpz (NPObject* entry, NPVariant* result, mpz_ptr* arg)
-{
-    TopObject* top = CONTAINING (TopObject, Entry_npclass, entry->_class);
-    Integer* ret = (Integer*) sBrowserFuncs->createobject
-        (top->instance, &Integer_npclass);
-
-    if (!ret) {
-        sBrowserFuncs->setexception (entry, "out of memory");
-        return false;
-    }
-    OBJECT_TO_NPVARIANT (&ret->npobj, *result);
-    *arg = &ret->mp[0];
-    return true;
-}
-
+DEFINE_OBJECT_TYPE (new_mpz, Integer, mpz_ptr, mp[0])
 #define in_new_mpz(var, count, arg) IN_NEW (new_mpz, var, arg)
-
-static void
-del_new_mpz (mpz_ptr arg)
-{
-    sBrowserFuncs->releaseobject (&CONTAINING (Integer, mp, arg)->npobj);
-}
-
-#define out_new_mpz(value, result)                                      \
-    do {                                                                \
-        value;                                                          \
-        sBrowserFuncs->retainobject (NPVARIANT_TO_OBJECT (*result));    \
-    } while (0)
-
+#define out_new_mpz OUT_NEW
 /*
  * Rational objects wrap mpq_t.
  */
@@ -614,6 +618,10 @@ in_mpq_ptr (const NPVariant* var, int count, mpq_ptr* arg)
 }
 
 #define del_mpq_ptr(arg)
+
+DEFINE_OBJECT_TYPE (new_mpq, Rational, mpq_ptr, mp[0])
+#define in_new_mpq(var, count, arg) IN_NEW (new_mpq, var, arg)
+#define out_new_mpq OUT_NEW
 
 /*
  * The mpq() function's class.
@@ -1096,6 +1104,7 @@ Entry_invokeDefault (NPObject *vEntry,
 #define IN_NEW(func, var, arg) (vArgNumber--, func (vEntry, vResult, arg))
 
     mpz_ptr a0new_mpz;
+    mpq_ptr a0new_mpq;
 
     switch (CONTAINING (Entry, npobj, vEntry)->number) {
 

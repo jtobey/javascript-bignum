@@ -177,6 +177,7 @@ ENTRY2(mpz_getlimbn, "mpz_getlimbn", np_mpz_getlimbn, mp_limb_t, mpz_ptr, mp_siz
 ENTRY1(mpz_size, "mpz_size", np_mpz_size, size_t, mpz_ptr)
 
 ENTRY1(mpq_canonicalize, "mpq_canonicalize", np_mpq_canonicalize, void, mpq_ptr)
+ENTRY1(mpq_init, "mpq_init", np_mpq_init, new_mpq, new_mpq)
 CTOR("mpq", npobjMpq)
 // mpq_init: C-specific; use mpq().
 // mpq_inits: C-specific.
