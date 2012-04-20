@@ -25,10 +25,9 @@
 
 // http://gmplib.org/manual/Integer-Functions.html
 
-// mpz() - allocates, initializes to 0, and returns an integer,
-// arranging to call mpz_clear on deallocation.
+// The mpz() function is deprecated!
 CTOR("mpz", npobjMpz)
-// mpz_init: C-specific; use mpz().
+ENTRY1(mpz_init, "mpz_init", np_mpz_init, new_mpz, new_mpz)
 // mpz_inits: C-specific.
 // mpz_init2: use mpz + mpz_realloc2.
 // mpz_clear: called automatically.
@@ -42,11 +41,11 @@ ENTRY2(mpz_set_q, "mpz_set_q", np_mpz_set_q, void, mpz_ptr, mpq_ptr)
 ENTRY2(mpz_set_f, "mpz_set_f", np_mpz_set_f, void, mpz_ptr, mpf_ptr)
 ENTRY3(mpz_set_str, "mpz_set_str", np_mpz_set_str, int, mpz_ptr, stringz, int_0_or_2_to_62)
 ENTRY2(mpz_swap, "mpz_swap", np_mpz_swap, void, mpz_ptr, mpz_ptr)
-// mpz_init_set: use mpz + mpz_set.
-// mpz_init_set_ui: use mpz + mpz_set_ui.
-// mpz_init_set_si: use mpz + mpz_set_si.
-// mpz_init_set_d: use mpz + mpz_set_d.
-// mpz_init_set_str: use mpz + mpz_set_str.
+ENTRY2(mpz_init_set, "mpz_init_set", np_mpz_init_set, new_mpz, new_mpz, mpz_ptr)
+ENTRY2(mpz_init_set_ui, "mpz_init_set_ui", np_mpz_init_set_ui, new_mpz, new_mpz, ulong)
+ENTRY2(mpz_init_set_si, "mpz_init_set_si", np_mpz_init_set_si, new_mpz, new_mpz, long)
+ENTRY2(mpz_init_set_d, "mpz_init_set_d", np_mpz_init_set_d, new_mpz, new_mpz, double)
+// mpz_init_set_str: would return two values; use mpz_init + mpz_set_str.
 ENTRY1(mpz_get_ui, "mpz_get_ui", np_mpz_get_ui, ulong, mpz_ptr)
 ENTRY1(mpz_get_si, "mpz_get_si", np_mpz_get_si, long, mpz_ptr)
 ENTRY1(mpz_get_d, "mpz_get_d", np_mpz_get_d, double, mpz_ptr)

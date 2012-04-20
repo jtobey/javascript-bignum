@@ -59,10 +59,12 @@ typedef char const* stringz;
 
 #define DEFINE_IN_NUMBER(type)                                          \
     static bool                                                         \
-    in_ ## type (const NPVariant* var, type* arg) UNUSED;               \
+    in_ ## type (const NPVariant* var, int count, type* arg) UNUSED;    \
     static bool                                                         \
-    in_ ## type (const NPVariant* var, type* arg)                       \
+    in_ ## type (const NPVariant* var, int count, type* arg)            \
     {                                                                   \
+        if (count < 1)                                                  \
+            return false;                                               \
         if (NPVARIANT_IS_INT32 (*var) &&                                \
             NPVARIANT_TO_INT32 (*var) == (type) NPVARIANT_TO_INT32 (*var)) \
             *arg = (type) NPVARIANT_TO_INT32 (*var);                    \
@@ -76,8 +78,12 @@ typedef char const* stringz;
 
 #define DEFINE_IN_UNSIGNED(type)                                        \
     static bool                                                         \
-    in_ ## type (const NPVariant* var, type* arg)                       \
+    in_ ## type (const NPVariant* var, int count, type* arg) UNUSED;    \
+    static bool                                                         \
+    in_ ## type (const NPVariant* var, int count, type* arg)            \
     {                                                                   \
+        if (count < 1)                                                  \
+            return false;                                               \
         if (NPVARIANT_IS_INT32 (*var) && NPVARIANT_TO_INT32 (*var) >= 0 && \
             NPVARIANT_TO_INT32 (*var) == (type) NPVARIANT_TO_INT32 (*var)) \
             *arg = (type) NPVARIANT_TO_INT32 (*var);                    \
@@ -93,9 +99,15 @@ DEFINE_IN_NUMBER (int)
 DEFINE_IN_NUMBER (long)
 DEFINE_IN_UNSIGNED (ulong)
 
+#define del_int(arg)
+#define del_long(arg)
+#define del_ulong(arg)
+
 static bool
-in_double (const NPVariant* var, double* arg)
+in_double (const NPVariant* var, int count, double* arg)
 {
+    if (count < 1)
+        return false;
     if (NPVARIANT_IS_DOUBLE (*var))
         *arg = NPVARIANT_TO_DOUBLE (*var);
     else if (NPVARIANT_IS_INT32 (*var))
@@ -105,15 +117,17 @@ in_double (const NPVariant* var, double* arg)
     return true;
 }
 
+#define del_double(arg)
+
 /* Chrome does not terminate its NPString with NUL.  Cope.  */
 
 static bool
-in_stringz (const NPVariant* var, stringz* arg)
+in_stringz (const NPVariant* var, int count, stringz* arg)
 {
     const NPString* npstr;
     NPUTF8* str;
 
-    if (!NPVARIANT_IS_STRING (*var))
+    if (count < 1 || !NPVARIANT_IS_STRING (*var))
         return false;
     npstr = &NPVARIANT_TO_STRING (*var);
     str = sBrowserFuncs->memalloc (npstr->UTF8Length + 1);
@@ -131,16 +145,12 @@ del_stringz (stringz arg)
     sBrowserFuncs->memfree ((char*) arg);
 }
 
-#define del_int(arg)
-#define del_long(arg)
-#define del_ulong(arg)
-#define del_double(arg)
-
 /*
  * Return value conversion.
  */
 
-#define out_void(value, result) value; VOID_TO_NPVARIANT (*result);
+#define out_void(value, result)                                 \
+    do { value; VOID_TO_NPVARIANT (*result); } while (0)
 
 static void
 out_double (double value, NPVariant* result)
@@ -298,7 +308,7 @@ integer_toString (NPObject *npobj, mpz_ptr mpp, const NPVariant *args,
 {
     int base = 0;
 
-    if (argCount == 0 || !in_int (&args[0], &base))
+    if (!in_int (&args[0], argCount, &base))
         base = 10;
 
     if (base >= -36 && base <= 62 && base != 0 && base != -1 && base != 1) {
@@ -414,16 +424,16 @@ typedef int int_0_or_2_to_62;
 typedef int int_2_to_62;
 
 static bool
-in_int_0_or_2_to_62 (const NPVariant* var, int* arg)
+in_int_0_or_2_to_62 (const NPVariant* var, int count, int* arg)
 {
-    return in_int (var, arg) && (*arg == 0 || (*arg >= 2 && *arg <= 62));
+    return in_int (var, count, arg) && (*arg == 0 || (*arg >= 2 && *arg <= 62));
 }
 #define del_int_0_or_2_to_62(arg)
 
 static bool
-in_int_2_to_62 (const NPVariant* var, int* arg)
+in_int_2_to_62 (const NPVariant* var, int count, int* arg)
 {
-    return in_int (var, arg) && *arg >= 2 && *arg <= 62;
+    return in_int (var, count, arg) && *arg >= 2 && *arg <= 62;
 }
 #define del_int_2_to_62(arg)
 
@@ -503,9 +513,9 @@ static NPClass MpzRef_npclass = {
  */
 
 static bool
-in_mpz_ptr (const NPVariant* var, mpz_ptr* arg)
+in_mpz_ptr (const NPVariant* var, int count, mpz_ptr* arg)
 {
-    if (!NPVARIANT_IS_OBJECT (*var))
+    if (count < 1 || !NPVARIANT_IS_OBJECT (*var))
         return false;
     if (NPVARIANT_TO_OBJECT (*var)->_class == &Integer_npclass)
         *arg = &((Integer*) NPVARIANT_TO_OBJECT (*var))->mp[0];
@@ -518,9 +528,8 @@ in_mpz_ptr (const NPVariant* var, mpz_ptr* arg)
 
 #define del_mpz_ptr(arg)
 
-#if 0
 static bool
-x_in_new_mpz (NPObject* entry, NPVariant* result, mpz_ptr* arg)
+new_mpz (NPObject* entry, NPVariant* result, mpz_ptr* arg)
 {
     TopObject* top = CONTAINING (TopObject, Entry_npclass, entry->_class);
     Integer* ret = (Integer*) sBrowserFuncs->createobject
@@ -531,10 +540,23 @@ x_in_new_mpz (NPObject* entry, NPVariant* result, mpz_ptr* arg)
         return false;
     }
     OBJECT_TO_NPVARIANT (&ret->npobj, *result);
+    *arg = &ret->mp[0];
     return true;
 }
-#define in_new_mpz(XXX)
-#endif
+
+#define in_new_mpz(var, count, arg) IN_NEW (new_mpz, var, arg)
+
+static void
+del_new_mpz (mpz_ptr arg)
+{
+    sBrowserFuncs->releaseobject (&CONTAINING (Integer, mp, arg)->npobj);
+}
+
+#define out_new_mpz(value, result)                                      \
+    do {                                                                \
+        value;                                                          \
+        sBrowserFuncs->retainobject (NPVARIANT_TO_OBJECT (*result));    \
+    } while (0)
 
 /*
  * Rational objects wrap mpq_t.
@@ -582,9 +604,9 @@ static NPClass Rational_npclass = {
 };
 
 static bool
-in_mpq_ptr (const NPVariant* var, mpq_ptr* arg)
+in_mpq_ptr (const NPVariant* var, int count, mpq_ptr* arg)
 {
-    if (!NPVARIANT_IS_OBJECT (*var)
+    if (count < 1 || !NPVARIANT_IS_OBJECT (*var)
         || NPVARIANT_TO_OBJECT (*var)->_class != &Rational_npclass)
         return false;
     *arg = &((Rational*) NPVARIANT_TO_OBJECT (*var))->mp[0];
@@ -668,7 +690,7 @@ Mpq_numref_invokeDefault (NPObject *npobj,
     mpq_ptr q;
     MpzRef* ret;
 
-    if (argCount != 1 || !in_mpq_ptr (&args[0], &q)) {
+    if (argCount != 1 || !in_mpq_ptr (&args[0], 1, &q)) {
         sBrowserFuncs->setexception (npobj, "wrong type arguments");
         return true;
     }
@@ -712,7 +734,7 @@ Mpq_denref_invokeDefault (NPObject *npobj,
     mpq_ptr q;
     MpzRef* ret;
 
-    if (argCount != 1 || !in_mpq_ptr (&args[0], &q)) {
+    if (argCount != 1 || !in_mpq_ptr (&args[0], 1, &q)) {
         sBrowserFuncs->setexception (npobj, "wrong type arguments");
         return true;
     }
@@ -801,9 +823,9 @@ static NPClass Float_npclass = {
 };
 
 static bool
-in_mpf_ptr (const NPVariant* var, mpf_ptr* arg)
+in_mpf_ptr (const NPVariant* var, int count, mpf_ptr* arg)
 {
-    if (!NPVARIANT_IS_OBJECT (*var)
+    if (count < 1 || !NPVARIANT_IS_OBJECT (*var)
         || NPVARIANT_TO_OBJECT (*var)->_class != &Float_npclass)
         return false;
     *arg = &((Float*) NPVARIANT_TO_OBJECT (*var))->mp[0];
@@ -908,9 +930,10 @@ static NPClass Rand_npclass = {
 };
 
 static bool
-in_x_gmp_randstate_ptr (const NPVariant* var, x_gmp_randstate_ptr* arg)
+in_x_gmp_randstate_ptr (const NPVariant* var, int count,
+                        x_gmp_randstate_ptr* arg)
 {
-    if (!NPVARIANT_IS_OBJECT (*var)
+    if (count < 1 || !NPVARIANT_IS_OBJECT (*var)
         || NPVARIANT_TO_OBJECT (*var)->_class != &Rand_npclass)
         return false;
     *arg = &((Rand*) NPVARIANT_TO_OBJECT (*var))->state[0];
@@ -1030,6 +1053,8 @@ Entry_deallocate (NPObject *npobj)
 #if DEBUG_ALLOC
     fprintf (stderr, "Entry deallocate %p\n", npobj);
 #endif  /* DEBUG_ALLOC */
+    TopObject* top = CONTAINING (TopObject, Entry_npclass, npobj->_class);
+    sBrowserFuncs->releaseobject (&top->npobjTop);
     sBrowserFuncs->memfree (npobj);
 }
 
@@ -1064,51 +1089,61 @@ Entry_invokeDefault (NPObject *vEntry,
     ARGN(a3);
     ARGN(a4);
 
-#define IN(a, t) in_ ## t (&vArgs[vArgNumber++], &a ## t)
+#define IN(a, t)                                                        \
+    (vArgNumber++,                                                      \
+     in_ ## t (&vArgs[vArgNumber-1], vArgCount + 1 - vArgNumber, &a ## t))
+
+#define IN_NEW(func, var, arg) (vArgNumber--, func (vEntry, vResult, arg))
+
+    mpz_ptr a0new_mpz;
 
     switch (CONTAINING (Entry, npobj, vEntry)->number) {
 
-#define ENTRY1(name, string, id, rett, t0)              \
-        case __LINE__:                                  \
-            if (vArgCount != 1 || !IN (a0, t0)) break;  \
-            out_ ## rett (name (a0 ## t0), vResult);    \
-            ok = true;                                  \
-            del_ ## t0 (a0 ## t0);                      \
+#define ENTRY1(name, string, id, rett, t0)                      \
+        case __LINE__:                                          \
+            if (!IN (a0, t0)) break;                            \
+            if (vArgNumber != vArgCount) goto del0_ ## id;      \
+            out_ ## rett (name (a0 ## t0), vResult);            \
+            ok = true;                                          \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
             break;
 
 #define ENTRY2(name, string, id, rett, t0, t1)                  \
         case __LINE__:                                          \
-            if (vArgCount != 2 || !IN (a0, t0)) break;          \
+            if (!IN (a0, t0)) break;                            \
             if (!IN (a1, t1)) goto del0_ ## id;                 \
+            if (vArgNumber != vArgCount) goto del1_ ## id;      \
             out_ ## rett (name (a0 ## t0, a1 ## t1), vResult);  \
             ok = true;                                          \
-            del_ ## t1 (a1 ## t1);                              \
+            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
             del0_ ## id: del_ ## t0 (a0 ## t0);                 \
             break;
 
 #define ENTRY3(name, string, id, rett, t0, t1, t2)              \
         case __LINE__:                                          \
-            if (vArgCount != 3 || !IN (a0, t0)) break;          \
+            if (!IN (a0, t0)) break;                            \
             if (!IN (a1, t1)) goto del0_ ## id;                 \
             if (!IN (a2, t2)) goto del1_ ## id;                 \
+            if (vArgNumber != vArgCount) goto del2_ ## id;      \
             out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2),  \
                           vResult);                             \
             ok = true;                                          \
-            del_ ## t2 (a2 ## t2);                              \
+            del2_ ## id: del_ ## t2 (a2 ## t2);                 \
             del1_ ## id: del_ ## t1 (a1 ## t1);                 \
             del0_ ## id: del_ ## t0 (a0 ## t0);                 \
             break;
 
 #define ENTRY4(name, string, id, rett, t0, t1, t2, t3)          \
         case __LINE__:                                          \
-            if (vArgCount != 4 || !IN (a0, t0)) break;          \
+            if (!IN (a0, t0)) break;                            \
             if (!IN (a1, t1)) goto del0_ ## id;                 \
             if (!IN (a2, t2)) goto del1_ ## id;                 \
             if (!IN (a3, t3)) goto del2_ ## id;                 \
+            if (vArgNumber != vArgCount) goto del3_ ## id;      \
             out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2,   \
                                 a3 ## t3), vResult);            \
             ok = true;                                          \
-            del_ ## t3 (a3 ## t3);                              \
+            del3_ ## id: del_ ## t3 (a3 ## t3);                 \
             del2_ ## id: del_ ## t2 (a2 ## t2);                 \
             del1_ ## id: del_ ## t1 (a1 ## t1);                 \
             del0_ ## id: del_ ## t0 (a0 ## t0);                 \
@@ -1116,15 +1151,16 @@ Entry_invokeDefault (NPObject *vEntry,
 
 #define ENTRY5(name, string, id, rett, t0, t1, t2, t3, t4)      \
         case __LINE__:                                          \
-            if (vArgCount != 5 || !IN (a0, t0)) break;          \
+            if (!IN (a0, t0)) break;                            \
             if (!IN (a1, t1)) goto del0_ ## id;                 \
             if (!IN (a2, t2)) goto del1_ ## id;                 \
             if (!IN (a3, t3)) goto del2_ ## id;                 \
             if (!IN (a4, t4)) goto del3_ ## id;                 \
+            if (vArgNumber != vArgCount) goto del4_ ## id;      \
             out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2,   \
                                 a3 ## t3, a4 ## t4), vResult);  \
             ok = true;                                          \
-            del_ ## t4 (a4 ## t4);                              \
+            del4_ ## id: del_ ## t4 (a4 ## t4);                 \
             del3_ ## id: del_ ## t3 (a3 ## t3);                 \
             del2_ ## id: del_ ## t2 (a2 ## t2);                 \
             del1_ ## id: del_ ## t1 (a1 ## t1);                 \
@@ -1189,6 +1225,7 @@ get_entry (NPObject *npobj, int number, NPVariant *result)
         (top->instance, &top->Entry_npclass);
 
     if (entry) {
+        sBrowserFuncs->retainobject (&top->npobjTop);
         entry->number = number;
         OBJECT_TO_NPVARIANT (&entry->npobj, *result);
     }
