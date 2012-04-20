@@ -7,6 +7,9 @@
 
 #include <gmp.h>
 
+/* Break the GMP abstraction just this once. */
+typedef __gmp_randstate_struct* x_gmp_randstate_ptr;
+
 #include <npapi.h>
 #include <npfunctions.h>
 
@@ -16,13 +19,32 @@
 #include <stddef.h>
 #include <math.h>
 
+/*
+ * Global constants.
+ */
+
 #define PLUGIN_NAME        "GMP Arithmetic Library"
 #define PLUGIN_DESCRIPTION PLUGIN_NAME " (EXPERIMENTAL)"
 #define PLUGIN_VERSION     "0.0.0.0"
 
 static NPNetscapeFuncs* sBrowserFuncs = NULL;
 
-/* Argument conversion. */
+static NPIdentifier ID_toString;
+
+typedef struct _TopObject {
+    NPObject npobjTop;
+    NPP instance;
+    NPObject npobjGmp;
+#define CTOR(string, id) NPObject id;
+#include "gmp-entries.h"
+} TopObject;
+
+#define CONTAINING(outer, member, ptr)                          \
+    ((outer*) (((char*) ptr) - offsetof (outer, member)))
+
+/*
+ * Argument conversion.
+ */
 
 typedef unsigned long ulong;
 typedef char const* stringz;
@@ -104,7 +126,9 @@ del_stringz (stringz arg)
 #define del_ulong(arg)
 #define del_double(arg)
 
-/* Return value conversion. */
+/*
+ * Return value conversion.
+ */
 
 static inline void
 out_double (double value, NPVariant* result)
@@ -112,14 +136,28 @@ out_double (double value, NPVariant* result)
     DOUBLE_TO_NPVARIANT (value, *result);
 }
 
-#define DEFINE_OUT_NUMBER(type)                                 \
-    static inline void                                          \
-    out_ ## type (type value, NPVariant* result)                \
-    {                                                           \
-        if (value == (int32_t) value)                           \
-            INT32_TO_NPVARIANT (value, *result);                \
-        else                                                    \
-            DOUBLE_TO_NPVARIANT ((double) value, *result);      \
+#define DEFINE_OUT_NUMBER(type)                                         \
+    static inline void                                                  \
+    out_ ## type (type value, NPVariant* result)                        \
+    {                                                                   \
+        if (value == (int32_t) value)                                   \
+            INT32_TO_NPVARIANT (value, *result);                        \
+        else if (value == (double) value)                               \
+            DOUBLE_TO_NPVARIANT ((double) value, *result);              \
+        else {                                                          \
+            size_t len = 3 * sizeof (type) + 2;                         \
+            NPUTF8* ret = (NPUTF8*) sBrowserFuncs->memalloc (len);      \
+            if (ret) {                                                  \
+                if (value >= 0)                                         \
+                    len = sprintf (ret, "%lu", (ulong) value);          \
+                else                                                    \
+                    len = sprintf (ret, "%ld", (long) value);           \
+                STRINGN_TO_NPVARIANT (ret, len, *result);               \
+            }                                                           \
+            else                                                        \
+                /* XXX Should make this throw. */                       \
+                VOID_TO_NPVARIANT (*result);                            \
+        }                                                               \
     }
 DEFINE_OUT_NUMBER(ulong)
 DEFINE_OUT_NUMBER(long)
@@ -146,18 +184,9 @@ out_stringz (stringz value, NPVariant* result)
         VOID_TO_NPVARIANT (*result);
 }
 
-static NPIdentifier ID_toString;
-
-typedef struct _TopObject {
-    NPObject npobjTop;
-    NPP instance;
-    NPObject npobjGmp;
-#define CTOR(string, id) NPObject id;
-#include "gmp-entries.h"
-} TopObject;
-
-#define CONTAINING(outer, member, ptr)                          \
-    ((outer*) (((char*) ptr) - offsetof (outer, member)))
+/*
+ * Generic NPClass methods.
+ */
 
 static bool
 obj_id_false(NPObject *npobj, NPIdentifier name)
@@ -213,9 +242,13 @@ static void
 obj_invalidate (NPObject *npobj)
 {
 #if DEBUG_ALLOC
-    //fprintf (stderr, "invalidate %p\n", npobj);
+    /*fprintf (stderr, "invalidate %p\n", npobj);*/
 #endif  /* DEBUG_ALLOC */
 }
+
+/*
+ * Integer objects wrap mpz_t.
+ */
 
 typedef struct _Integer {
     NPObject npobj;
@@ -245,8 +278,31 @@ Integer_deallocate (NPObject *npobj)
     sBrowserFuncs->memfree (npobj);
 }
 
-static bool mpp_toString (NPObject *npobj, mpz_ptr mpp, const NPVariant *args,
-                          uint32_t argCount, NPVariant *result);
+static bool
+integer_toString (NPObject *npobj, mpz_ptr mpp, const NPVariant *args,
+                  uint32_t argCount, NPVariant *result)
+{
+    int base = 0;
+
+    if (argCount == 0 || !in_int (&args[0], &base))
+        base = 10;
+
+    if (base >= -36 && base <= 62 && base != 0 && base != -1 && base != 1) {
+        size_t len = mpz_sizeinbase (mpp, base) + 2;
+        NPUTF8* s = sBrowserFuncs->memalloc (len);
+        if (s) {
+            mpz_get_str (s, base, mpp);
+            if (s[0] != '-')
+                len--;
+            STRINGN_TO_NPVARIANT (s, s[len-2] ? len-1 : len-2, *result);
+        }
+        else
+            sBrowserFuncs->setexception (npobj, "out of memory");
+    }
+    else
+        sBrowserFuncs->setexception (npobj, "invalid argument");
+    return true;
+}
 
 static bool
 Integer_invoke (NPObject *npobj, NPIdentifier name,
@@ -254,7 +310,7 @@ Integer_invoke (NPObject *npobj, NPIdentifier name,
 {
     Integer* z = (Integer*) npobj;
     if (name == ID_toString)
-        return mpp_toString (npobj, z->mp, args, argCount, result);
+        return integer_toString (npobj, z->mp, args, argCount, result);
     sBrowserFuncs->setexception (npobj, "no such method");
     return true;
 }
@@ -272,6 +328,10 @@ static NPClass Integer_npclass = {
     removeProperty  : removeProperty_ro,
     enumerate       : enumerate_only_toString
 };
+
+/*
+ * The mpz() function's class.
+ */
 
 static void
 Mpz_deallocate (NPObject *npobj)
@@ -332,6 +392,10 @@ static NPClass Mpz_npclass = {
     enumerate       : enumerate_empty
 };
 
+/*
+ * GMP-specific scalar types.
+ */
+
 typedef int int_0_or_2_to_62;
 typedef int int_2_to_62;
 
@@ -353,36 +417,20 @@ DEFINE_IN_UNSIGNED (mp_bitcnt_t)
 DEFINE_OUT_NUMBER (mp_bitcnt_t)
 #define del_mp_bitcnt_t(arg)
 
-static bool
-mpp_toString (NPObject *npobj, mpz_ptr mpp, const NPVariant *args,
-              uint32_t argCount, NPVariant *result)
-{
-    int base = 0;
+DEFINE_IN_UNSIGNED (mp_size_t)
+DEFINE_OUT_NUMBER (mp_size_t)
+#define del_mp_size_t(arg)
 
-    if (argCount == 0 || !in_int (&args[0], &base))
-        base = 10;
+DEFINE_OUT_NUMBER (mp_limb_t)
 
-    if (base >= -36 && base <= 62 && base != 0 && base != -1 && base != 1) {
-        size_t len = mpz_sizeinbase (mpp, base) + 2;
-        NPUTF8* s = sBrowserFuncs->memalloc (len);
-        if (s) {
-            mpz_get_str (s, base, mpp);
-            if (s[0] != '-')
-                len--;
-            STRINGN_TO_NPVARIANT (s, s[len-2] ? len-1 : len-2, *result);
-        }
-        else
-            sBrowserFuncs->setexception (npobj, "out of memory");
-    }
-    else
-        sBrowserFuncs->setexception (npobj, "invalid argument");
-    return true;
-}
+/*
+ * Class of objects "returned" by the mpq_numref and mpq_denref macros.
+ */
 
 typedef struct _MpzRef {
     NPObject npobj;
     mpz_ptr mpp;
-    NPObject* owner;
+    NPObject* owner;  /* This Rational (mpq_t) owns mpp.  */
 } MpzRef;
 
 static NPObject*
@@ -417,7 +465,7 @@ MpzRef_invoke (NPObject *npobj, NPIdentifier name,
 {
     MpzRef* ref = (MpzRef*) npobj;
     if (name == ID_toString)
-        return mpp_toString (npobj, ref->mpp, args, argCount, result);
+        return integer_toString (npobj, ref->mpp, args, argCount, result);
     sBrowserFuncs->setexception (npobj, "no such method");
     return true;
 }
@@ -436,6 +484,10 @@ static NPClass MpzRef_npclass = {
     enumerate       : enumerate_only_toString
 };
 
+/*
+ * Integer argument conversion.
+ */
+
 static inline bool
 in_mpz_ptr (const NPVariant* var, mpz_ptr* arg)
 {
@@ -451,6 +503,10 @@ in_mpz_ptr (const NPVariant* var, mpz_ptr* arg)
 }
 
 #define del_mpz_ptr(arg)
+
+/*
+ * Rational objects wrap mpq_t.
+ */
 
 typedef struct _Rational {
     NPObject npobj;
@@ -492,6 +548,22 @@ static NPClass Rational_npclass = {
     removeProperty  : removeProperty_ro,
     enumerate       : enumerate_empty
 };
+
+static inline bool
+in_mpq_ptr (const NPVariant* var, mpq_ptr* arg)
+{
+    if (!NPVARIANT_IS_OBJECT (*var)
+        || NPVARIANT_TO_OBJECT (*var)->_class != &Rational_npclass)
+        return false;
+    *arg = &((Rational*) NPVARIANT_TO_OBJECT (*var))->mp[0];
+    return true;
+}
+
+#define del_mpq_ptr(arg)
+
+/*
+ * The mpq() function's class.
+ */
 
 static void
 Mpq_deallocate (NPObject *npobj)
@@ -539,17 +611,9 @@ static NPClass Mpq_npclass = {
     enumerate       : enumerate_empty
 };
 
-static inline bool
-in_mpq_ptr (const NPVariant* var, mpq_ptr* arg)
-{
-    if (!NPVARIANT_IS_OBJECT (*var)
-        || NPVARIANT_TO_OBJECT (*var)->_class != &Rational_npclass)
-        return false;
-    *arg = &((Rational*) NPVARIANT_TO_OBJECT (*var))->mp[0];
-    return true;
-}
-
-#define del_mpq_ptr(arg)
+/*
+ * The mpq_numref function's class.
+ */
 
 static void
 Mpq_numref_deallocate (NPObject *npobj)
@@ -603,6 +667,10 @@ static NPClass Mpq_numref_npclass = {
     enumerate       : enumerate_empty
 };
 
+/*
+ * The mpq_denref function's class.
+ */
+
 static bool
 Mpq_denref_invokeDefault (NPObject *npobj,
                           const NPVariant *args, uint32_t argCount,
@@ -655,6 +723,10 @@ static NPClass Mpq_denref_npclass = {
     enumerate       : enumerate_empty
 };
 
+/*
+ * Float objects wrap mpf_t.
+ */
+
 typedef struct _Float {
     NPObject npobj;
     mpf_t mp;
@@ -695,6 +767,22 @@ static NPClass Float_npclass = {
     removeProperty  : removeProperty_ro,
     enumerate       : enumerate_empty
 };
+
+static inline bool
+in_mpf_ptr (const NPVariant* var, mpf_ptr* arg)
+{
+    if (!NPVARIANT_IS_OBJECT (*var)
+        || NPVARIANT_TO_OBJECT (*var)->_class != &Float_npclass)
+        return false;
+    *arg = &((Float*) NPVARIANT_TO_OBJECT (*var))->mp[0];
+    return true;
+}
+
+#define del_mpf_ptr(arg)
+
+/*
+ * The mpf() function's class.
+ */
 
 static void
 Mpf_deallocate (NPObject *npobj)
@@ -742,21 +830,156 @@ static NPClass Mpf_npclass = {
     enumerate       : enumerate_empty
 };
 
+/*
+ * Rand objects wrap gmp_randstate_t.
+ */
+
+typedef struct _Rand {
+    NPObject npobj;
+    gmp_randstate_t state;
+} Rand;
+
+static NPObject*
+Rand_allocate (NPP npp, NPClass *aClass)
+{
+    Rand* ret = (Rand*) sBrowserFuncs->memalloc (sizeof (Rand));
+#if DEBUG_ALLOC
+    fprintf (stderr, "Rand allocate %p\n", ret);
+#endif  /* DEBUG_ALLOC */
+    if (ret)
+        gmp_randinit_default (ret->state);
+    return &ret->npobj;
+}
+
+static void
+Rand_deallocate (NPObject *npobj)
+{
+#if DEBUG_ALLOC
+    fprintf (stderr, "Rand deallocate %p\n", npobj);
+#endif  /* DEBUG_ALLOC */
+    if (npobj)
+        gmp_randclear (((Rand*) npobj)->state);
+    sBrowserFuncs->memfree (npobj);
+}
+
+static NPClass Rand_npclass = {
+    structVersion   : NP_CLASS_STRUCT_VERSION,
+    allocate        : Rand_allocate,
+    deallocate      : Rand_deallocate,
+    invalidate      : obj_invalidate,
+    hasMethod       : obj_id_false,
+    hasProperty     : obj_id_false,
+    getProperty     : obj_id_var_void,
+    setProperty     : setProperty_ro,
+    removeProperty  : removeProperty_ro,
+    enumerate       : enumerate_empty
+};
+
 static inline bool
-in_mpf_ptr (const NPVariant* var, mpf_ptr* arg)
+in_x_gmp_randstate_ptr (const NPVariant* var, x_gmp_randstate_ptr* arg)
 {
     if (!NPVARIANT_IS_OBJECT (*var)
-        || NPVARIANT_TO_OBJECT (*var)->_class != &Float_npclass)
+        || NPVARIANT_TO_OBJECT (*var)->_class != &Rand_npclass)
         return false;
-    *arg = &((Float*) NPVARIANT_TO_OBJECT (*var))->mp[0];
+    *arg = &((Rand*) NPVARIANT_TO_OBJECT (*var))->state[0];
     return true;
 }
 
-#define del_mpf_ptr(arg)
+#define del_x_gmp_randstate_ptr(arg)
+
+static void
+x_gmp_randinit_default (x_gmp_randstate_ptr state)
+{
+    gmp_randclear (state);
+    gmp_randinit_default (state);
+}
+
+static void
+x_gmp_randinit_mt (x_gmp_randstate_ptr state)
+{
+    gmp_randclear (state);
+    gmp_randinit_mt (state);
+}
+
+static void
+x_gmp_randinit_lc_2exp (x_gmp_randstate_ptr state, mpz_ptr a, ulong c,
+                        mp_bitcnt_t m2exp)
+{
+    gmp_randclear (state);
+    gmp_randinit_lc_2exp (state, a, c, m2exp);
+}
+
+static int
+x_gmp_randinit_lc_2exp_size (x_gmp_randstate_ptr state, mp_bitcnt_t size)
+{
+    gmp_randclear (state);
+    return gmp_randinit_lc_2exp_size (state, size);
+}
+
+static void
+x_gmp_randinit_set (x_gmp_randstate_ptr rop, x_gmp_randstate_ptr op)
+{
+    gmp_randclear (rop);
+    gmp_randinit_set (rop, op);
+}
+
+/*
+ * The randstate() function's class.
+ */
+
+static void
+Randstate_deallocate (NPObject *npobj)
+{
+    TopObject* top = CONTAINING (TopObject, npobjRandstate, npobj);
+#if DEBUG_ALLOC
+    fprintf (stderr, "Randstate deallocate %p; %u\n", npobj, (unsigned int) top->npobjTop.referenceCount);
+#endif  /* DEBUG_ALLOC */
+    /* Decrement the top object's reference count.  See comments in
+       Mpz_deallocate.  */
+    sBrowserFuncs->releaseobject (&top->npobjTop);
+}
+
+static bool
+Randstate_invokeDefault (NPObject *npobj,
+                   const NPVariant *args, uint32_t argCount, NPVariant *result)
+{
+    NPP instance = CONTAINING (TopObject, npobjRandstate, npobj)->instance;
+    Rand* ret;
+
+    if (argCount != 0) {
+        sBrowserFuncs->setexception (npobj, "invalid argument");
+        return true;
+    }
+
+    ret = (Rand*) sBrowserFuncs->createobject (instance, &Rand_npclass);
+
+    if (ret)
+        OBJECT_TO_NPVARIANT (&ret->npobj, *result);
+    else
+        sBrowserFuncs->setexception (npobj, "out of memory");
+    return true;
+}
+
+static NPClass Randstate_npclass = {
+    structVersion   : NP_CLASS_STRUCT_VERSION,
+    deallocate      : Randstate_deallocate,
+    invalidate      : obj_invalidate,
+    hasMethod       : obj_id_false,
+    invokeDefault   : Randstate_invokeDefault,
+    hasProperty     : obj_id_false,
+    getProperty     : obj_id_var_void,
+    setProperty     : setProperty_ro,
+    removeProperty  : removeProperty_ro,
+    enumerate       : enumerate_empty
+};
+
+/*
+ * Class of ordinary functions like mpz_add.
+ */
 
 typedef struct _Entry {
     NPObject npobj;
-    int number;
+    int number;  /* unique ID; currently, a line number in gmp-entries.h */
 } Entry;
 
 static NPObject*
@@ -777,6 +1000,8 @@ Entry_deallocate (NPObject *npobj)
 #endif  /* DEBUG_ALLOC */
     sBrowserFuncs->memfree (npobj);
 }
+
+/* Calls to most functions go through Entry_invokeDefault. */
 
 static bool
 Entry_invokeDefault (NPObject *npobj,
@@ -799,9 +1024,11 @@ Entry_invokeDefault (NPObject *npobj,
     mpz_ptr aN ## mpz_ptr UNUSED; \
     mpq_ptr aN ## mpq_ptr UNUSED; \
     mpf_ptr aN ## mpf_ptr UNUSED; \
+    x_gmp_randstate_ptr aN ## x_gmp_randstate_ptr UNUSED; \
     mp_bitcnt_t aN ## mp_bitcnt_t UNUSED; \
     int_0_or_2_to_62 aN ## int_0_or_2_to_62 UNUSED; \
-    int_2_to_62 aN ## int_2_to_62 UNUSED;
+    int_2_to_62 aN ## int_2_to_62 UNUSED; \
+    mp_size_t aN ## mp_size_t UNUSED;
 
     ARGN(a0);
     ARGN(a1);
@@ -950,6 +1177,10 @@ static NPClass Entry_npclass = {
     enumerate       : enumerate_empty
 };
 
+/*
+ * Class of the "gmp" object.
+ */
+
 static void
 Gmp_deallocate (NPObject *npobj)
 {
@@ -1017,7 +1248,7 @@ Gmp_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
     name = sBrowserFuncs->utf8fromidentifier (key);
 
     if (false)
-        name = name;  // Dummy branch to set up else-if sequence.
+        name = name;  /* Dummy branch to set up else-if sequence.  */
 
 #define CTOR(string, id)                                \
     else if (!strcmp (string, name))                    \
@@ -1072,6 +1303,10 @@ static NPClass Gmp_npclass = {
     enumerate       : Gmp_enumerate
 };
 
+/*
+ * Class of the top-level <embed> object exposed to scripts through the DOM.
+ */
+
 static NPObject*
 TopObject_allocate (NPP instance, NPClass *aClass)
 {
@@ -1089,6 +1324,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->npobjMpq_numref._class = &Mpq_numref_npclass;
         ret->npobjMpq_denref._class = &Mpq_denref_npclass;
         ret->npobjMpf._class = &Mpf_npclass;
+        ret->npobjRandstate._class = &Randstate_npclass;
     }
     return &ret->npobjTop;
 }
@@ -1142,12 +1378,18 @@ static NPClass TopObject_npclass = {
     enumerate       : TopObject_enumerate
 };
 
+/*
+ * NPAPI plug-in entry points.
+ */
+
 static NPError
 npp_New(NPMIMEType pluginType, NPP instance, uint16_t mode,
         int16_t argc, char* argn[], char* argv[], NPSavedData* saved)
 {
-    // Make this a windowless plug-in.  This makes Chrome happy.
+    /* Make this a windowless plug-in.  This makes Chrome happy.  */
     sBrowserFuncs->setvalue (instance, NPPVpluginWindowBool, (void*) false);
+
+    /* Create the instance's top-level scriptable <embed> object.  */
     instance->pdata = sBrowserFuncs->createobject (instance,
                                                    &TopObject_npclass);
     if (!instance->pdata)
@@ -1185,8 +1427,8 @@ NP_Initialize(NPNetscapeFuncs* bFuncs, NPPluginFuncs* pFuncs)
 {
     sBrowserFuncs = bFuncs;
 
-    // Check the size of the provided structure based on the offset of the
-    // last member we need.
+    /* Check the size of the provided structure based on the offset of the
+       last member we need.  */
     if (pFuncs->size < (offsetof(NPPluginFuncs, getvalue) + sizeof(void*)))
         return NPERR_INVALID_FUNCTABLE_ERROR;
 

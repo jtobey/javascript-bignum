@@ -34,22 +34,30 @@
 // mpz() - allocates, initializes to 0, and returns an integer,
 // arranging to call mpz_clear on deallocation.
 CTOR("mpz", npobjMpz)
-// mpz_init*, mpz_clear*: C-specific.
+// mpz_init: C-specific; use mpz().
+// mpz_inits: C-specific.
+// mpz_init2: use mpz + mpz_realloc2.
+// mpz_clear: called automatically.
+// mpz_clears: C-specific.
 ENTRY2v(mpz_realloc2, "mpz_realloc2", np_mpz_realloc2, mpz_ptr, mp_bitcnt_t)
 ENTRY2v(mpz_set, "mpz_set", np_mpz_set, mpz_ptr, mpz_ptr)
 ENTRY2v(mpz_set_ui, "mpz_set_ui", np_mpz_set_ui, mpz_ptr, ulong)
 ENTRY2v(mpz_set_si, "mpz_set_si", np_mpz_set_si, mpz_ptr, long)
 ENTRY2v(mpz_set_d, "mpz_set_d", np_mpz_set_d, mpz_ptr, double)
 ENTRY2v(mpz_set_q, "mpz_set_q", np_mpz_set_q, mpz_ptr, mpq_ptr)
-//ENTRY2v(mpz_set_f, "mpz_set_f", np_mpz_set_f, mpz_ptr, mpf_ptr)
-// mpz_init_set*: C-specific.
+ENTRY2v(mpz_set_f, "mpz_set_f", np_mpz_set_f, mpz_ptr, mpf_ptr)
 ENTRY3(mpz_set_str, "mpz_set_str", np_mpz_set_str, int, mpz_ptr, stringz, int_0_or_2_to_62)
 ENTRY2v(mpz_swap, "mpz_swap", np_mpz_swap, mpz_ptr, mpz_ptr)
+// mpz_init_set: use mpz + mpz_set.
+// mpz_init_set_ui: use mpz + mpz_set_ui.
+// mpz_init_set_si: use mpz + mpz_set_si.
+// mpz_init_set_d: use mpz + mpz_set_d.
+// mpz_init_set_str: use mpz + mpz_set_str.
 ENTRY1(mpz_get_ui, "mpz_get_ui", np_mpz_get_ui, ulong, mpz_ptr)
 ENTRY1(mpz_get_si, "mpz_get_si", np_mpz_get_si, long, mpz_ptr)
 ENTRY1(mpz_get_d, "mpz_get_d", np_mpz_get_d, double, mpz_ptr)
-// mpz_get_d_2exp: implementable using mpz_size, mpz_tdiv_q_2exp, mpz_get_d.
-// mpz_get_str: implemented as integer objects' toString method.
+// mpz_get_d_2exp: would return two values; meanwhile, perhaps mpz_size + mpz_tdiv_q_2exp + mpz_get_d comes close enough.
+// mpz_get_str: C-specific; use integers' toString method instead.
 ENTRY3v(mpz_add, "mpz_add", np_mpz_add, mpz_ptr, mpz_ptr, mpz_ptr)
 ENTRY3v(mpz_add_ui, "mpz_add_ui", np_mpz_add_ui, mpz_ptr, mpz_ptr, ulong)
 ENTRY3v(mpz_sub, "mpz_sub", np_mpz_sub, mpz_ptr, mpz_ptr, mpz_ptr)
@@ -157,32 +165,40 @@ ENTRY2v(mpz_clrbit, "mpz_clrbit", np_mpz_clrbit, mpz_ptr, mp_bitcnt_t)
 ENTRY2v(mpz_combit, "mpz_combit", np_mpz_combit, mpz_ptr, mp_bitcnt_t)
 ENTRY2(mpz_tstbit, "mpz_tstbit", np_mpz_tstbit, int, mpz_ptr, mp_bitcnt_t)
 // mpz_out_str, mpz_inp_str, mpz_out_raw, mpz_inp_raw: not relevant to plugin.
-//ENTRY3v(mpz_urandomb, "mpz_urandomb", np_mpz_urandomb, mpz_ptr, gmp_randstate_ptr, mp_bitcnt_t)
-//ENTRY3v(mpz_urandomb, "mpz_urandomm", np_mpz_urandomb, mpz_ptr, gmp_randstate_ptr, mpz_ptr)
-//ENTRY3v(mpz_urandomb, "mpz_rrandomb", np_mpz_urandomb, mpz_ptr, gmp_randstate_ptr, mp_bitcnt_t)
-// mpz_import, mpz_export: not relevant to plugin.
+ENTRY3v(mpz_urandomb, "mpz_urandomb", np_mpz_urandomb, mpz_ptr, x_gmp_randstate_ptr, mp_bitcnt_t)
+ENTRY3v(mpz_urandomm, "mpz_urandomm", np_mpz_urandomm, mpz_ptr, x_gmp_randstate_ptr, mpz_ptr)
+ENTRY3v(mpz_rrandomb, "mpz_rrandomb", np_mpz_rrandomb, mpz_ptr, x_gmp_randstate_ptr, mp_bitcnt_t)
+ENTRY2v(mpz_random, "mpz_random", np_mpz_random, mpz_ptr, mp_size_t)
+ENTRY2v(mpz_random2, "mpz_random2", np_mpz_random2, mpz_ptr, mp_size_t)
+// mpz_import, mpz_export: unclear how they would work.
 ENTRY1(mpz_fits_ulong_p, "mpz_fits_ulong_p", np_mpz_fits_ulong_p, bool, mpz_ptr)
 ENTRY1(mpz_fits_slong_p, "mpz_fits_slong_p", np_mpz_fits_slong_p, bool, mpz_ptr)
 // mpz_fits_uint_p, mpz_fits_sint_p, mpz_fits_ushort_p, mpz_fits_sshort_p:
-// C-specific.
+// C-specific; let us avoid gratuitous, non-portable exposure of C type sizes.
 ENTRY1(mpz_odd_p, "mpz_odd_p", np_mpz_odd_p, bool, mpz_ptr)
 ENTRY1(mpz_even_p, "mpz_even_p", np_mpz_even_p, bool, mpz_ptr)
 ENTRY2(mpz_sizeinbase, "mpz_sizeinbase", np_mpz_sizeinbase, size_t, mpz_ptr, int_2_to_62)
-// mpz_array_init: C-specific.
-//ENTRY2v(_mpz_realloc, "_mpz_realloc", np__mpz_realloc, mpz_ptr, mp_size_t)
-//ENTRY2(mpz_getlimbn, "mpz_getlimbn", np_mpz_getlimbn, mp_limb_t, mpz_ptr, mp_size_t)
+// mpz_array_init: tricky.
+ENTRY2v(_mpz_realloc, "_mpz_realloc", np__mpz_realloc, mpz_ptr, mp_size_t)
+ENTRY2(mpz_getlimbn, "mpz_getlimbn", np_mpz_getlimbn, mp_limb_t, mpz_ptr, mp_size_t)
 ENTRY1(mpz_size, "mpz_size", np_mpz_size, size_t, mpz_ptr)
 
-CTOR("mpq", npobjMpq)
-CTOR("mpq_numref", npobjMpq_numref)
-CTOR("mpq_denref", npobjMpq_denref)
 ENTRY1v(mpq_canonicalize, "mpq_canonicalize", np_mpq_canonicalize, mpq_ptr)
+CTOR("mpq", npobjMpq)
+// mpq_init: C-specific; use mpq().
+// mpq_inits: C-specific.
+// mpq_clear: called automatically.
+// mpq_clears: C-specific.
 ENTRY2v(mpq_set, "mpq_set", np_mpq_set, mpq_ptr, mpq_ptr)
 ENTRY2v(mpq_set_z, "mpq_set_z", np_mpq_set_z, mpq_ptr, mpz_ptr)
 ENTRY3v(mpq_set_ui, "mpq_set_ui", np_mpq_set_ui, mpq_ptr, ulong, ulong)
 ENTRY3v(mpq_set_si, "mpq_set_si", np_mpq_set_si, mpq_ptr, long, long)
 ENTRY3(mpq_set_str, "mpq_set_str", np_mpq_set_str, int, mpq_ptr, stringz, int_0_or_2_to_62)
 ENTRY2v(mpq_swap, "mpq_swap", np_mpq_swap, mpq_ptr, mpq_ptr)
+ENTRY1(mpq_get_d, "mpq_get_d", np_mpq_get_d, double, mpq_ptr)
+ENTRY2v(mpq_set_d, "mpq_set_d", np_mpq_set_d, mpq_ptr, double)
+ENTRY2v(mpq_set_f, "mpq_set_f", np_mpq_set_f, mpq_ptr, mpf_ptr)
+// mpq_get_str: until implemented, use mpq_numref(q) + "/" + mpq_denref(q).
 ENTRY3v(mpq_add, "mpq_add", np_mpq_add, mpq_ptr, mpq_ptr, mpq_ptr)
 ENTRY3v(mpq_sub, "mpq_sub", np_mpq_sub, mpq_ptr, mpq_ptr, mpq_ptr)
 ENTRY3v(mpq_mul, "mpq_mul", np_mpq_mul, mpq_ptr, mpq_ptr, mpq_ptr)
@@ -197,17 +213,32 @@ ENTRY3(mpq_cmp_si, "mpq_cmp_si", np_mpq_cmp_si, int, mpq_ptr, long, long)
 ENTRY3(mpq_cmp_ui, "mpq_cmp_ui", np_mpq_cmp_ui, int, mpq_ptr, ulong, ulong)
 ENTRY1(mpq_sgn, "mpq_sgn", np_mpq_sgn, int, mpq_ptr)
 ENTRY2(mpq_equal, "mpq_equal", np_mpq_equal, int, mpq_ptr, mpq_ptr)
-// mpq_numref, mpq_denref: would require some design thought.
+CTOR("mpq_numref", npobjMpq_numref)
+CTOR("mpq_denref", npobjMpq_denref)
 ENTRY2v(mpq_get_num, "mpq_get_num", np_mpq_get_num, mpz_ptr, mpq_ptr)
 ENTRY2v(mpq_get_den, "mpq_get_den", np_mpq_get_den, mpz_ptr, mpq_ptr)
 ENTRY2v(mpq_set_num, "mpq_set_num", np_mpq_set_num, mpq_ptr, mpz_ptr)
 ENTRY2v(mpq_set_den, "mpq_set_den", np_mpq_set_den, mpq_ptr, mpz_ptr)
+// mpq_out_str, mpq_inp_str: not relevant to plugin.
 
 CTOR("mpf", npobjMpf)
-CTOR("randstate", npobjRandstate)
-CTOR("mpfr", npobjMpfr)
 
-// XXX mpf, gmp_randstate, and mpfr operations.
+CTOR("randstate", npobjRandstate)
+ENTRY1v(x_gmp_randinit_default, "gmp_randinit_default", np_gmp_randinit_default, x_gmp_randstate_ptr)
+ENTRY1v(x_gmp_randinit_mt, "gmp_randinit_mt", np_gmp_randinit_mt, x_gmp_randstate_ptr)
+ENTRY4v(x_gmp_randinit_lc_2exp, "gmp_randinit_lc_2exp", np_gmp_randinit_lc_2exp, x_gmp_randstate_ptr, mpz_ptr, ulong, mp_bitcnt_t)
+ENTRY2(x_gmp_randinit_lc_2exp_size, "gmp_randinit_lc_2exp_size", np_gmp_randinit_lc_2exp_size, int, x_gmp_randstate_ptr, mp_bitcnt_t)
+ENTRY2v(x_gmp_randinit_set, "gmp_randinit_set", np_gmp_randinit_set, x_gmp_randstate_ptr, x_gmp_randstate_ptr)
+// gmp_randinit: obsolete and variadic.
+// gmp_randclear: called automatically.
+ENTRY2v(gmp_randseed, "gmp_randseed", np_gmp_randseed, x_gmp_randstate_ptr, mpz_ptr)
+ENTRY2v(gmp_randseed_ui, "gmp_randseed_ui", np_gmp_randseed_ui, x_gmp_randstate_ptr, ulong)
+ENTRY2(gmp_urandomb_ui, "gmp_urandomb_ui", np_gmp_urandomb_ui, ulong, x_gmp_randstate_ptr, ulong)
+ENTRY2(gmp_urandomm_ui, "gmp_urandomm_ui", np_gmp_urandomm_ui, ulong, x_gmp_randstate_ptr, ulong)
+
+//CTOR("mpfr", npobjMpfr)
+
+// XXX mpf and mpfr operations.
 
 #undef ENTRY
 #undef CTOR

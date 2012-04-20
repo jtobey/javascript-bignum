@@ -29,7 +29,7 @@ TODO:
 * Add MPFR functions to the GMP plugin.  Create a high-precision
   inexact number implementation on MPFR.
 
-* Consider adding GMP bindings for randstate and mpf_t.
+* Consider adding GMP bindings for mpf_t.
 
 * Reimplement the performance benefit of using Number.prototype for
   inexact, but make it optional.
