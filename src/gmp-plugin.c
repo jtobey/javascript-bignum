@@ -394,6 +394,7 @@ DEFINE_OBJECT_TYPE (new_mpz, Integer, mpz_ptr, mp[0])
 
 typedef int int_0_or_2_to_62;
 typedef int int_2_to_62;
+typedef int int_abs_2_to_62;
 
 static bool
 in_int_0_or_2_to_62 (const NPVariant* var, int count, int* arg)
@@ -409,6 +410,14 @@ in_int_2_to_62 (const NPVariant* var, int count, int* arg)
 }
 #define del_int_2_to_62(arg)
 
+static bool
+in_int_abs_2_to_62 (const NPVariant* var, int count, int* arg)
+{
+    int i = (*arg > 0 ? *arg : -*arg);
+    return in_int (var, count, arg) && i >= 2 && i <= 62;
+}
+#define del_int_abs_2_to_62(arg)
+
 DEFINE_IN_UNSIGNED (mp_bitcnt_t)
 DEFINE_OUT_NUMBER (mp_bitcnt_t)
 #define del_mp_bitcnt_t(arg)
@@ -416,6 +425,10 @@ DEFINE_OUT_NUMBER (mp_bitcnt_t)
 DEFINE_IN_UNSIGNED (mp_size_t)
 DEFINE_OUT_NUMBER (mp_size_t)
 #define del_mp_size_t(arg)
+
+DEFINE_IN_UNSIGNED (mp_exp_t)
+DEFINE_OUT_NUMBER (mp_exp_t)
+#define del_mp_exp_t(arg)
 
 DEFINE_OUT_NUMBER (mp_limb_t)
 
@@ -849,7 +862,9 @@ Entry_invokeDefault (NPObject *vEntry,
     mp_bitcnt_t aN ## mp_bitcnt_t UNUSED; \
     int_0_or_2_to_62 aN ## int_0_or_2_to_62 UNUSED; \
     int_2_to_62 aN ## int_2_to_62 UNUSED; \
-    mp_size_t aN ## mp_size_t UNUSED;
+    int_abs_2_to_62 aN ## int_abs_2_to_62 UNUSED; \
+    mp_size_t aN ## mp_size_t UNUSED; \
+    mp_exp_t aN ## mp_exp_t UNUSED;
 
     ARGN(a0);
     ARGN(a1);
@@ -869,6 +884,13 @@ Entry_invokeDefault (NPObject *vEntry,
     x_gmp_randstate_ptr a0new_rand;
 
     switch (CONTAINING (Entry, npobj, vEntry)->number) {
+
+#define ENTRY0(name, string, id, rett)                          \
+        case __LINE__:                                          \
+            if (vArgNumber != vArgCount) break;                 \
+            out_ ## rett (name (), vResult);                    \
+            ok = true;                                          \
+            break;
 
 #define ENTRY1(name, string, id, rett, t0)                      \
         case __LINE__:                                          \

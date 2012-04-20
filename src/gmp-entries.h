@@ -2,6 +2,48 @@
    C macros as IDL for libgmp.
 
    Copyright(C) 2012 John Tobey, see ../LICENCE
+
+   TO DO:
+      mpz_init_set_str - maybe
+      mpz_get_d_2exp
+      mpz_import - maybe
+      mpz_export - maybe
+      mpq_get_str (as toString method)
+      mpf_set_default_prec - maybe, optionally
+      mpf_set_prec_raw - maybe
+      mpf_init_set_str - maybe
+      mpf_get_d_2exp
+      mpf_get_str (perhaps as toString)
+      gmp_randinit_lc_2exp_size
+
+   NOT TO DO:
+      mpz_get_str - use toString method
+      mpz_out_str
+      mpz_inp_str
+      mpz_out_raw
+      mpz_inp_raw
+      mpz_fits_uint_p
+      mpz_fits_sint_p
+      mpz_fits_ushort_p
+      mpz_fits_sshort_p
+      mpz_array_init
+      mpq_out_str
+      mpq_inp_str
+      mpf_out_str
+      mpf_inp_str
+      mpf_fits_uint_p
+      mpf_fits_sint_p
+      mpf_fits_ushort_p
+      mpf_fits_sshort_p
+      mpn* - probably not
+      gmp_randinit - obsolete
+      gmp_*printf - possibly with libffi
+      gmp_*scanf - possibly with libffi
+      BSD compatibility functions - probably not
+      mp_set_memory_functions
+      mp_get_memory_functions
+
+   DONE: every remaining function and macro in the v5.0.4 manual.
 */
 
 #ifndef ENTRY
@@ -13,6 +55,7 @@
 #endif
 
 #ifndef ENTRY1
+# define ENTRY0(__name, __string, __id, __r) ENTRY (__string, __id)
 # define ENTRY1(__name, __string, __id, __r, __t0) ENTRY (__string, __id)
 # define ENTRY2(__name, __string, __id, __r, __t0, __t1) ENTRY (__string, __id)
 # define ENTRY3(__name, __string, __id, __r, __t0, __t1, __t2) \
@@ -27,7 +70,7 @@
 
 ENTRY1(mpz_init, "mpz_init", np_mpz_init, new_mpz, new_mpz)
 // mpz_inits: C-specific.
-// mpz_init2: use mpz + mpz_realloc2.
+ENTRY2(mpz_init2, "mpz_init2", np_mpz_init2, new_mpz, new_mpz, mp_bitcnt_t)
 // mpz_clear: called automatically.
 // mpz_clears: C-specific.
 ENTRY2(mpz_realloc2, "mpz_realloc2", np_mpz_realloc2, void, mpz_ptr, mp_bitcnt_t)
@@ -169,7 +212,7 @@ ENTRY1(mpz_fits_slong_p, "mpz_fits_slong_p", np_mpz_fits_slong_p, bool, mpz_ptr)
 ENTRY1(mpz_odd_p, "mpz_odd_p", np_mpz_odd_p, bool, mpz_ptr)
 ENTRY1(mpz_even_p, "mpz_even_p", np_mpz_even_p, bool, mpz_ptr)
 ENTRY2(mpz_sizeinbase, "mpz_sizeinbase", np_mpz_sizeinbase, size_t, mpz_ptr, int_2_to_62)
-// mpz_array_init: tricky.
+// mpz_array_init: tricky and unsuitable.
 ENTRY2(_mpz_realloc, "_mpz_realloc", np__mpz_realloc, void, mpz_ptr, mp_size_t)
 ENTRY2(mpz_getlimbn, "mpz_getlimbn", np_mpz_getlimbn, mp_limb_t, mpz_ptr, mp_size_t)
 ENTRY1(mpz_size, "mpz_size", np_mpz_size, size_t, mpz_ptr)
@@ -212,7 +255,71 @@ ENTRY2(mpq_set_num, "mpq_set_num", np_mpq_set_num, void, mpq_ptr, mpz_ptr)
 ENTRY2(mpq_set_den, "mpq_set_den", np_mpq_set_den, void, mpq_ptr, mpz_ptr)
 // mpq_out_str, mpq_inp_str: not relevant to plugin.
 
+// mpf_set_default_prec: not suitable for plugin use.
+ENTRY0(mpf_get_default_prec, "mpf_get_default_prec", np_mpf_get_default_prec, mp_bitcnt_t)
 ENTRY1(mpf_init, "mpf_init", np_mpf_init, new_mpf, new_mpf)
+ENTRY2(mpf_init2, "mpf_init2", np_mpf_init2, new_mpf, new_mpf, mp_bitcnt_t)
+// mpf_inits: C-specific.
+// mpf_clear: called automatically.
+// mpf_clears: C-specific.
+ENTRY1(mpf_get_prec, "mpf_get_prec", np_mpf_get_prec, mp_bitcnt_t, mpf_ptr)
+ENTRY2(mpf_set_prec, "mpf_set_prec", np_mpf_set_prec, void, mpf_ptr, mp_bitcnt_t)
+// mpf_set_prec_raw: requires some design thought.
+ENTRY2(mpf_set, "mpf_set", np_mpf_set, void, mpf_ptr, mpf_ptr)
+ENTRY2(mpf_set_ui, "mpf_set_ui", np_mpf_set_ui, void, mpf_ptr, ulong)
+ENTRY2(mpf_set_si, "mpf_set_si", np_mpf_set_si, void, mpf_ptr, long)
+ENTRY2(mpf_set_d, "mpf_set_d", np_mpf_set_d, void, mpf_ptr, double)
+ENTRY2(mpf_set_z, "mpf_set_z", np_mpf_set_z, void, mpf_ptr, mpz_ptr)
+ENTRY2(mpf_set_q, "mpf_set_q", np_mpf_set_q, void, mpf_ptr, mpq_ptr)
+ENTRY3(mpf_set_str, "mpf_set_str", np_mpf_set_str, int, mpf_ptr, stringz, int_abs_2_to_62)
+ENTRY2(mpf_swap, "mpf_swap", np_mpf_swap, void, mpf_ptr, mpf_ptr)
+ENTRY2(mpf_init_set, "mpf_init_set", np_mpf_init_set, new_mpf, new_mpf, mpf_ptr)
+ENTRY2(mpf_init_set_ui, "mpf_init_set_ui", np_mpf_init_set_ui, new_mpf, new_mpf, ulong)
+ENTRY2(mpf_init_set_si, "mpf_init_set_si", np_mpf_init_set_si, new_mpf, new_mpf, long)
+ENTRY2(mpf_init_set_d, "mpf_init_set_d", np_mpf_init_set_d, new_mpf, new_mpf, double)
+// mpf_init_set_str: would return two values; use mpf_init2 + mpf_set_str.
+ENTRY1(mpf_get_d, "mpf_get_d", np_mpf_get_d, double, mpf_ptr)
+// mpf_get_d_2exp: XXX would return two values
+ENTRY1(mpf_get_si, "mpf_get_si", np_mpf_get_si, long, mpf_ptr)
+ENTRY1(mpf_get_ui, "mpf_get_ui", np_mpf_get_ui, ulong, mpf_ptr)
+// mpf_get_str: XXX unimplemented, a bit tricky.
+ENTRY3(mpf_add, "mpf_add", np_mpf_add, void, mpf_ptr, mpf_ptr, mpf_ptr)
+ENTRY3(mpf_add_ui, "mpf_add_ui", np_mpf_add_ui, void, mpf_ptr, mpf_ptr, ulong)
+ENTRY3(mpf_sub, "mpf_sub", np_mpf_sub, void, mpf_ptr, mpf_ptr, mpf_ptr)
+ENTRY3(mpf_ui_sub, "mpf_ui_sub", np_mpf_ui_sub, void, mpf_ptr, ulong, mpf_ptr)
+ENTRY3(mpf_sub_ui, "mpf_sub_ui", np_mpf_sub_ui, void, mpf_ptr, mpf_ptr, ulong)
+ENTRY3(mpf_mul, "mpf_mul", np_mpf_mul, void, mpf_ptr, mpf_ptr, mpf_ptr)
+ENTRY3(mpf_mul_ui, "mpf_mul_ui", np_mpf_mul_ui, void, mpf_ptr, mpf_ptr, ulong)
+ENTRY3(mpf_div, "mpf_div", np_mpf_div, void, mpf_ptr, mpf_ptr, mpf_ptr)
+ENTRY3(mpf_ui_div, "mpf_ui_div", np_mpf_ui_div, void, mpf_ptr, ulong, mpf_ptr)
+ENTRY3(mpf_div_ui, "mpf_div_ui", np_mpf_div_ui, void, mpf_ptr, mpf_ptr, ulong)
+ENTRY2(mpf_sqrt, "mpf_sqrt", np_mpf_sqrt, void, mpf_ptr, mpf_ptr)
+ENTRY2(mpf_sqrt_ui, "mpf_sqrt_ui", np_mpf_sqrt_ui, void, mpf_ptr, ulong)
+ENTRY3(mpf_pow_ui, "mpf_pow_ui", np_mpf_pow_ui, void, mpf_ptr, mpf_ptr, ulong)
+ENTRY2(mpf_neg, "mpf_neg", np_mpf_neg, void, mpf_ptr, mpf_ptr)
+ENTRY2(mpf_abs, "mpf_abs", np_mpf_abs, void, mpf_ptr, mpf_ptr)
+ENTRY3(mpf_mul_2exp, "mpf_mul_2exp", np_mpf_mul_2exp, void, mpf_ptr, mpf_ptr, mp_bitcnt_t)
+ENTRY3(mpf_div_2exp, "mpf_div_2exp", np_mpf_div_2exp, void, mpf_ptr, mpf_ptr, mp_bitcnt_t)
+ENTRY2(mpf_cmp, "mpf_cmp", np_mpf_cmp, int, mpf_ptr, mpf_ptr)
+ENTRY2(mpf_cmp_d, "mpf_cmp_d", np_mpf_cmp_d, int, mpf_ptr, double)
+ENTRY2(mpf_cmp_ui, "mpf_cmp_ui", np_mpf_cmp_ui, int, mpf_ptr, ulong)
+ENTRY2(mpf_cmp_si, "mpf_cmp_si", np_mpf_cmp_si, int, mpf_ptr, long)
+ENTRY3(mpf_eq, "mpf_eq", np_mpf_eq, int, mpf_ptr, mpf_ptr, mp_bitcnt_t)
+ENTRY3(mpf_reldiff, "mpf_reldiff", np_mpf_reldiff, void, mpf_ptr, mpf_ptr, mpf_ptr)
+ENTRY1(mpf_sgn, "mpf_sgn", np_mpf_sgn, int, mpf_ptr)
+// mpf_out_str, mpf_inp_str: not relevant to plugin.
+ENTRY2(mpf_ceil, "mpf_ceil", np_mpf_ceil, void, mpf_ptr, mpf_ptr)
+ENTRY2(mpf_floor, "mpf_floor", np_mpf_floor, void, mpf_ptr, mpf_ptr)
+ENTRY2(mpf_trunc, "mpf_trunc", np_mpf_trunc, void, mpf_ptr, mpf_ptr)
+ENTRY1(mpf_integer_p, "mpf_integer_p", np_mpf_integer_p, bool, mpf_ptr)
+ENTRY1(mpf_fits_ulong_p, "mpf_fits_ulong_p", np_mpf_fits_ulong_p, bool, mpf_ptr)
+ENTRY1(mpf_fits_slong_p, "mpf_fits_slong_p", np_mpf_fits_slong_p, bool, mpf_ptr)
+// mpf_fits_uint_p, mpf_fits_sint_p, mpf_fits_ushort_p, mpf_fits_sshort_p:
+// C-specific; let us avoid gratuitous, non-portable exposure of C type sizes.
+ENTRY3(mpf_urandomb, "mpf_urandomb", np_mpf_urandomb, void, mpf_ptr, x_gmp_randstate_ptr, mp_bitcnt_t)
+ENTRY3(mpf_random2, "mpf_random2", np_mpf_random2, void, mpf_ptr, mp_size_t, mp_exp_t)
+
+// mpn functions: unimplemented, not very suitable for plugins.
 
 ENTRY1(gmp_randinit_default, "gmp_randinit_default", np_gmp_randinit_default, new_rand, new_rand)
 ENTRY1(gmp_randinit_mt, "gmp_randinit_mt", np_gmp_randinit_mt, new_rand, new_rand)
@@ -226,10 +333,12 @@ ENTRY2(gmp_randseed_ui, "gmp_randseed_ui", np_gmp_randseed_ui, void, x_gmp_rands
 ENTRY2(gmp_urandomb_ui, "gmp_urandomb_ui", np_gmp_urandomb_ui, ulong, x_gmp_randstate_ptr, ulong)
 ENTRY2(gmp_urandomm_ui, "gmp_urandomm_ui", np_gmp_urandomm_ui, ulong, x_gmp_randstate_ptr, ulong)
 
-// XXX mpf and mpfr operations.
+// gmp_printf, gmp_scanf, and friends: something similar would be nice.
+// mp_set_memory_functions, mp_get_memory_functions: not relevant to plugin.
 
 #undef ENTRY
 #undef CTOR
+#undef ENTRY0
 #undef ENTRY1
 #undef ENTRY2
 #undef ENTRY3
