@@ -9,7 +9,7 @@
       mpz_import - maybe
       mpz_export - maybe
       mpq_get_str (as toString method)
-      mpf_set_default_prec - maybe, optionally
+      mpf_set_default_prec - maybe, as compile-time option
       mpf_set_prec_raw - maybe
       mpf_init_set_str - maybe
       mpf_get_d_2exp
@@ -43,7 +43,7 @@
       mp_set_memory_functions
       mp_get_memory_functions
 
-   DONE: every remaining function and macro in the v5.0.4 manual.
+   DONE: every remaining function and macro in the GMP v5.0.4 manual.
 */
 
 #ifndef ENTRY

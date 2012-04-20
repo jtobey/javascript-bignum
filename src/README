@@ -1,0 +1,36 @@
+This directory contains source code for a browser plug-in that gives
+scripts access to GMP, the GNU multiple precision arithmetic library.
+The code status is alpha to early beta.
+
+The plugin supports most GMP functions.  For a list, see
+gmp-entries.h.  The code uses NPAPI, so the plugin should run in all
+major browsers *except* Internet Explorer.  I have tested it (briefly)
+in Firefox 11.0 and Chrome 19.0.1084.30.
+
+The plugin can crash on certain input, such as requesting the square
+root of a negative number.  This is hard to fix.
+
+The per-call time overhead is quite high, unless you configure your
+browser to run the plug-in in-process.  But if you do, the plug-in can
+crash the browser.
+
+This is free software and comes with NO WARRANTY as explained in
+../LICENSE.
+
+You will need:
+
+    * GNU/Linux or a similar operating system, or some porting experience.
+    * npapi.h and accompanying files: http://code.google.com/p/npapi-sdk/
+    * the GMP development package: http://gmplib.org/devel/
+    * a C compiler: http://gcc.gnu.org/
+    * Make: http://www.gnu.org/software/make/
+
+To install, run the following commands.  If successful, restart your
+browser and open the example page, gmp-example.html.  The example
+simply pops up an alert containing the result of a calculation.
+
+    make
+    mkdir -p ~/.mozilla/plugins/
+    cp libgmp-plugin.so ~/.mozilla/plugins/
+
+Errors?  Questions?  Ideas?  Email me: John.Tobey@gmail.com
