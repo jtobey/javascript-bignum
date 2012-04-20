@@ -170,7 +170,7 @@ ENTRY3v(mpz_urandomm, "mpz_urandomm", np_mpz_urandomm, mpz_ptr, x_gmp_randstate_
 ENTRY3v(mpz_rrandomb, "mpz_rrandomb", np_mpz_rrandomb, mpz_ptr, x_gmp_randstate_ptr, mp_bitcnt_t)
 ENTRY2v(mpz_random, "mpz_random", np_mpz_random, mpz_ptr, mp_size_t)
 ENTRY2v(mpz_random2, "mpz_random2", np_mpz_random2, mpz_ptr, mp_size_t)
-// mpz_import, mpz_export: unclear how they would work.
+// mpz_import, mpz_export: tricky to implmement with NPAPI.
 ENTRY1(mpz_fits_ulong_p, "mpz_fits_ulong_p", np_mpz_fits_ulong_p, bool, mpz_ptr)
 ENTRY1(mpz_fits_slong_p, "mpz_fits_slong_p", np_mpz_fits_slong_p, bool, mpz_ptr)
 // mpz_fits_uint_p, mpz_fits_sint_p, mpz_fits_ushort_p, mpz_fits_sshort_p:
