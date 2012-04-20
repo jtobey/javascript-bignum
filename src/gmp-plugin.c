@@ -1041,6 +1041,7 @@ Entry_invokeDefault (NPObject *vEntry,
                      NPVariant *vResult)
 {
     bool ok = false;
+    int vArgNumber = 0;
 
 #define ARGN(aN) \
     int aN ## int UNUSED; \
@@ -1063,69 +1064,71 @@ Entry_invokeDefault (NPObject *vEntry,
     ARGN(a3);
     ARGN(a4);
 
+#define IN(a, t) in_ ## t (&vArgs[vArgNumber++], &a ## t)
+
     switch (CONTAINING (Entry, npobj, vEntry)->number) {
 
-#define ENTRY1(name, string, id, rett, t0)                              \
-        case __LINE__:                                                  \
-            if (vArgCount != 1 || !in_ ## t0 (&vArgs[0], &a0 ## t0))    \
-                break;                                                  \
-            out_ ## rett (name (a0 ## t0), vResult);                    \
-            ok = true;                                                  \
-            del_ ## t0 (a0 ## t0);                                      \
+#define ENTRY1(name, string, id, rett, t0)              \
+        case __LINE__:                                  \
+            if (vArgCount != 1 || !IN (a0, t0)) break;  \
+            out_ ## rett (name (a0 ## t0), vResult);    \
+            ok = true;                                  \
+            del_ ## t0 (a0 ## t0);                      \
             break;
 
-#define ENTRY2(name, string, id, rett, t0, t1)                          \
-        case __LINE__:                                                  \
-            if (vArgCount != 2 || !in_ ## t0 (&vArgs[0], &a0 ## t0)) break; \
-            if (!in_ ## t1 (&vArgs[1], &a1 ## t1)) goto del0_ ## id;    \
-            out_ ## rett (name (a0 ## t0, a1 ## t1), vResult);          \
-            ok = true;                                                  \
-            del_ ## t1 (a1 ## t1);                                      \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                         \
+#define ENTRY2(name, string, id, rett, t0, t1)                  \
+        case __LINE__:                                          \
+            if (vArgCount != 2 || !IN (a0, t0)) break;          \
+            if (!IN (a1, t1)) goto del0_ ## id;                 \
+            out_ ## rett (name (a0 ## t0, a1 ## t1), vResult);  \
+            ok = true;                                          \
+            del_ ## t1 (a1 ## t1);                              \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
             break;
 
-#define ENTRY3(name, string, id, rett, t0, t1, t2)                      \
-        case __LINE__:                                                  \
-            if (vArgCount != 3 || !in_ ## t0 (&vArgs[0], &a0 ## t0)) break; \
-            if (!in_ ## t1 (&vArgs[1], &a1 ## t1)) goto del0_ ## id;    \
-            if (!in_ ## t2 (&vArgs[2], &a2 ## t2)) goto del1_ ## id;    \
-            out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2), vResult);\
-            ok = true;                                                  \
-            del_ ## t2 (a2 ## t2);                                      \
-            del1_ ## id: del_ ## t1 (a1 ## t1);                         \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                         \
+#define ENTRY3(name, string, id, rett, t0, t1, t2)              \
+        case __LINE__:                                          \
+            if (vArgCount != 3 || !IN (a0, t0)) break;          \
+            if (!IN (a1, t1)) goto del0_ ## id;                 \
+            if (!IN (a2, t2)) goto del1_ ## id;                 \
+            out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2),  \
+                          vResult);                             \
+            ok = true;                                          \
+            del_ ## t2 (a2 ## t2);                              \
+            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
             break;
 
-#define ENTRY4(name, string, id, rett, t0, t1, t2, t3)                  \
-        case __LINE__:                                                  \
-            if (vArgCount != 4 || !in_ ## t0 (&vArgs[0], &a0 ## t0)) break; \
-            if (!in_ ## t1 (&vArgs[1], &a1 ## t1)) goto del0_ ## id;    \
-            if (!in_ ## t2 (&vArgs[2], &a2 ## t2)) goto del1_ ## id;    \
-            if (!in_ ## t3 (&vArgs[3], &a3 ## t3)) goto del2_ ## id;    \
-            out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2,           \
-                                a3 ## t3), vResult);                    \
-            ok = true;                                                  \
-            del_ ## t3 (a3 ## t3);                                      \
-            del2_ ## id: del_ ## t2 (a2 ## t2);                         \
-            del1_ ## id: del_ ## t1 (a1 ## t1);                         \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                         \
+#define ENTRY4(name, string, id, rett, t0, t1, t2, t3)          \
+        case __LINE__:                                          \
+            if (vArgCount != 4 || !IN (a0, t0)) break;          \
+            if (!IN (a1, t1)) goto del0_ ## id;                 \
+            if (!IN (a2, t2)) goto del1_ ## id;                 \
+            if (!IN (a3, t3)) goto del2_ ## id;                 \
+            out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2,   \
+                                a3 ## t3), vResult);            \
+            ok = true;                                          \
+            del_ ## t3 (a3 ## t3);                              \
+            del2_ ## id: del_ ## t2 (a2 ## t2);                 \
+            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
             break;
 
-#define ENTRY5(name, string, id, rett, t0, t1, t2, t3, t4)              \
-        case __LINE__:                                                  \
-            if (vArgCount != 5 || !in_ ## t0 (&vArgs[0], &a0 ## t0)) break; \
-            if (!in_ ## t1 (&vArgs[1], &a1 ## t1)) goto del0_ ## id;    \
-            if (!in_ ## t2 (&vArgs[2], &a2 ## t2)) goto del1_ ## id;    \
-            if (!in_ ## t3 (&vArgs[3], &a3 ## t3)) goto del2_ ## id;    \
-            if (!in_ ## t4 (&vArgs[4], &a4 ## t4)) goto del3_ ## id;    \
-            out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2,           \
-                                a3 ## t3, a4 ## t4), vResult);          \
-            ok = true;                                                  \
-            del_ ## t4 (a4 ## t4);                                      \
-            del3_ ## id: del_ ## t3 (a3 ## t3);                         \
-            del2_ ## id: del_ ## t2 (a2 ## t2);                         \
-            del1_ ## id: del_ ## t1 (a1 ## t1);                         \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                         \
+#define ENTRY5(name, string, id, rett, t0, t1, t2, t3, t4)      \
+        case __LINE__:                                          \
+            if (vArgCount != 5 || !IN (a0, t0)) break;          \
+            if (!IN (a1, t1)) goto del0_ ## id;                 \
+            if (!IN (a2, t2)) goto del1_ ## id;                 \
+            if (!IN (a3, t3)) goto del2_ ## id;                 \
+            if (!IN (a4, t4)) goto del3_ ## id;                 \
+            out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2,   \
+                                a3 ## t3, a4 ## t4), vResult);  \
+            ok = true;                                          \
+            del_ ## t4 (a4 ## t4);                              \
+            del3_ ## id: del_ ## t3 (a3 ## t3);                 \
+            del2_ ## id: del_ ## t2 (a2 ## t2);                 \
+            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
             break;
 
 #include "gmp-entries.h"
