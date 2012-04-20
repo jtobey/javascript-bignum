@@ -140,6 +140,8 @@ del_stringz (stringz arg)
  * Return value conversion.
  */
 
+#define out_void(value, result) value; VOID_TO_NPVARIANT (*result);
+
 static void
 out_double (double value, NPVariant* result)
 {
@@ -1063,16 +1065,6 @@ Entry_invokeDefault (NPObject *vEntry,
 
     switch (CONTAINING (Entry, npobj, vEntry)->number) {
 
-#define ENTRY1v(name, string, id, t0)                                   \
-        case __LINE__:                                                  \
-            VOID_TO_NPVARIANT (*vResult);                               \
-            if (argCount != 1 || !in_ ## t0 (&args[0], &a0 ## t0))      \
-                break;                                                  \
-            name (a0 ## t0);                                            \
-            ok = true;                                                  \
-            del_ ## t0 (a0 ## t0);                                      \
-            break;
-
 #define ENTRY1(name, string, id, rett, t0)                              \
         case __LINE__:                                                  \
             if (argCount != 1 || !in_ ## t0 (&args[0], &a0 ## t0))      \
@@ -1080,17 +1072,6 @@ Entry_invokeDefault (NPObject *vEntry,
             out_ ## rett (name (a0 ## t0), vResult);                    \
             ok = true;                                                  \
             del_ ## t0 (a0 ## t0);                                      \
-            break;
-
-#define ENTRY2v(name, string, id, t0, t1)                               \
-        case __LINE__:                                                  \
-            VOID_TO_NPVARIANT (*vResult);                               \
-            if (argCount != 2 || !in_ ## t0 (&args[0], &a0 ## t0)) break; \
-            if (!in_ ## t1 (&args[1], &a1 ## t1)) goto del0_ ## id;     \
-            name (a0 ## t0, a1 ## t1);                                  \
-            ok = true;                                                  \
-            del_ ## t1 (a1 ## t1);                                      \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                         \
             break;
 
 #define ENTRY2(name, string, id, rett, t0, t1)                          \
@@ -1103,19 +1084,6 @@ Entry_invokeDefault (NPObject *vEntry,
             del0_ ## id: del_ ## t0 (a0 ## t0);                         \
             break;
 
-#define ENTRY3v(name, string, id, t0, t1, t2)                           \
-        case __LINE__:                                                  \
-            VOID_TO_NPVARIANT (*vResult);                               \
-            if (argCount != 3 || !in_ ## t0 (&args[0], &a0 ## t0)) break; \
-            if (!in_ ## t1 (&args[1], &a1 ## t1)) goto del0_ ## id;     \
-            if (!in_ ## t2 (&args[2], &a2 ## t2)) goto del1_ ## id;     \
-            name (a0 ## t0, a1 ## t1, a2 ## t2);                        \
-            ok = true;                                                  \
-            del_ ## t2 (a2 ## t2);                                      \
-            del1_ ## id: del_ ## t1 (a1 ## t1);                         \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                         \
-            break;
-
 #define ENTRY3(name, string, id, rett, t0, t1, t2)                      \
         case __LINE__:                                                  \
             if (argCount != 3 || !in_ ## t0 (&args[0], &a0 ## t0)) break; \
@@ -1124,21 +1092,6 @@ Entry_invokeDefault (NPObject *vEntry,
             out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2), vResult);\
             ok = true;                                                  \
             del_ ## t2 (a2 ## t2);                                      \
-            del1_ ## id: del_ ## t1 (a1 ## t1);                         \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                         \
-            break;
-
-#define ENTRY4v(name, string, id, t0, t1, t2, t3)                       \
-        case __LINE__:                                                  \
-            VOID_TO_NPVARIANT (*vResult);                               \
-            if (argCount != 4 || !in_ ## t0 (&args[0], &a0 ## t0)) break; \
-            if (!in_ ## t1 (&args[1], &a1 ## t1)) goto del0_ ## id;     \
-            if (!in_ ## t2 (&args[2], &a2 ## t2)) goto del1_ ## id;     \
-            if (!in_ ## t3 (&args[3], &a3 ## t3)) goto del2_ ## id;     \
-            name (a0 ## t0, a1 ## t1, a2 ## t2, a3 ## t3);              \
-            ok = true;                                                  \
-            del_ ## t3 (a3 ## t3);                                      \
-            del2_ ## id: del_ ## t2 (a2 ## t2);                         \
             del1_ ## id: del_ ## t1 (a1 ## t1);                         \
             del0_ ## id: del_ ## t0 (a0 ## t0);                         \
             break;
@@ -1158,15 +1111,15 @@ Entry_invokeDefault (NPObject *vEntry,
             del0_ ## id: del_ ## t0 (a0 ## t0);                         \
             break;
 
-#define ENTRY5v(name, string, id, t0, t1, t2, t3, t4)                   \
+#define ENTRY5(name, string, id, rett, t0, t1, t2, t3, t4)              \
         case __LINE__:                                                  \
-            VOID_TO_NPVARIANT (*vResult);                               \
             if (argCount != 5 || !in_ ## t0 (&args[0], &a0 ## t0)) break; \
             if (!in_ ## t1 (&args[1], &a1 ## t1)) goto del0_ ## id;     \
             if (!in_ ## t2 (&args[2], &a2 ## t2)) goto del1_ ## id;     \
             if (!in_ ## t3 (&args[3], &a3 ## t3)) goto del2_ ## id;     \
             if (!in_ ## t4 (&args[4], &a4 ## t4)) goto del3_ ## id;     \
-            name (a0 ## t0, a1 ## t1, a2 ## t2, a3 ## t3, a4 ## t4);    \
+            out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2,           \
+                                a3 ## t3, a4 ## t4), vResult);          \
             ok = true;                                                  \
             del_ ## t4 (a4 ## t4);                                      \
             del3_ ## id: del_ ## t3 (a3 ## t3);                         \
