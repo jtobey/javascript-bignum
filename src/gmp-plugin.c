@@ -35,12 +35,19 @@ typedef struct _TopObject {
     NPObject npobjTop;
     NPP instance;
     NPObject npobjGmp;
+    NPClass Entry_npclass;
 #define CTOR(string, id) NPObject id;
 #include "gmp-entries.h"
 } TopObject;
 
 #define CONTAINING(outer, member, ptr)                          \
     ((outer*) (((char*) ptr) - offsetof (outer, member)))
+
+#if __GNUC__
+#define UNUSED __attribute__ ((unused))
+#else
+#define UNUSED
+#endif
 
 /*
  * Argument conversion.
@@ -50,6 +57,8 @@ typedef unsigned long ulong;
 typedef char const* stringz;
 
 #define DEFINE_IN_NUMBER(type)                                          \
+    static bool                                                         \
+    in_ ## type (const NPVariant* var, type* arg) UNUSED;               \
     static bool                                                         \
     in_ ## type (const NPVariant* var, type* arg)                       \
     {                                                                   \
@@ -137,6 +146,8 @@ out_double (double value, NPVariant* result)
 }
 
 #define DEFINE_OUT_NUMBER(type)                                         \
+    static void                                                         \
+    out_ ## type (type value, NPVariant* result) UNUSED;                \
     static void                                                         \
     out_ ## type (type value, NPVariant* result)                        \
     {                                                                   \
@@ -1010,11 +1021,6 @@ Entry_invokeDefault (NPObject *npobj,
 {
     bool ok = false;
 
-#if __GNUC__
-#define UNUSED __attribute__ ((unused))
-#else
-#define UNUSED
-#endif
 #define ARGN(aN) \
     int aN ## int UNUSED; \
     long aN ## long UNUSED; \
@@ -1163,20 +1169,6 @@ Entry_invokeDefault (NPObject *npobj,
     return true;
 }
 
-static NPClass Entry_npclass = {
-    structVersion   : NP_CLASS_STRUCT_VERSION,
-    allocate        : Entry_allocate,
-    deallocate      : Entry_deallocate,
-    invalidate      : obj_invalidate,
-    hasMethod       : obj_id_false,
-    invokeDefault   : Entry_invokeDefault,
-    hasProperty     : obj_id_false,
-    getProperty     : obj_id_var_void,
-    setProperty     : setProperty_ro,
-    removeProperty  : removeProperty_ro,
-    enumerate       : enumerate_empty
-};
-
 /*
  * Class of the "gmp" object.
  */
@@ -1216,9 +1208,9 @@ Gmp_hasProperty(NPObject *npobj, NPIdentifier key)
 static void
 get_entry (NPObject *npobj, int number, NPVariant *result)
 {
-    NPP instance = CONTAINING (TopObject, npobjGmp, npobj)->instance;
+    TopObject* top = CONTAINING (TopObject, npobjGmp, npobj);
     Entry* entry = (Entry*) sBrowserFuncs->createobject
-        (instance, &Entry_npclass);
+        (top->instance, &top->Entry_npclass);
 
     if (entry) {
         entry->number = number;
@@ -1317,14 +1309,25 @@ TopObject_allocate (NPP instance, NPClass *aClass)
 #endif  /* DEBUG_ALLOC */
     if (ret) {
         memset (ret, '\0', sizeof *ret);
-        ret->instance = instance;
-        ret->npobjGmp._class = &Gmp_npclass;
-        ret->npobjMpz._class = &Mpz_npclass;
-        ret->npobjMpq._class = &Mpq_npclass;
-        ret->npobjMpq_numref._class = &Mpq_numref_npclass;
-        ret->npobjMpq_denref._class = &Mpq_denref_npclass;
-        ret->npobjMpf._class = &Mpf_npclass;
-        ret->npobjRandstate._class = &Randstate_npclass;
+        ret->instance                      = instance;
+        ret->npobjGmp._class               = &Gmp_npclass;
+        ret->npobjMpz._class               = &Mpz_npclass;
+        ret->npobjMpq._class               = &Mpq_npclass;
+        ret->npobjMpq_numref._class        = &Mpq_numref_npclass;
+        ret->npobjMpq_denref._class        = &Mpq_denref_npclass;
+        ret->npobjMpf._class               = &Mpf_npclass;
+        ret->npobjRandstate._class         = &Randstate_npclass;
+        ret->Entry_npclass.structVersion   = NP_CLASS_STRUCT_VERSION;
+        ret->Entry_npclass.allocate        = Entry_allocate;
+        ret->Entry_npclass.deallocate      = Entry_deallocate;
+        ret->Entry_npclass.invalidate      = obj_invalidate;
+        ret->Entry_npclass.hasMethod       = obj_id_false;
+        ret->Entry_npclass.invokeDefault   = Entry_invokeDefault;
+        ret->Entry_npclass.hasProperty     = obj_id_false;
+        ret->Entry_npclass.getProperty     = obj_id_var_void;
+        ret->Entry_npclass.setProperty     = setProperty_ro;
+        ret->Entry_npclass.removeProperty  = removeProperty_ro;
+        ret->Entry_npclass.enumerate       = enumerate_empty;
     }
     return &ret->npobjTop;
 }
