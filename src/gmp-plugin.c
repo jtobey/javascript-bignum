@@ -50,7 +50,7 @@ typedef unsigned long ulong;
 typedef char const* stringz;
 
 #define DEFINE_IN_NUMBER(type)                                          \
-    static inline bool                                                  \
+    static bool                                                         \
     in_ ## type (const NPVariant* var, type* arg)                       \
     {                                                                   \
         if (NPVARIANT_IS_INT32 (*var) &&                                \
@@ -65,7 +65,7 @@ typedef char const* stringz;
     }
 
 #define DEFINE_IN_UNSIGNED(type)                                        \
-    static inline bool                                                  \
+    static bool                                                         \
     in_ ## type (const NPVariant* var, type* arg)                       \
     {                                                                   \
         if (NPVARIANT_IS_INT32 (*var) && NPVARIANT_TO_INT32 (*var) >= 0 && \
@@ -83,7 +83,7 @@ DEFINE_IN_NUMBER (int)
 DEFINE_IN_NUMBER (long)
 DEFINE_IN_UNSIGNED (ulong)
 
-static inline bool
+static bool
 in_double (const NPVariant* var, double* arg)
 {
     if (NPVARIANT_IS_DOUBLE (*var))
@@ -97,7 +97,7 @@ in_double (const NPVariant* var, double* arg)
 
 /* Chrome does not terminate its NPString with NUL.  Cope.  */
 
-static inline bool
+static bool
 in_stringz (const NPVariant* var, stringz* arg)
 {
     const NPString* npstr;
@@ -115,7 +115,7 @@ in_stringz (const NPVariant* var, stringz* arg)
     return true;
 }
 
-static inline void
+static void
 del_stringz (stringz arg)
 {
     sBrowserFuncs->memfree ((char*) arg);
@@ -130,14 +130,14 @@ del_stringz (stringz arg)
  * Return value conversion.
  */
 
-static inline void
+static void
 out_double (double value, NPVariant* result)
 {
     DOUBLE_TO_NPVARIANT (value, *result);
 }
 
 #define DEFINE_OUT_NUMBER(type)                                         \
-    static inline void                                                  \
+    static void                                                         \
     out_ ## type (type value, NPVariant* result)                        \
     {                                                                   \
         if (value == (int32_t) value)                                   \
@@ -164,13 +164,13 @@ DEFINE_OUT_NUMBER(long)
 DEFINE_OUT_NUMBER(int)
 DEFINE_OUT_NUMBER(size_t)
 
-static inline void
+static void
 out_bool (int value, NPVariant* result)
 {
     BOOLEAN_TO_NPVARIANT (value, *result);
 }
 
-static inline void
+static void
 out_stringz (stringz value, NPVariant* result)
 {
     size_t len = strlen (value);
@@ -399,14 +399,14 @@ static NPClass Mpz_npclass = {
 typedef int int_0_or_2_to_62;
 typedef int int_2_to_62;
 
-static inline bool
+static bool
 in_int_0_or_2_to_62 (const NPVariant* var, int* arg)
 {
     return in_int (var, arg) && (*arg == 0 || (*arg >= 2 && *arg <= 62));
 }
 #define del_int_0_or_2_to_62(arg)
 
-static inline bool
+static bool
 in_int_2_to_62 (const NPVariant* var, int* arg)
 {
     return in_int (var, arg) && *arg >= 2 && *arg <= 62;
@@ -488,7 +488,7 @@ static NPClass MpzRef_npclass = {
  * Integer argument conversion.
  */
 
-static inline bool
+static bool
 in_mpz_ptr (const NPVariant* var, mpz_ptr* arg)
 {
     if (!NPVARIANT_IS_OBJECT (*var))
@@ -549,7 +549,7 @@ static NPClass Rational_npclass = {
     enumerate       : enumerate_empty
 };
 
-static inline bool
+static bool
 in_mpq_ptr (const NPVariant* var, mpq_ptr* arg)
 {
     if (!NPVARIANT_IS_OBJECT (*var)
@@ -768,7 +768,7 @@ static NPClass Float_npclass = {
     enumerate       : enumerate_empty
 };
 
-static inline bool
+static bool
 in_mpf_ptr (const NPVariant* var, mpf_ptr* arg)
 {
     if (!NPVARIANT_IS_OBJECT (*var)
@@ -875,7 +875,7 @@ static NPClass Rand_npclass = {
     enumerate       : enumerate_empty
 };
 
-static inline bool
+static bool
 in_x_gmp_randstate_ptr (const NPVariant* var, x_gmp_randstate_ptr* arg)
 {
     if (!NPVARIANT_IS_OBJECT (*var)
