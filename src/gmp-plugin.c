@@ -317,8 +317,6 @@ Integer_allocate (NPP npp, NPClass *aClass)
 #if DEBUG_ALLOC
     fprintf (stderr, "Integer allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
-    if (ret)
-        mpz_init (ret->mp);
     return &ret->npobj;
 }
 
@@ -536,8 +534,6 @@ Rational_allocate (NPP npp, NPClass *aClass)
 #if DEBUG_ALLOC
     fprintf (stderr, "Rational allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
-    if (ret)
-        mpq_init (ret->mp);
     return &ret->npobj;
 }
 
@@ -634,8 +630,6 @@ Float_allocate (NPP npp, NPClass *aClass)
 #if DEBUG_ALLOC
     fprintf (stderr, "Float allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
-    if (ret)
-        mpf_init (ret->mp);
     return &ret->npobj;
 }
 
@@ -777,8 +771,6 @@ Rand_allocate (NPP npp, NPClass *aClass)
 #if DEBUG_ALLOC
     fprintf (stderr, "Rand allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
-    if (ret)
-        gmp_randinit_default (ret->state);
     return &ret->npobj;
 }
 
