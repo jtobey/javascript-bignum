@@ -5,8 +5,6 @@
    Copyright(C) 2012 John Tobey, see ../LICENCE
 */
 
-#define _GNU_SOURCE  /* for memmem()  XXX */
-
 #include <gmp.h>
 
 /* Break the GMP abstraction just this once. */
@@ -999,19 +997,35 @@ Gmp_deallocate (NPObject *npobj)
     sBrowserFuncs->releaseobject (&top->npobjTop);
 }
 
+#define STRINGIFY(x) STRINGIFY1(x)
+#define STRINGIFY1(x) # x
+
 static const char GmpProperties[] =
-#define ENTRY(string, id)                 "\0" string
+#define ENTRY(string, id)                 "\0" STRINGIFY(__LINE__) "|" string
 #include "gmp-entries.h"
-#define CONSTANT(constval, string, type)  "\0" string
+#define CONSTANT(constval, string, type)  "\0" STRINGIFY(__LINE__) "|" string
 #include "gmp-constants.h"
     "\0";
+
+static int
+name_to_line (NPUTF8* name)
+{
+    const char* n;
+    const char* p;
+
+    n = &GmpProperties[1];
+    while (*n) {
+        p = strchr (n, '|') + 1;
+        if (!strcmp (p, name))
+            return atoi (n);
+        n = p + strlen (p) + 1;
+    }
+    return 0;
+}
 
 static bool
 Gmp_hasProperty(NPObject *npobj, NPIdentifier key)
 {
-    size_t len;
-    const char* p;
-    const char* end = &GmpProperties[sizeof GmpProperties];
     NPUTF8* name;
     bool ret;
 
@@ -1019,20 +1033,7 @@ Gmp_hasProperty(NPObject *npobj, NPIdentifier key)
         return false;
 
     name = sBrowserFuncs->utf8fromidentifier (key);
-    len = 1 + strlen (name);
-    ret = false;
-    p = &GmpProperties[1];
-    while (true) {
-        p = (const char*) memmem (p, end - p, name, len);
-        if (!p)
-            break;
-        if (p[-1]) {
-            p++;
-            continue;
-        }
-        ret = true;
-        break;
-    }
+    ret = name_to_line (name) != 0;
     sBrowserFuncs->memfree (name);
     return ret;
 }
@@ -1052,16 +1053,6 @@ get_entry (NPObject *npobj, int number, NPVariant *result)
     }
     else
         sBrowserFuncs->setexception (npobj, "out of memory");
-}
-
-static int
-name_to_line (NPUTF8* name)
-{
-#define ENTRY(string, id)                       \
-    if (!strcmp (string, name))                 \
-        return __LINE__;
-#include "gmp-entries.h"
-    return 0;
 }
 
 static bool
@@ -1106,7 +1097,8 @@ Gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
     *count = cnt;
     cnt = 0;
     for (p = &GmpProperties[1]; *p; p += strlen (p) + 1)
-        (*value)[cnt++] = sBrowserFuncs->getstringidentifier (p);
+        (*value)[cnt++] = sBrowserFuncs->getstringidentifier
+            (strchr (p, '|') + 1);
     return true;
 }
 
