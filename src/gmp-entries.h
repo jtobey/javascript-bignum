@@ -82,7 +82,7 @@ ENTRY2(mpz_init_set_d, "mpz_init_set_d", np_mpz_init_set_d, new_mpz, new_mpz, do
 ENTRY1(mpz_get_ui, "mpz_get_ui", np_mpz_get_ui, ulong, mpz_ptr)
 ENTRY1(mpz_get_si, "mpz_get_si", np_mpz_get_si, long, mpz_ptr)
 ENTRY1(mpz_get_d, "mpz_get_d", np_mpz_get_d, double, mpz_ptr)
-// Two-valued function usage: var a = mpz_get_d_2exp(z), d = a[0], exp = a[1];
+// Usage: var a = mpz_get_d_2exp(z), d = a[0], exp = a[1];
 ENTRY1(x_mpz_get_d_2exp, "mpz_get_d_2exp", np_mpz_get_d_2exp, npobj, mpz_ptr)
 // mpz_get_str: C-specific; use integers' toString method instead.
 ENTRY3(mpz_add, "mpz_add", np_mpz_add, void, mpz_ptr, mpz_ptr, mpz_ptr)
@@ -271,9 +271,11 @@ ENTRY2(mpf_init_set_si, "mpf_init_set_si", np_mpf_init_set_si, new_mpf, new_mpf,
 ENTRY2(mpf_init_set_d, "mpf_init_set_d", np_mpf_init_set_d, new_mpf, new_mpf, double)
 // mpf_init_set_str: would return two values; use mpf_init2 + mpf_set_str.
 ENTRY1(mpf_get_d, "mpf_get_d", np_mpf_get_d, double, mpf_ptr)
+// Usage: var a = mpf_get_d_2exp(x), d = a[0], exp = a[1];
 ENTRY1(x_mpf_get_d_2exp, "mpf_get_d_2exp", np_mpf_get_d_2exp, npobj, mpf_ptr)
 ENTRY1(mpf_get_si, "mpf_get_si", np_mpf_get_si, long, mpf_ptr)
 ENTRY1(mpf_get_ui, "mpf_get_ui", np_mpf_get_ui, ulong, mpf_ptr)
+// Usage: var a = mpf_get_str(base,n_digits,x), fraction = a[0], exp = a[1];
 ENTRY3(x_mpf_get_str, "mpf_get_str", np_mpf_get_str, npobj, int, size_t, mpf_ptr)
 ENTRY3(mpf_add, "mpf_add", np_mpf_add, void, mpf_ptr, mpf_ptr, mpf_ptr)
 ENTRY3(mpf_add_ui, "mpf_add_ui", np_mpf_add_ui, void, mpf_ptr, mpf_ptr, ulong)
@@ -316,7 +318,7 @@ ENTRY3(mpf_random2, "mpf_random2", np_mpf_random2, void, mpf_ptr, mp_size_t, mp_
 ENTRY1(gmp_randinit_default, "gmp_randinit_default", np_gmp_randinit_default, new_rand, new_rand)
 ENTRY1(gmp_randinit_mt, "gmp_randinit_mt", np_gmp_randinit_mt, new_rand, new_rand)
 ENTRY4(gmp_randinit_lc_2exp, "gmp_randinit_lc_2exp", np_gmp_randinit_lc_2exp, new_rand, new_rand, mpz_ptr, ulong, mp_bitcnt_t)
-// Usage: gmp_randinit_lc_2exp_size(size), returns undefined if unsuccessful.
+// Usage: rs=gmp_randinit_lc_2exp_size(size); returns undefined if unsuccessful.
 ENTRY1(x_gmp_randinit_lc_2exp_size, "gmp_randinit_lc_2exp_size", np_gmp_randinit_lc_2exp_size, noconv, mp_bitcnt_t)
 ENTRY2(gmp_randinit_set, "gmp_randinit_set", np_gmp_randinit_set, new_rand, new_rand, x_gmp_randstate_ptr)
 // gmp_randinit: obsolete and variadic.
