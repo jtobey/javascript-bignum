@@ -1034,23 +1034,30 @@ get_entry (NPObject *npobj, int number, NPVariant *result)
         sBrowserFuncs->setexception (npobj, "out of memory");
 }
 
+static int
+name_to_line (NPUTF8* name)
+{
+#define ENTRY(string, id)                       \
+    if (!strcmp (string, name))                 \
+        return __LINE__;
+#include "gmp-entries.h"
+    return 0;
+}
+
 static bool
 Gmp_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
 {
     NPUTF8* name;
+    int line = 0;
 
     if (!sBrowserFuncs->identifierisstring (key))
         return false;
 
     name = sBrowserFuncs->utf8fromidentifier (key);
+    line = name_to_line (name);
 
-    if (false)
-        name = name;  /* Dummy branch to set up else-if sequence.  */
-
-#define ENTRY(string, id)                       \
-    else if (!strcmp (string, name))            \
-        get_entry (npobj, __LINE__, result);
-#include "gmp-entries.h"
+    if (line)
+        get_entry (npobj, line, result);
 
 #define CONSTANT(value, string, type)           \
     else if (!strcmp (string, name))            \
@@ -1061,6 +1068,7 @@ Gmp_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
         VOID_TO_NPVARIANT (*result);
 
     sBrowserFuncs->memfree (name);
+
     return true;
 }
 
