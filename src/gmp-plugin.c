@@ -5,6 +5,8 @@
    Copyright(C) 2012 John Tobey, see ../LICENCE
 */
 
+#define _GNU_SOURCE  /* for memmem()  XXX */
+
 #include <gmp.h>
 
 /* Break the GMP abstraction just this once. */
@@ -997,9 +999,19 @@ Gmp_deallocate (NPObject *npobj)
     sBrowserFuncs->releaseobject (&top->npobjTop);
 }
 
+static const char GmpProperties[] =
+#define ENTRY(string, id)                 "\0" string
+#include "gmp-entries.h"
+#define CONSTANT(constval, string, type)  "\0" string
+#include "gmp-constants.h"
+    "\0";
+
 static bool
 Gmp_hasProperty(NPObject *npobj, NPIdentifier key)
 {
+    size_t len;
+    const char* p;
+    const char* end = &GmpProperties[sizeof GmpProperties];
     NPUTF8* name;
     bool ret;
 
@@ -1007,12 +1019,20 @@ Gmp_hasProperty(NPObject *npobj, NPIdentifier key)
         return false;
 
     name = sBrowserFuncs->utf8fromidentifier (key);
-    ret = false
-#define ENTRY(string, id) || !strcmp (string, name)
-#include "gmp-entries.h"
-#define CONSTANT(value, string, type) || !strcmp (string, name)
-#include "gmp-constants.h"
-        ;
+    len = 1 + strlen (name);
+    ret = false;
+    p = &GmpProperties[1];
+    while (true) {
+        p = (const char*) memmem (p, end - p, name, len);
+        if (!p)
+            break;
+        if (p[-1]) {
+            p++;
+            continue;
+        }
+        ret = true;
+        break;
+    }
     sBrowserFuncs->memfree (name);
     return ret;
 }
@@ -1075,6 +1095,7 @@ Gmp_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
 static bool
 Gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 {
+    const char* p;
     uint32_t cnt = 0
 #define ENTRY(string, id) +1
 #include "gmp-entries.h"
@@ -1084,12 +1105,8 @@ Gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
     *value = sBrowserFuncs->memalloc (cnt * sizeof (NPIdentifier*));
     *count = cnt;
     cnt = 0;
-#define ENTRY(string, id)                                               \
-    (*value)[cnt++] = sBrowserFuncs->getstringidentifier (string);
-#include "gmp-entries.h"
-#define CONSTANT(constval, string, type)                                \
-    (*value)[cnt++] = sBrowserFuncs->getstringidentifier (string);
-#include "gmp-constants.h"
+    for (p = &GmpProperties[1]; *p; p += strlen (p) + 1)
+        (*value)[cnt++] = sBrowserFuncs->getstringidentifier (p);
     return true;
 }
 
