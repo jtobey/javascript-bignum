@@ -50,10 +50,6 @@
 # define ENTRY(__string, __id)
 #endif
 
-#ifndef CTOR
-# define CTOR(__string, __id) ENTRY (__string, __id)
-#endif
-
 #ifndef ENTRY1
 # define ENTRY0(__name, __string, __id, __r) ENTRY (__string, __id)
 # define ENTRY1(__name, __string, __id, __r, __t0) ENTRY (__string, __id)
@@ -246,9 +242,8 @@ ENTRY3(mpq_cmp_si, "mpq_cmp_si", np_mpq_cmp_si, int, mpq_ptr, long, long)
 ENTRY3(mpq_cmp_ui, "mpq_cmp_ui", np_mpq_cmp_ui, int, mpq_ptr, ulong, ulong)
 ENTRY1(mpq_sgn, "mpq_sgn", np_mpq_sgn, int, mpq_ptr)
 ENTRY2(mpq_equal, "mpq_equal", np_mpq_equal, int, mpq_ptr, mpq_ptr)
-// XXX I'd like to get rid of the CTOR macro but keep the meaning of mpq_numref.
-CTOR("mpq_numref", npobjMpq_numref)
-CTOR("mpq_denref", npobjMpq_denref)
+ENTRY2(x_mpq_numref, "mpq_numref", np_mpq_numref, new_mpzref, new_mpzref, mpq_ptr)
+ENTRY2(x_mpq_denref, "mpq_denref", np_mpq_denref, new_mpzref, new_mpzref, mpq_ptr)
 ENTRY2(mpq_get_num, "mpq_get_num", np_mpq_get_num, void, mpz_ptr, mpq_ptr)
 ENTRY2(mpq_get_den, "mpq_get_den", np_mpq_get_den, void, mpz_ptr, mpq_ptr)
 ENTRY2(mpq_set_num, "mpq_set_num", np_mpq_set_num, void, mpq_ptr, mpz_ptr)
@@ -337,7 +332,6 @@ ENTRY2(gmp_urandomm_ui, "gmp_urandomm_ui", np_gmp_urandomm_ui, ulong, x_gmp_rand
 // mp_set_memory_functions, mp_get_memory_functions: not relevant to plugin.
 
 #undef ENTRY
-#undef CTOR
 #undef ENTRY0
 #undef ENTRY1
 #undef ENTRY2

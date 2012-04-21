@@ -34,11 +34,8 @@ static NPIdentifier ID_toString;
 typedef struct _TopObject {
     NPObject npobjTop;
     NPP instance;
-    bool destroying;
     NPObject npobjGmp;
     NPClass Entry_npclass;
-#define CTOR(string, id) NPObject id;
-#include "gmp-entries.h"
 } TopObject;
 
 #define CONTAINING(outer, member, ptr)                          \
@@ -496,6 +493,13 @@ static NPClass MpzRef_npclass = {
     enumerate       : enumerate_only_toString
 };
 
+DEFINE_OBJECT_TYPE (new_mpzref, MpzRef, mpz_ptr*, mpp)
+#define in_new_mpzref(var, count, arg) IN_NEW (new_mpzref, arg)
+#define out_new_mpzref OUT_NEW
+
+static void x_mpq_numref (mpz_ptr* zp, mpq_ptr q) { *zp = &mpq_numref (q)[0]; }
+static void x_mpq_denref (mpz_ptr* zp, mpq_ptr q) { *zp = &mpq_denref (q)[0]; }
+
 /*
  * Integer argument conversion.
  */
@@ -576,118 +580,6 @@ in_mpq_ptr (const NPVariant* var, int count, mpq_ptr* arg)
 DEFINE_OBJECT_TYPE (new_mpq, Rational, mpq_ptr, mp[0])
 #define in_new_mpq(var, count, arg) IN_NEW (new_mpq, arg)
 #define out_new_mpq OUT_NEW
-
-/*
- * The mpq_numref function's class.
- */
-
-static void
-Mpq_numref_deallocate (NPObject *npobj)
-{
-    TopObject* top = CONTAINING (TopObject, npobjMpq_numref, npobj);
-#if DEBUG_ALLOC
-    fprintf (stderr, "Mpq_numref deallocate %p; %u\n", npobj, (unsigned int) top->npobjTop.referenceCount);
-#endif  /* DEBUG_ALLOC */
-    /* Decrement the top object's reference count.  See comments in
-       Mpz_deallocate.  */
-    sBrowserFuncs->releaseobject (&top->npobjTop);
-}
-
-static bool
-Mpq_numref_invokeDefault (NPObject *npobj,
-                          const NPVariant *args, uint32_t argCount,
-                          NPVariant *result)
-{
-    NPP instance = CONTAINING (TopObject, npobjMpq_numref, npobj)->instance;
-    mpq_ptr q;
-    MpzRef* ret;
-
-    if (argCount != 1 || !in_mpq_ptr (&args[0], 1, &q)) {
-        sBrowserFuncs->setexception (npobj, "wrong type arguments");
-        return true;
-    }
-
-    ret = (MpzRef*) sBrowserFuncs->createobject (instance, &MpzRef_npclass);
-
-    if (ret) {
-        ret->owner = sBrowserFuncs->retainobject
-            (NPVARIANT_TO_OBJECT (args[0]));
-        ret->mpp = &(mpq_numref (q))[0];
-        OBJECT_TO_NPVARIANT (&ret->npobj, *result);
-    }
-    else
-        sBrowserFuncs->setexception (npobj, "out of memory");
-    return true;
-}
-
-static NPClass Mpq_numref_npclass = {
-    structVersion   : NP_CLASS_STRUCT_VERSION,
-    deallocate      : Mpq_numref_deallocate,
-    invalidate      : obj_invalidate,
-    hasMethod       : obj_id_false,
-    invokeDefault   : Mpq_numref_invokeDefault,
-    hasProperty     : obj_id_false,
-    getProperty     : obj_id_var_void,
-    setProperty     : setProperty_ro,
-    removeProperty  : removeProperty_ro,
-    enumerate       : enumerate_empty
-};
-
-/*
- * The mpq_denref function's class.
- */
-
-static bool
-Mpq_denref_invokeDefault (NPObject *npobj,
-                          const NPVariant *args, uint32_t argCount,
-                          NPVariant *result)
-{
-    NPP instance = CONTAINING (TopObject, npobjMpq_denref, npobj)->instance;
-    mpq_ptr q;
-    MpzRef* ret;
-
-    if (argCount != 1 || !in_mpq_ptr (&args[0], 1, &q)) {
-        sBrowserFuncs->setexception (npobj, "wrong type arguments");
-        return true;
-    }
-
-    ret = (MpzRef*) sBrowserFuncs->createobject (instance, &MpzRef_npclass);
-
-    if (ret) {
-        ret->owner = sBrowserFuncs->retainobject
-            (NPVARIANT_TO_OBJECT (args[0]));
-        ret->mpp = &(mpq_denref (q))[0];
-        OBJECT_TO_NPVARIANT (&ret->npobj, *result);
-    }
-    else
-        sBrowserFuncs->setexception (npobj, "out of memory");
-    return true;
-}
-
-static void
-Mpq_denref_deallocate (NPObject *npobj)
-{
-    TopObject* top = CONTAINING (TopObject, npobjMpq_denref, npobj);
-#if DEBUG_ALLOC
-    fprintf (stderr, "Mpq_denref deallocate %p; %u\n", npobj, (unsigned int) top->npobjTop.referenceCount);
-#endif  /* DEBUG_ALLOC */
-    /* Decrement the top object's reference count.  See comments in
-       Mpz_deallocate.  */
-    sBrowserFuncs->releaseobject (&top->npobjTop);
-}
-
-static NPClass Mpq_denref_npclass = {
-    structVersion   : NP_CLASS_STRUCT_VERSION,
-    deallocate      : Mpq_denref_deallocate,
-    invalidate      : obj_invalidate,
-    hasMethod       : obj_id_false,
-    invokeDefault   : Mpq_denref_invokeDefault,
-    hasProperty     : obj_id_false,
-    getProperty     : obj_id_var_void,
-    setProperty     : setProperty_ro,
-    removeProperty  : removeProperty_ro,
-    enumerate       : enumerate_empty
-};
 
 /*
  * Float objects wrap mpf_t.
@@ -964,6 +856,7 @@ Entry_invokeDefault (NPObject *vEntry,
 #define IN_NEW(func, arg) (vArgNumber--, func (vEntry, vResult, arg))
 
     mpz_ptr a0new_mpz;
+    mpz_ptr* a0new_mpzref;
     mpq_ptr a0new_mpq;
     mpf_ptr a0new_mpf;
     x_gmp_randstate_ptr a0new_rand;
@@ -1099,6 +992,7 @@ static void
 get_entry (NPObject *npobj, int number, NPVariant *result)
 {
     TopObject* top = CONTAINING (TopObject, npobjGmp, npobj);
+
     Entry* entry = (Entry*) sBrowserFuncs->createobject
         (top->instance, &top->Entry_npclass);
 
@@ -1111,19 +1005,10 @@ get_entry (NPObject *npobj, int number, NPVariant *result)
         sBrowserFuncs->setexception (npobj, "out of memory");
 }
 
-static void
-get_constructor (TopObject* top, NPObject* ctor, NPVariant *result)
-{
-    if (ctor->referenceCount == 0)
-        sBrowserFuncs->retainobject (&top->npobjTop);
-    OBJECT_TO_NPVARIANT (sBrowserFuncs->retainobject (ctor), *result);
-}
-
 static bool
 Gmp_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
 {
     NPUTF8* name;
-    TopObject* top = CONTAINING (TopObject, npobjGmp, npobj);
 
     if (!sBrowserFuncs->identifierisstring (key))
         return false;
@@ -1133,9 +1018,6 @@ Gmp_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
     if (false)
         name = name;  /* Dummy branch to set up else-if sequence.  */
 
-#define CTOR(string, id)                                \
-    else if (!strcmp (string, name))                    \
-        get_constructor (top, &top->id, result);
 #define ENTRY(string, id)                       \
     else if (!strcmp (string, name))            \
         get_entry (npobj, __LINE__, result);
@@ -1202,8 +1084,6 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         memset (ret, '\0', sizeof *ret);
         ret->instance                      = instance;
         ret->npobjGmp._class               = &Gmp_npclass;
-        ret->npobjMpq_numref._class        = &Mpq_numref_npclass;
-        ret->npobjMpq_denref._class        = &Mpq_denref_npclass;
         ret->Entry_npclass.structVersion   = NP_CLASS_STRUCT_VERSION;
         ret->Entry_npclass.allocate        = Entry_allocate;
         ret->Entry_npclass.deallocate      = Entry_deallocate;
@@ -1295,7 +1175,6 @@ npp_Destroy(NPP instance, NPSavedData** save) {
 #endif  /* DEBUG_ALLOC */
     instance->pdata = 0;
     if (top) {
-        top->destroying = true;
         sBrowserFuncs->releaseobject (&top->npobjTop);
     }
     return NPERR_NO_ERROR;
