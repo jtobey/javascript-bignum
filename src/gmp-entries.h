@@ -10,9 +10,7 @@
       mpf_set_default_prec - maybe, as compile-time option
       mpf_set_prec_raw - maybe
       mpf_init_set_str - maybe
-      mpf_get_d_2exp
       mpf_get_str - maybe
-      gmp_randinit_lc_2exp_size
 
    NOT TO DO:
       mpz_get_str - use toString method
@@ -274,7 +272,7 @@ ENTRY2(mpf_init_set_si, "mpf_init_set_si", np_mpf_init_set_si, new_mpf, new_mpf,
 ENTRY2(mpf_init_set_d, "mpf_init_set_d", np_mpf_init_set_d, new_mpf, new_mpf, double)
 // mpf_init_set_str: would return two values; use mpf_init2 + mpf_set_str.
 ENTRY1(mpf_get_d, "mpf_get_d", np_mpf_get_d, double, mpf_ptr)
-// mpf_get_d_2exp: XXX would return two values
+ENTRY1(x_mpf_get_d_2exp, "mpf_get_d_2exp", np_mpf_get_d_2exp, npobj, mpf_ptr)
 ENTRY1(mpf_get_si, "mpf_get_si", np_mpf_get_si, long, mpf_ptr)
 ENTRY1(mpf_get_ui, "mpf_get_ui", np_mpf_get_ui, ulong, mpf_ptr)
 // mpf_get_str: use toString method.
@@ -319,7 +317,8 @@ ENTRY3(mpf_random2, "mpf_random2", np_mpf_random2, void, mpf_ptr, mp_size_t, mp_
 ENTRY1(gmp_randinit_default, "gmp_randinit_default", np_gmp_randinit_default, new_rand, new_rand)
 ENTRY1(gmp_randinit_mt, "gmp_randinit_mt", np_gmp_randinit_mt, new_rand, new_rand)
 ENTRY4(gmp_randinit_lc_2exp, "gmp_randinit_lc_2exp", np_gmp_randinit_lc_2exp, new_rand, new_rand, mpz_ptr, ulong, mp_bitcnt_t)
-//ENTRY2(gmp_randinit_lc_2exp_size, "gmp_randinit_lc_2exp_size", np_gmp_randinit_lc_2exp_size, int/new_rand, new_rand, mp_bitcnt_t)
+// Usage: gmp_randinit_lc_2exp_size(size), returns undefined if unsuccessful.
+ENTRY1(x_gmp_randinit_lc_2exp_size, "gmp_randinit_lc_2exp_size", np_gmp_randinit_lc_2exp_size, noconv, mp_bitcnt_t)
 ENTRY2(gmp_randinit_set, "gmp_randinit_set", np_gmp_randinit_set, new_rand, new_rand, x_gmp_randstate_ptr)
 // gmp_randinit: obsolete and variadic.
 // gmp_randclear: called automatically.

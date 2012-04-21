@@ -151,6 +151,8 @@ del_stringz (stringz arg)
 #define out_void(value, result)                                 \
     do { value; VOID_TO_NPVARIANT (*result); } while (0)
 
+#define out_noconv(value, result) value
+
 static void
 out_double (double value, NPVariant* result)
 {
@@ -243,8 +245,11 @@ out_stringz (stringz value, NPVariant* result)
 static void
 out_npobj (NPObject* value, NPVariant* result)
 {
-    /* Caller retains. */
-    OBJECT_TO_NPVARIANT (value, *result);
+    if (value)
+        /* Caller retains. */
+        OBJECT_TO_NPVARIANT (value, *result);
+    else
+        VOID_TO_NPVARIANT (*result);
 }
 
 /*
@@ -668,7 +673,7 @@ z_get_d_2exp (NPObject* entry, mpz_ptr z)
 
     if (!ret) {
         sBrowserFuncs->setexception (entry, "out of memory");
-        return 0;
+        return entry;  /* any object that is handy */
     }
     DOUBLE_TO_NPVARIANT (mpz_get_d_2exp (&exp, z), ret->array[0]);
     out_long (exp, &ret->array[1]);
@@ -914,6 +919,25 @@ DEFINE_OBJECT_TYPE (new_mpf, Float, mpf_ptr, mp[0])
 #define in_new_mpf(var, count, arg) IN_NEW (new_mpf, arg)
 #define out_new_mpf OUT_NEW
 
+static NPObject*
+f_get_d_2exp (NPObject* entry, mpf_ptr z)
+{
+    TopObject* top = ENTRY_TO_TOP (entry);
+    Pair* ret = (Pair*)
+        sBrowserFuncs->createobject (top->instance, &Pair_npclass);
+    long exp;
+
+    if (!ret) {
+        sBrowserFuncs->setexception (entry, "out of memory");
+        return entry;  /* any object that is handy */
+    }
+    DOUBLE_TO_NPVARIANT (mpf_get_d_2exp (&exp, z), ret->array[0]);
+    out_long (exp, &ret->array[1]);
+    return &ret->npobj;
+}
+
+#define x_mpf_get_d_2exp(z) f_get_d_2exp (vEntry, z)
+
 /*
  * Rand objects wrap gmp_randstate_t.
  */
@@ -974,8 +998,24 @@ DEFINE_OBJECT_TYPE (new_rand, Rand, x_gmp_randstate_ptr, state[0])
 #define in_new_rand(var, count, arg) IN_NEW (new_rand, arg)
 #define out_new_rand OUT_NEW
 
+static void
+randinit_lc_2exp_size (NPObject* entry, NPVariant* result, mp_bitcnt_t size)
+{
+    x_gmp_randstate_ptr rs;
+
+    if (!new_rand (entry, result, &rs))
+        return;
+    if (gmp_randinit_lc_2exp_size (rs, size) == 0) {
+        sBrowserFuncs->releaseobject (NPVARIANT_TO_OBJECT (*result));
+        VOID_TO_NPVARIANT (*result);
+    }
+}
+
+#define x_gmp_randinit_lc_2exp_size(size) \
+    randinit_lc_2exp_size (vEntry, vResult, size)
+
 /*
- * Class of ordinary functions like mpz_add.
+ * Class of ordinary functions like mpz_init and mpz_add.
  */
 
 typedef struct _Entry {
