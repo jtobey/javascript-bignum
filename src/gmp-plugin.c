@@ -1006,6 +1006,8 @@ randinit_lc_2exp_size (NPObject* entry, NPVariant* result, mp_bitcnt_t size)
     if (!new_rand (entry, result, &rs))
         return;
     if (gmp_randinit_lc_2exp_size (rs, size) == 0) {
+        /* Rand_deallocate calls gmp_randclear, so must init. */
+        gmp_randinit_default (rs);
         sBrowserFuncs->releaseobject (NPVARIANT_TO_OBJECT (*result));
         VOID_TO_NPVARIANT (*result);
     }
