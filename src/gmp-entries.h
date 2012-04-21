@@ -5,7 +5,6 @@
 
    TO DO:
       mpz_init_set_str - maybe
-      mpz_get_d_2exp
       mpz_import - maybe
       mpz_export - maybe
       mpf_set_default_prec - maybe, as compile-time option
@@ -86,7 +85,8 @@ ENTRY2(mpz_init_set_d, "mpz_init_set_d", np_mpz_init_set_d, new_mpz, new_mpz, do
 ENTRY1(mpz_get_ui, "mpz_get_ui", np_mpz_get_ui, ulong, mpz_ptr)
 ENTRY1(mpz_get_si, "mpz_get_si", np_mpz_get_si, long, mpz_ptr)
 ENTRY1(mpz_get_d, "mpz_get_d", np_mpz_get_d, double, mpz_ptr)
-// mpz_get_d_2exp: would return two values; meanwhile, perhaps mpz_size + mpz_tdiv_q_2exp + mpz_get_d comes close enough.
+// Two-valued function usage: var a = mpz_get_d_2exp(z), d = a[0], exp = a[1];
+ENTRY1(x_mpz_get_d_2exp, "mpz_get_d_2exp", np_mpz_get_d_2exp, npobj, mpz_ptr)
 // mpz_get_str: C-specific; use integers' toString method instead.
 ENTRY3(mpz_add, "mpz_add", np_mpz_add, void, mpz_ptr, mpz_ptr, mpz_ptr)
 ENTRY3(mpz_add_ui, "mpz_add_ui", np_mpz_add_ui, void, mpz_ptr, mpz_ptr, ulong)

@@ -214,12 +214,13 @@ out_stringz (stringz value, NPVariant* result)
         sBrowserFuncs->retainobject (NPVARIANT_TO_OBJECT (*result));    \
     } while (0)
 
+#define ENTRY_TO_TOP(entry) CONTAINING (TopObject, Entry_npclass, entry->_class)
+
 #define DEFINE_OBJECT_TYPE(ctor, name, type, field)                     \
     static bool                                                         \
     ctor (NPObject* entry, NPVariant* result, type* arg)                \
     {                                                                   \
-        TopObject* top = CONTAINING                                     \
-            (TopObject, Entry_npclass, entry->_class);                  \
+        TopObject* top = ENTRY_TO_TOP (entry);                          \
         name* ret = (name*) sBrowserFuncs->createobject                 \
             (top->instance, &name ## _npclass);                         \
                                                                         \
@@ -238,6 +239,13 @@ out_stringz (stringz value, NPVariant* result)
         sBrowserFuncs->releaseobject                                    \
             (&CONTAINING (name, field, arg)->npobj);                    \
     }
+
+static void
+out_npobj (NPObject* value, NPVariant* result)
+{
+    /* Caller retains. */
+    OBJECT_TO_NPVARIANT (value, *result);
+}
 
 /*
  * Generic NPClass methods.
@@ -300,6 +308,138 @@ obj_invalidate (NPObject *npobj)
     /*fprintf (stderr, "invalidate %p\n", npobj);*/
 #endif  /* DEBUG_ALLOC */
 }
+
+/*
+ * Pair: array-like class for returning two values.
+ * Probably a better way is to get the real Array constructor from
+ * NPN_GetValue, but this will do for starters.
+ */
+
+typedef struct _Pair {
+    NPObject npobj;
+    NPVariant array[2];
+} Pair;
+
+static NPObject*
+Pair_allocate (NPP npp, NPClass *aClass)
+{
+    Pair* ret = (Pair*) sBrowserFuncs->memalloc (sizeof (Pair));
+#if DEBUG_ALLOC
+    fprintf (stderr, "Pair allocate %p\n", ret);
+#endif  /* DEBUG_ALLOC */
+    if (ret) {
+        VOID_TO_NPVARIANT (ret->array[0]);
+        VOID_TO_NPVARIANT (ret->array[1]);
+    }
+    return &ret->npobj;
+}
+
+static void
+free_npvariant (NPVariant* var)
+{
+    if (NPVARIANT_IS_STRING (*var))
+        sBrowserFuncs->memfree
+            ((NPUTF8*) NPVARIANT_TO_STRING (*var).UTF8Characters);
+    else if (NPVARIANT_IS_OBJECT (*var))
+        sBrowserFuncs->releaseobject (NPVARIANT_TO_OBJECT (*var));
+}
+
+static void
+Pair_deallocate (NPObject *npobj)
+{
+    Pair* pair = (Pair*) npobj;
+#if DEBUG_ALLOC
+    fprintf (stderr, "Pair deallocate %p\n", npobj);
+#endif  /* DEBUG_ALLOC */
+    free_npvariant (&pair->array[0]);
+    free_npvariant (&pair->array[1]);
+    sBrowserFuncs->memfree (npobj);
+}
+
+static int32_t
+pair_property_number (NPIdentifier key)
+{
+    int32_t n;
+
+    if (sBrowserFuncs->identifierisstring (key)) {
+        if (key == sBrowserFuncs->getstringidentifier ("length"))
+            return 2;
+        return -1;
+    }
+    n = sBrowserFuncs->intfromidentifier (key);
+    if (n == 0 || n == 1)
+        return n;
+    return -1;
+}
+
+static bool
+Pair_hasProperty(NPObject *npobj, NPIdentifier key)
+{
+    return pair_property_number (key) != -1;
+}
+
+static bool
+copy_npvariant (NPObject* npobj, NPVariant* dest, NPVariant* src)
+{
+    if (NPVARIANT_IS_STRING (*src)) {
+        uint32_t len = NPVARIANT_TO_STRING (*src).UTF8Length;
+        NPUTF8* s = sBrowserFuncs->memalloc (len);
+        if (!s) {
+            sBrowserFuncs->setexception (npobj, "out of memory");
+            return false;
+        }
+        memcpy (s, NPVARIANT_TO_STRING (*src).UTF8Characters, len);
+        STRINGN_TO_NPVARIANT (s, len, *dest);
+    }
+    else {
+        if (NPVARIANT_IS_OBJECT (*src))
+            sBrowserFuncs->retainobject (NPVARIANT_TO_OBJECT (*src));
+        *dest = *src;
+    }
+    return true;
+}
+
+static bool
+Pair_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
+{
+    Pair* pair = (Pair*) npobj;
+    int32_t number = pair_property_number (key);
+
+    switch (number) {
+    case -1:  /* no such property */
+        VOID_TO_NPVARIANT (*result);
+        return true;
+    case 2:   /* length */
+        INT32_TO_NPVARIANT (2, *result);
+        return true;
+    default:  /* 0 or 1 */
+        return copy_npvariant (npobj, result, &pair->array[number]);
+    }
+}
+
+static bool
+Pair_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
+{
+    *value = sBrowserFuncs->memalloc (3 * sizeof (NPIdentifier*));
+    *count = 3;
+    (*value)[0] = sBrowserFuncs->getintidentifier (0);
+    (*value)[1] = sBrowserFuncs->getintidentifier (1);
+    (*value)[2] = sBrowserFuncs->getstringidentifier ("length");
+    return true;
+}
+
+static NPClass Pair_npclass = {
+    structVersion   : NP_CLASS_STRUCT_VERSION,
+    allocate        : Pair_allocate,
+    deallocate      : Pair_deallocate,
+    invalidate      : obj_invalidate,
+    hasMethod       : obj_id_false,
+    hasProperty     : Pair_hasProperty,
+    getProperty     : Pair_getProperty,
+    setProperty     : setProperty_ro,
+    removeProperty  : removeProperty_ro,
+    enumerate       : Pair_enumerate
+};
 
 /*
  * Integer objects wrap mpz_t.
@@ -517,6 +657,25 @@ in_mpz_ptr (const NPVariant* var, int count, mpz_ptr* arg)
 }
 
 #define del_mpz_ptr(arg)
+
+static NPObject*
+z_get_d_2exp (NPObject* entry, mpz_ptr z)
+{
+    TopObject* top = ENTRY_TO_TOP (entry);
+    Pair* ret = (Pair*)
+        sBrowserFuncs->createobject (top->instance, &Pair_npclass);
+    long exp;
+
+    if (!ret) {
+        sBrowserFuncs->setexception (entry, "out of memory");
+        return 0;
+    }
+    DOUBLE_TO_NPVARIANT (mpz_get_d_2exp (&exp, z), ret->array[0]);
+    out_long (exp, &ret->array[1]);
+    return &ret->npobj;
+}
+
+#define x_mpz_get_d_2exp(z) z_get_d_2exp (vEntry, z)
 
 /*
  * Rational objects wrap mpq_t.
