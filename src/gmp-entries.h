@@ -3,14 +3,13 @@
 
    Copyright(C) 2012 John Tobey, see ../LICENCE
 
-   TO DO:
-      mpz_init_set_str - maybe
-      mpz_import - maybe
-      mpz_export - maybe
-      mpf_set_default_prec - maybe, as compile-time option
-      mpf_set_prec_raw - maybe
-      mpf_init_set_str - maybe
-      mpf_get_str - maybe
+   MAYBE TO DO:
+      mpz_init_set_str
+      mpz_import - what would it do?
+      mpz_export - what would it do?
+      mpf_set_default_prec - as compile-time option
+      mpf_set_prec_raw
+      mpf_init_set_str
 
    NOT TO DO:
       mpz_get_str - use toString method
@@ -275,7 +274,7 @@ ENTRY1(mpf_get_d, "mpf_get_d", np_mpf_get_d, double, mpf_ptr)
 ENTRY1(x_mpf_get_d_2exp, "mpf_get_d_2exp", np_mpf_get_d_2exp, npobj, mpf_ptr)
 ENTRY1(mpf_get_si, "mpf_get_si", np_mpf_get_si, long, mpf_ptr)
 ENTRY1(mpf_get_ui, "mpf_get_ui", np_mpf_get_ui, ulong, mpf_ptr)
-// mpf_get_str: use toString method.
+ENTRY3(x_mpf_get_str, "mpf_get_str", np_mpf_get_str, npobj, int, size_t, mpf_ptr)
 ENTRY3(mpf_add, "mpf_add", np_mpf_add, void, mpf_ptr, mpf_ptr, mpf_ptr)
 ENTRY3(mpf_add_ui, "mpf_add_ui", np_mpf_add_ui, void, mpf_ptr, mpf_ptr, ulong)
 ENTRY3(mpf_sub, "mpf_sub", np_mpf_sub, void, mpf_ptr, mpf_ptr, mpf_ptr)

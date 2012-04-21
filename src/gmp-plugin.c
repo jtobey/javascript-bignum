@@ -808,6 +808,18 @@ Float_deallocate (NPObject *npobj)
     sBrowserFuncs->memfree (npobj);
 }
 
+static void
+x_gmp_free (void *ptr, size_t size)
+{
+    void *(*alloc_func_ptr) (size_t);
+    void *(*realloc_func_ptr) (void *, size_t, size_t);
+    void (*free_func_ptr) (void *, size_t);
+
+    mp_get_memory_functions (&alloc_func_ptr, &realloc_func_ptr,
+                             &free_func_ptr);
+    (*free_func_ptr) (ptr, size);
+}
+
 /* XXX toString should behave a little differently.  toExponential would
    be closer, but not exactly this.  */
 static bool
@@ -819,9 +831,6 @@ float_toString (NPObject *npobj, mpf_ptr mpp, const NPVariant *args,
     mp_exp_t expt;
     char* str;
     size_t allocated;
-    void *(*alloc_func_ptr) (size_t);
-    void *(*realloc_func_ptr) (void *, size_t, size_t);
-    void (*free_func_ptr) (void *, size_t);
 
     if (in_int (args, argCount, &base)) {
         args++;
@@ -833,9 +842,10 @@ float_toString (NPObject *npobj, mpf_ptr mpp, const NPVariant *args,
     if (!in_size_t (args, argCount, &n_digits))
         n_digits = 0;
 
-    if (base >= -62 && base <= 62 && base != 0 && base != -1 && base != 1) {
+    if (base >= -36 && base <= 62 && base != 0 && base != -1 && base != 1) {
         NPUTF8* s;
 
+        /* XXX could preallocate for n_digits != 0. */
         str = mpf_get_str (NULL, &expt, base, n_digits, mpp);
         if (!str) {
             sBrowserFuncs->setexception (npobj, "out of memory");
@@ -869,12 +879,10 @@ float_toString (NPObject *npobj, mpf_ptr mpp, const NPVariant *args,
                 sBrowserFuncs->setexception (npobj, "out of memory");
         }
 
-        mp_get_memory_functions (&alloc_func_ptr, &realloc_func_ptr,
-                                 &free_func_ptr);
-        (*free_func_ptr) (str, allocated);
+        x_gmp_free (str, allocated);
     }
     else
-        sBrowserFuncs->setexception (npobj, "invalid argument");
+        sBrowserFuncs->setexception (npobj, "invalid base");
     return true;
 }
 
@@ -920,7 +928,7 @@ DEFINE_OBJECT_TYPE (new_mpf, Float, mpf_ptr, mp[0])
 #define out_new_mpf OUT_NEW
 
 static NPObject*
-f_get_d_2exp (NPObject* entry, mpf_ptr z)
+f_get_d_2exp (NPObject* entry, mpf_ptr f)
 {
     TopObject* top = ENTRY_TO_TOP (entry);
     Pair* ret = (Pair*)
@@ -931,12 +939,66 @@ f_get_d_2exp (NPObject* entry, mpf_ptr z)
         sBrowserFuncs->setexception (entry, "out of memory");
         return entry;  /* any object that is handy */
     }
-    DOUBLE_TO_NPVARIANT (mpf_get_d_2exp (&exp, z), ret->array[0]);
+    DOUBLE_TO_NPVARIANT (mpf_get_d_2exp (&exp, f), ret->array[0]);
     out_long (exp, &ret->array[1]);
     return &ret->npobj;
 }
 
-#define x_mpf_get_d_2exp(z) f_get_d_2exp (vEntry, z)
+#define x_mpf_get_d_2exp(f) f_get_d_2exp (vEntry, f)
+
+static NPObject*
+f_get_str (NPObject* entry, int base, size_t n_digits, mpf_ptr f)
+{
+    TopObject* top = ENTRY_TO_TOP (entry);
+    Pair* ret = (Pair*)
+        sBrowserFuncs->createobject (top->instance, &Pair_npclass);
+    mp_exp_t exp;
+    char* str;
+    size_t len;
+    NPUTF8* s;
+
+    if (!ret) {
+        sBrowserFuncs->setexception (entry, "out of memory");
+        goto error_out;
+    }
+
+    if (base < -36 || base > 62 || (base >= -1 && base <= 1)) {
+        sBrowserFuncs->setexception (entry, "invalid base");
+        goto error_release;
+    }
+
+
+    /* XXX could preallocate for n_digits != 0. */
+    str = mpf_get_str (NULL, &exp, base, n_digits, f);
+    if (!str) {
+        sBrowserFuncs->setexception (entry, "out of memory");
+        goto error_release;
+    }
+
+    len = strlen (str);
+    s = sBrowserFuncs->memalloc (len);
+    if (s || !len) {
+        memcpy (s, str, len);
+        x_gmp_free (str, len + 1);
+        STRINGN_TO_NPVARIANT (s, len, ret->array[0]);
+    }
+    else {
+        sBrowserFuncs->setexception (entry, "out of memory");
+        goto error_free;
+    }
+
+    out_mp_exp_t (exp, &ret->array[1]);
+    return &ret->npobj;
+
+    error_free:
+    x_gmp_free (str, len + 1);
+    error_release:
+    sBrowserFuncs->releaseobject (&ret->npobj);
+    error_out:
+    return sBrowserFuncs->retainobject (entry);  /* any object handy */
+}
+
+#define x_mpf_get_str(base, n_digits, f) f_get_str(vEntry, base, n_digits, f) 
 
 /*
  * Rand objects wrap gmp_randstate_t.
@@ -1071,7 +1133,8 @@ Entry_invokeDefault (NPObject *vEntry,
     int_2_to_62 aN ## int_2_to_62 UNUSED; \
     int_abs_2_to_62 aN ## int_abs_2_to_62 UNUSED; \
     mp_size_t aN ## mp_size_t UNUSED; \
-    mp_exp_t aN ## mp_exp_t UNUSED;
+    mp_exp_t aN ## mp_exp_t UNUSED; \
+    size_t aN ## size_t UNUSED;
 
     ARGN(a0);
     ARGN(a1);
