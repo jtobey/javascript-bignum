@@ -8,7 +8,6 @@
       mpz_get_d_2exp
       mpz_import - maybe
       mpz_export - maybe
-      mpq_get_str (as toString method)
       mpf_set_default_prec - maybe, as compile-time option
       mpf_set_prec_raw - maybe
       mpf_init_set_str - maybe
@@ -27,6 +26,7 @@
       mpz_fits_ushort_p
       mpz_fits_sshort_p
       mpz_array_init
+      mpq_get_str - use toString method
       mpq_out_str
       mpq_inp_str
       mpf_out_str
@@ -82,7 +82,7 @@ ENTRY2(mpz_init_set, "mpz_init_set", np_mpz_init_set, new_mpz, new_mpz, mpz_ptr)
 ENTRY2(mpz_init_set_ui, "mpz_init_set_ui", np_mpz_init_set_ui, new_mpz, new_mpz, ulong)
 ENTRY2(mpz_init_set_si, "mpz_init_set_si", np_mpz_init_set_si, new_mpz, new_mpz, long)
 ENTRY2(mpz_init_set_d, "mpz_init_set_d", np_mpz_init_set_d, new_mpz, new_mpz, double)
-// mpz_init_set_str: would return two values; use mpz_init + mpz_set_str.
+//ENTRY3(x_mpz_init_set_str, "mpz_init_set_str", np_mpz_init_set_str, new_mpz, new_mpz, stringz, int_0_or_2_to_62)
 ENTRY1(mpz_get_ui, "mpz_get_ui", np_mpz_get_ui, ulong, mpz_ptr)
 ENTRY1(mpz_get_si, "mpz_get_si", np_mpz_get_si, long, mpz_ptr)
 ENTRY1(mpz_get_d, "mpz_get_d", np_mpz_get_d, double, mpz_ptr)
@@ -227,7 +227,7 @@ ENTRY2(mpq_swap, "mpq_swap", np_mpq_swap, void, mpq_ptr, mpq_ptr)
 ENTRY1(mpq_get_d, "mpq_get_d", np_mpq_get_d, double, mpq_ptr)
 ENTRY2(mpq_set_d, "mpq_set_d", np_mpq_set_d, void, mpq_ptr, double)
 ENTRY2(mpq_set_f, "mpq_set_f", np_mpq_set_f, void, mpq_ptr, mpf_ptr)
-// mpq_get_str: until implemented, use mpq_numref(q) + "/" + mpq_denref(q).
+// mpq_get_str: C-specific; use numbers' toString method instead.
 ENTRY3(mpq_add, "mpq_add", np_mpq_add, void, mpq_ptr, mpq_ptr, mpq_ptr)
 ENTRY3(mpq_sub, "mpq_sub", np_mpq_sub, void, mpq_ptr, mpq_ptr, mpq_ptr)
 ENTRY3(mpq_mul, "mpq_mul", np_mpq_mul, void, mpq_ptr, mpq_ptr, mpq_ptr)
@@ -277,7 +277,7 @@ ENTRY1(mpf_get_d, "mpf_get_d", np_mpf_get_d, double, mpf_ptr)
 // mpf_get_d_2exp: XXX would return two values
 ENTRY1(mpf_get_si, "mpf_get_si", np_mpf_get_si, long, mpf_ptr)
 ENTRY1(mpf_get_ui, "mpf_get_ui", np_mpf_get_ui, ulong, mpf_ptr)
-// mpf_get_str: XXX unimplemented for specific length; use toString method.
+// mpf_get_str: use toString method.
 ENTRY3(mpf_add, "mpf_add", np_mpf_add, void, mpf_ptr, mpf_ptr, mpf_ptr)
 ENTRY3(mpf_add_ui, "mpf_add_ui", np_mpf_add_ui, void, mpf_ptr, mpf_ptr, ulong)
 ENTRY3(mpf_sub, "mpf_sub", np_mpf_sub, void, mpf_ptr, mpf_ptr, mpf_ptr)

@@ -439,7 +439,7 @@ DEFINE_OUT_NUMBER (mp_limb_t)
 typedef struct _MpzRef {
     NPObject npobj;
     mpz_ptr mpp;
-    NPObject* owner;  /* This Rational (mpq_t) owns mpp.  */
+    NPObject* owner;  /* This Rational (mpq_t) owns *mpp.  */
 } MpzRef;
 
 static NPObject*
@@ -552,17 +552,54 @@ Rational_deallocate (NPObject *npobj)
     sBrowserFuncs->memfree (npobj);
 }
 
+static bool
+rational_toString (NPObject *npobj, mpq_ptr mpp, const NPVariant *args,
+                   uint32_t argCount, NPVariant *result)
+{
+    int base = 0;
+
+    if (!in_int (&args[0], argCount, &base))
+        base = 10;
+
+    if (base >= -36 && base <= 62 && base != 0 && base != -1 && base != 1) {
+        size_t len = mpz_sizeinbase (mpq_numref (mpp), base)
+            + mpz_sizeinbase (mpq_denref (mpp), base) + 3;
+        NPUTF8* s = sBrowserFuncs->memalloc (len);
+        if (s) {
+            mpq_get_str (s, base, mpp);
+            STRINGN_TO_NPVARIANT (s, len-5 + strlen (s + len-5), *result);
+        }
+        else
+            sBrowserFuncs->setexception (npobj, "out of memory");
+    }
+    else
+        sBrowserFuncs->setexception (npobj, "invalid argument");
+    return true;
+}
+
+static bool
+Rational_invoke (NPObject *npobj, NPIdentifier name,
+                 const NPVariant *args, uint32_t argCount, NPVariant *result)
+{
+    Rational* z = (Rational*) npobj;
+    if (name == ID_toString)
+        return rational_toString (npobj, z->mp, args, argCount, result);
+    sBrowserFuncs->setexception (npobj, "no such method");
+    return true;
+}
+
 static NPClass Rational_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     allocate        : Rational_allocate,
     deallocate      : Rational_deallocate,
     invalidate      : obj_invalidate,
-    hasMethod       : obj_id_false,
+    hasMethod       : hasMethod_only_toString,
+    invoke          : Rational_invoke,
     hasProperty     : obj_id_false,
     getProperty     : obj_id_var_void,
     setProperty     : setProperty_ro,
     removeProperty  : removeProperty_ro,
-    enumerate       : enumerate_empty
+    enumerate       : enumerate_only_toString
 };
 
 static bool
