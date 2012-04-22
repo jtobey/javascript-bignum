@@ -996,7 +996,6 @@ f_get_str (NPObject* entry, int base, size_t n_digits, mpf_ptr f)
         goto error_release;
     }
 
-
     /* XXX could preallocate for n_digits != 0. */
     str = mpf_get_str (NULL, &exp, base, n_digits, f);
     if (!str) {
