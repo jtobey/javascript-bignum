@@ -1,6 +1,11 @@
 /* browser (NPAPI) plug-in for multiple precision arithmetic.
 
-   TO DO: see list in gmp-entries.h
+   TO DO:
+
+   * Expose settable "prototype" objects to be used for getProperty on
+     Integer, MpzRef, Rational, Float, and perhaps Rand.
+
+   * See list in gmp-entries.h.
 
    Copyright(C) 2012 John Tobey, see ../LICENCE
 */
@@ -38,8 +43,8 @@ typedef struct _TopObject {
     NPClass Entry_npclass;
 } TopObject;
 
-#define CONTAINING(outer, member, ptr)                          \
-    ((outer*) (((char*) ptr) - offsetof (outer, member)))
+#define CONTAINING(outer, member, member_ptr)                           \
+    ((outer*) (((char*) member_ptr) - offsetof (outer, member)))
 
 #if __GNUC__
 #define UNUSED __attribute__ ((unused))
@@ -446,14 +451,35 @@ static NPClass Pair_npclass = {
     enumerate       : Pair_enumerate
 };
 
-/*
- * Integer objects wrap mpz_t.
- */
-
 typedef struct _Integer {
     NPObject npobj;
     mpz_t mp;
 } Integer;
+
+typedef struct _MpzRef {
+    NPObject npobj;
+    mpz_ptr mpp;
+    NPObject* owner;  /* This Rational (mpq_t) owns *mpp.  */
+} MpzRef;
+
+typedef struct _Rational {
+    NPObject npobj;
+    mpq_t mp;
+} Rational;
+
+typedef struct _Float {
+    NPObject npobj;
+    mpf_t mp;
+} Float;
+
+typedef struct _Rand {
+    NPObject npobj;
+    gmp_randstate_t state;
+} Rand;
+
+/*
+ * Integer objects wrap mpz_t.
+ */
 
 static NPObject*
 Integer_allocate (NPP npp, NPClass *aClass)
@@ -579,12 +605,6 @@ DEFINE_OUT_NUMBER (mp_limb_t)
  * Class of objects "returned" by the mpq_numref and mpq_denref macros.
  */
 
-typedef struct _MpzRef {
-    NPObject npobj;
-    mpz_ptr mpp;
-    NPObject* owner;  /* This Rational (mpq_t) owns *mpp.  */
-} MpzRef;
-
 static NPObject*
 MpzRef_allocate (NPP npp, NPClass *aClass)
 {
@@ -640,8 +660,18 @@ DEFINE_OBJECT_TYPE (new_mpzref, MpzRef, mpz_ptr*, mpp)
 #define in_new_mpzref(var, count, arg) IN_NEW (new_mpzref, arg)
 #define out_new_mpzref OUT_NEW
 
-static void x_mpq_numref (mpz_ptr* zp, mpq_ptr q) { *zp = &mpq_numref (q)[0]; }
-static void x_mpq_denref (mpz_ptr* zp, mpq_ptr q) { *zp = &mpq_denref (q)[0]; }
+static void x_mpq_numref (mpz_ptr* zp, mpq_ptr q) {
+    MpzRef* ref = CONTAINING (MpzRef, mpp, zp);
+    Rational* rat = CONTAINING (Rational, mp[0], q);
+    *zp = &mpq_numref (q)[0];
+    ref->owner = sBrowserFuncs->retainobject (&rat->npobj);
+}
+static void x_mpq_denref (mpz_ptr* zp, mpq_ptr q) {
+    MpzRef* ref = CONTAINING (MpzRef, mpp, zp);
+    Rational* rat = CONTAINING (Rational, mp[0], q);
+    *zp = &mpq_denref (q)[0];
+    ref->owner = sBrowserFuncs->retainobject (&rat->npobj);
+}
 
 /*
  * Integer argument conversion.
@@ -685,11 +715,6 @@ z_get_d_2exp (NPObject* entry, mpz_ptr z)
 /*
  * Rational objects wrap mpq_t.
  */
-
-typedef struct _Rational {
-    NPObject npobj;
-    mpq_t mp;
-} Rational;
 
 static NPObject*
 Rational_allocate (NPP npp, NPClass *aClass)
@@ -781,11 +806,6 @@ DEFINE_OBJECT_TYPE (new_mpq, Rational, mpq_ptr, mp[0])
 /*
  * Float objects wrap mpf_t.
  */
-
-typedef struct _Float {
-    NPObject npobj;
-    mpf_t mp;
-} Float;
 
 static NPObject*
 Float_allocate (NPP npp, NPClass *aClass)
@@ -1003,11 +1023,6 @@ f_get_str (NPObject* entry, int base, size_t n_digits, mpf_ptr f)
 /*
  * Rand objects wrap gmp_randstate_t.
  */
-
-typedef struct _Rand {
-    NPObject npobj;
-    gmp_randstate_t state;
-} Rand;
 
 static NPObject*
 Rand_allocate (NPP npp, NPClass *aClass)
