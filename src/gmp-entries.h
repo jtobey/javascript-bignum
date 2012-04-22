@@ -265,7 +265,7 @@ ENTRY1(mpf_init, "mpf_init", np_mpf_init, void, uninit_mpf)
 ENTRY2(mpf_init2, "mpf_init2", np_mpf_init2, void, uninit_mpf, mp_bitcnt_t)
 // mpf_inits: unimplemented.
 // mpf_clear: called automatically.  Dummy version:
-ENTRY1(mpf_init, "mpf_clear", np_mpf_clear, void, uninit_mpf)
+ENTRY1(x_mpf_clear, "mpf_clear", np_mpf_clear, void, uninit_mpf)
 // mpf_clears: unimplemented.
 ENTRY1(mpf_get_prec, "mpf_get_prec", np_mpf_get_prec, mp_bitcnt_t, mpf_ptr)
 ENTRY2(mpf_set_prec, "mpf_set_prec", np_mpf_set_prec, void, mpf_ptr, mp_bitcnt_t)

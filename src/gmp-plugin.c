@@ -991,6 +991,12 @@ DEFINE_OBJECT_TYPE (new_mpf, Float, mpf_ptr, mp[0])
 #define in_new_mpf(var, count, arg) IN_NEW (new_mpf, arg)
 #define out_new_mpf OUT_NEW
 
+static void
+x_mpf_clear (mpf_ptr f)
+{
+    mpf_init2 (f, 1);
+}
+
 static NPObject*
 f_get_d_2exp (NPObject* entry, mpf_ptr f)
 {
