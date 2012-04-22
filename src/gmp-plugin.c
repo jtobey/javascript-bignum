@@ -330,7 +330,7 @@ obj_invalidate (NPObject *npobj)
 
 /*
  * Pair: array-like class for returning two values.
- * Probably a better way is to get the real Array constructor from
+ * Perhaps a better way is to get the real Array constructor from
  * NPN_GetValue, but this will do for starters.
  */
 
@@ -567,7 +567,7 @@ DEFINE_OBJECT_TYPE (new_mpz, Integer, mpz_ptr, mp[0])
 #define out_new_mpz OUT_NEW
 
 /*
- * GMP-specific scalar types.
+ * GMP-specific types.
  */
 
 typedef int int_0_or_2_to_62;
@@ -609,6 +609,11 @@ DEFINE_OUT_NUMBER (mp_exp_t)
 #define del_mp_exp_t(arg)
 
 DEFINE_OUT_NUMBER (mp_limb_t)
+
+typedef mpz_ptr uninit_mpz;
+typedef mpq_ptr uninit_mpq;
+typedef mpf_ptr uninit_mpf;
+typedef x_gmp_randstate_ptr uninit_rand;
 
 /*
  * Class of objects "returned" by the mpq_numref and mpq_denref macros.
@@ -700,7 +705,17 @@ in_mpz_ptr (const NPVariant* var, int count, mpz_ptr* arg)
     return true;
 }
 
+static bool
+in_uninit_mpz (const NPVariant* var, int count, mpz_ptr* arg)
+{
+    bool ret = in_mpz_ptr (var, count, arg);
+    if (ret)
+        mpz_clear (*arg);
+    return ret;
+}
+
 #define del_mpz_ptr(arg)
+#define del_uninit_mpz(arg)
 
 static NPObject*
 z_get_d_2exp (NPObject* entry, mpz_ptr z)
@@ -806,7 +821,17 @@ in_mpq_ptr (const NPVariant* var, int count, mpq_ptr* arg)
     return true;
 }
 
+static bool
+in_uninit_mpq (const NPVariant* var, int count, mpq_ptr* arg)
+{
+    bool ret = in_mpq_ptr (var, count, arg);
+    if (ret)
+        mpq_clear (*arg);
+    return ret;
+}
+
 #define del_mpq_ptr(arg)
+#define del_uninit_mpq(arg)
 
 DEFINE_OBJECT_TYPE (new_mpq, Rational, mpq_ptr, mp[0])
 #define in_new_mpq(var, count, arg) IN_NEW (new_mpq, arg)
@@ -950,7 +975,17 @@ in_mpf_ptr (const NPVariant* var, int count, mpf_ptr* arg)
     return true;
 }
 
+static bool
+in_uninit_mpf (const NPVariant* var, int count, mpf_ptr* arg)
+{
+    bool ret = in_mpf_ptr (var, count, arg);
+    if (ret)
+        mpf_clear (*arg);
+    return ret;
+}
+
 #define del_mpf_ptr(arg)
+#define del_uninit_mpf(arg)
 
 DEFINE_OBJECT_TYPE (new_mpf, Float, mpf_ptr, mp[0])
 #define in_new_mpf(var, count, arg) IN_NEW (new_mpf, arg)
@@ -1077,29 +1112,31 @@ in_x_gmp_randstate_ptr (const NPVariant* var, int count,
     return true;
 }
 
+static bool
+in_uninit_rand (const NPVariant* var, int count, x_gmp_randstate_ptr* arg)
+{
+    bool ret = in_x_gmp_randstate_ptr (var, count, arg);
+    if (ret)
+        gmp_randclear (*arg);
+    return ret;
+}
+
 #define del_x_gmp_randstate_ptr(arg)
+#define del_uninit_rand(arg)
 
 DEFINE_OBJECT_TYPE (new_rand, Rand, x_gmp_randstate_ptr, state[0])
 #define in_new_rand(var, count, arg) IN_NEW (new_rand, arg)
 #define out_new_rand OUT_NEW
 
-static void
-randinit_lc_2exp_size (NPObject* entry, NPVariant* result, mp_bitcnt_t size)
+static int
+x_randinit_lc_2exp_size (uninit_rand state, mp_bitcnt_t size)
 {
-    x_gmp_randstate_ptr rs;
-
-    if (!new_rand (entry, result, &rs))
-        return;
-    if (gmp_randinit_lc_2exp_size (rs, size) == 0) {
-        /* Rand_deallocate calls gmp_randclear, so must init. */
-        gmp_randinit_default (rs);
-        sBrowserFuncs->releaseobject (NPVARIANT_TO_OBJECT (*result));
-        VOID_TO_NPVARIANT (*result);
-    }
+    int ret = gmp_randinit_lc_2exp_size (state, size);
+    if (!ret)
+        /* Rand_deallocate calls gmp_randclear, so must init.  */
+        gmp_randinit_default (state);
+    return ret;
 }
-
-#define x_gmp_randinit_lc_2exp_size(size) \
-    randinit_lc_2exp_size (vEntry, vResult, size)
 
 /*
  * Class of ordinary functions like mpz_init and mpz_add.
@@ -1198,6 +1235,10 @@ Entry_invokeDefault (NPObject *vEntry,
     mpq_ptr aN ## mpq_ptr UNUSED; \
     mpf_ptr aN ## mpf_ptr UNUSED; \
     x_gmp_randstate_ptr aN ## x_gmp_randstate_ptr UNUSED; \
+    uninit_mpz aN ## uninit_mpz UNUSED; \
+    uninit_mpq aN ## uninit_mpq UNUSED; \
+    uninit_mpf aN ## uninit_mpf UNUSED; \
+    uninit_rand aN ## uninit_rand UNUSED; \
     mp_bitcnt_t aN ## mp_bitcnt_t UNUSED; \
     int_0_or_2_to_62 aN ## int_0_or_2_to_62 UNUSED; \
     int_2_to_62 aN ## int_2_to_62 UNUSED; \

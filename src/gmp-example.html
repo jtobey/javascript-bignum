@@ -5,7 +5,7 @@
 function onload() {
     var lib = document.getElementById("lib");
     var gmp = lib.gmp;
-    var ret = gmp.mpz_init();
+    var ret = gmp.mpz();
     gmp.mpz_set_str(ret,"0x10000000000000000",0);
     gmp.mpz_add_ui(ret,ret,1);
     gmp.mpz_mul(ret,ret,ret);

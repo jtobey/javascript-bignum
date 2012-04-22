@@ -4,12 +4,10 @@
    Copyright(C) 2012 John Tobey, see ../LICENCE
 
    MAYBE TO DO:
-      mpz_init_set_str
       mpz_import - what would it do?
       mpz_export - what would it do?
       mpf_set_default_prec - as compile-time option or per-instance emulated
       mpf_set_prec_raw - as compile-time option or with safety enforced
-      mpf_init_set_str
 
    NOT TO DO:
       mpz_get_str - use toString method
@@ -60,9 +58,10 @@
 
 // http://gmplib.org/manual/Integer-Functions.html
 
-ENTRY1(mpz_init, "mpz_init", np_mpz_init, new_mpz, new_mpz)
+ENTRY1(mpz_init, "mpz", np_mpz, new_mpz, new_mpz)
+ENTRY1(mpz_init, "mpz_init", np_mpz_init, void, uninit_mpz)
 // mpz_inits: C-specific.
-ENTRY2(mpz_init2, "mpz_init2", np_mpz_init2, new_mpz, new_mpz, mp_bitcnt_t)
+ENTRY2(mpz_init2, "mpz_init2", np_mpz_init2, void, uninit_mpz, mp_bitcnt_t)
 // mpz_clear: called automatically.
 // mpz_clears: C-specific.
 ENTRY2(mpz_realloc2, "mpz_realloc2", np_mpz_realloc2, void, mpz_ptr, mp_bitcnt_t)
@@ -74,11 +73,11 @@ ENTRY2(mpz_set_q, "mpz_set_q", np_mpz_set_q, void, mpz_ptr, mpq_ptr)
 ENTRY2(mpz_set_f, "mpz_set_f", np_mpz_set_f, void, mpz_ptr, mpf_ptr)
 ENTRY3(mpz_set_str, "mpz_set_str", np_mpz_set_str, int, mpz_ptr, stringz, int_0_or_2_to_62)
 ENTRY2(mpz_swap, "mpz_swap", np_mpz_swap, void, mpz_ptr, mpz_ptr)
-ENTRY2(mpz_init_set, "mpz_init_set", np_mpz_init_set, new_mpz, new_mpz, mpz_ptr)
-ENTRY2(mpz_init_set_ui, "mpz_init_set_ui", np_mpz_init_set_ui, new_mpz, new_mpz, ulong)
-ENTRY2(mpz_init_set_si, "mpz_init_set_si", np_mpz_init_set_si, new_mpz, new_mpz, long)
-ENTRY2(mpz_init_set_d, "mpz_init_set_d", np_mpz_init_set_d, new_mpz, new_mpz, double)
-//ENTRY3(x_mpz_init_set_str, "mpz_init_set_str", np_mpz_init_set_str, new_mpz, new_mpz, stringz, int_0_or_2_to_62)
+ENTRY2(mpz_init_set, "mpz_init_set", np_mpz_init_set, void, uninit_mpz, mpz_ptr)
+ENTRY2(mpz_init_set_ui, "mpz_init_set_ui", np_mpz_init_set_ui, void, uninit_mpz, ulong)
+ENTRY2(mpz_init_set_si, "mpz_init_set_si", np_mpz_init_set_si, void, uninit_mpz, long)
+ENTRY2(mpz_init_set_d, "mpz_init_set_d", np_mpz_init_set_d, void, uninit_mpz, double)
+ENTRY3(mpz_init_set_str, "mpz_init_set_str", np_mpz_init_set_str, int, uninit_mpz, stringz, int_0_or_2_to_62)
 ENTRY1(mpz_get_ui, "mpz_get_ui", np_mpz_get_ui, ulong, mpz_ptr)
 ENTRY1(mpz_get_si, "mpz_get_si", np_mpz_get_si, long, mpz_ptr)
 ENTRY1(mpz_get_d, "mpz_get_d", np_mpz_get_d, double, mpz_ptr)
@@ -211,7 +210,8 @@ ENTRY2(mpz_getlimbn, "mpz_getlimbn", np_mpz_getlimbn, mp_limb_t, mpz_ptr, mp_siz
 ENTRY1(mpz_size, "mpz_size", np_mpz_size, size_t, mpz_ptr)
 
 ENTRY1(mpq_canonicalize, "mpq_canonicalize", np_mpq_canonicalize, void, mpq_ptr)
-ENTRY1(mpq_init, "mpq_init", np_mpq_init, new_mpq, new_mpq)
+ENTRY1(mpq_init, "mpq", np_mpq, new_mpq, new_mpq)
+ENTRY1(mpq_init, "mpq_init", np_mpq_init, void, uninit_mpq)
 // mpq_inits: C-specific.
 // mpq_clear: called automatically.
 // mpq_clears: C-specific.
@@ -249,8 +249,9 @@ ENTRY2(mpq_set_den, "mpq_set_den", np_mpq_set_den, void, mpq_ptr, mpz_ptr)
 
 // mpf_set_default_prec: not suitable for plugin use.
 ENTRY0(mpf_get_default_prec, "mpf_get_default_prec", np_mpf_get_default_prec, mp_bitcnt_t)
-ENTRY1(mpf_init, "mpf_init", np_mpf_init, new_mpf, new_mpf)
-ENTRY2(mpf_init2, "mpf_init2", np_mpf_init2, new_mpf, new_mpf, mp_bitcnt_t)
+ENTRY1(mpf_init, "mpf", np_mpf, new_mpf, new_mpf)
+ENTRY1(mpf_init, "mpf_init", np_mpf_init, void, uninit_mpf)
+ENTRY2(mpf_init2, "mpf_init2", np_mpf_init2, void, uninit_mpf, mp_bitcnt_t)
 // mpf_inits: C-specific.
 // mpf_clear: called automatically.
 // mpf_clears: C-specific.
@@ -265,11 +266,11 @@ ENTRY2(mpf_set_z, "mpf_set_z", np_mpf_set_z, void, mpf_ptr, mpz_ptr)
 ENTRY2(mpf_set_q, "mpf_set_q", np_mpf_set_q, void, mpf_ptr, mpq_ptr)
 ENTRY3(mpf_set_str, "mpf_set_str", np_mpf_set_str, int, mpf_ptr, stringz, int_abs_2_to_62)
 ENTRY2(mpf_swap, "mpf_swap", np_mpf_swap, void, mpf_ptr, mpf_ptr)
-ENTRY2(mpf_init_set, "mpf_init_set", np_mpf_init_set, new_mpf, new_mpf, mpf_ptr)
-ENTRY2(mpf_init_set_ui, "mpf_init_set_ui", np_mpf_init_set_ui, new_mpf, new_mpf, ulong)
-ENTRY2(mpf_init_set_si, "mpf_init_set_si", np_mpf_init_set_si, new_mpf, new_mpf, long)
-ENTRY2(mpf_init_set_d, "mpf_init_set_d", np_mpf_init_set_d, new_mpf, new_mpf, double)
-// mpf_init_set_str: would return two values; use mpf_init2 + mpf_set_str.
+ENTRY2(mpf_init_set, "mpf_init_set", np_mpf_init_set, void, uninit_mpf, mpf_ptr)
+ENTRY2(mpf_init_set_ui, "mpf_init_set_ui", np_mpf_init_set_ui, void, uninit_mpf, ulong)
+ENTRY2(mpf_init_set_si, "mpf_init_set_si", np_mpf_init_set_si, void, uninit_mpf, long)
+ENTRY2(mpf_init_set_d, "mpf_init_set_d", np_mpf_init_set_d, void, uninit_mpf, double)
+ENTRY3(mpf_init_set_str, "mpf_init_set_str", np_mpf_init_set_str, int, uninit_mpf, stringz, int_abs_2_to_62)
 ENTRY1(mpf_get_d, "mpf_get_d", np_mpf_get_d, double, mpf_ptr)
 // Usage: var a = mpf_get_d_2exp(x), d = a[0], exp = a[1];
 ENTRY1(x_mpf_get_d_2exp, "mpf_get_d_2exp", np_mpf_get_d_2exp, npobj, mpf_ptr)
@@ -315,12 +316,13 @@ ENTRY3(mpf_random2, "mpf_random2", np_mpf_random2, void, mpf_ptr, mp_size_t, mp_
 
 // mpn functions: unimplemented, not very suitable for plugins.
 
-ENTRY1(gmp_randinit_default, "gmp_randinit_default", np_gmp_randinit_default, new_rand, new_rand)
-ENTRY1(gmp_randinit_mt, "gmp_randinit_mt", np_gmp_randinit_mt, new_rand, new_rand)
-ENTRY4(gmp_randinit_lc_2exp, "gmp_randinit_lc_2exp", np_gmp_randinit_lc_2exp, new_rand, new_rand, mpz_ptr, ulong, mp_bitcnt_t)
+ENTRY1(gmp_randinit_default, "randstate", np_randstate, new_rand, new_rand)
+ENTRY1(gmp_randinit_default, "gmp_randinit_default", np_gmp_randinit_default, void, uninit_rand)
+ENTRY1(gmp_randinit_mt, "gmp_randinit_mt", np_gmp_randinit_mt, void, uninit_rand)
+ENTRY4(gmp_randinit_lc_2exp, "gmp_randinit_lc_2exp", np_gmp_randinit_lc_2exp, void, uninit_rand, mpz_ptr, ulong, mp_bitcnt_t)
 // Usage: rs=gmp_randinit_lc_2exp_size(size); returns undefined if unsuccessful.
-ENTRY1(x_gmp_randinit_lc_2exp_size, "gmp_randinit_lc_2exp_size", np_gmp_randinit_lc_2exp_size, noconv, mp_bitcnt_t)
-ENTRY2(gmp_randinit_set, "gmp_randinit_set", np_gmp_randinit_set, new_rand, new_rand, x_gmp_randstate_ptr)
+ENTRY2(x_randinit_lc_2exp_size, "gmp_randinit_lc_2exp_size", np_gmp_randinit_lc_2exp_size, int, uninit_rand, mp_bitcnt_t)
+ENTRY2(gmp_randinit_set, "gmp_randinit_set", np_gmp_randinit_set, void, uninit_rand, x_gmp_randstate_ptr)
 // gmp_randinit: obsolete and variadic.
 // gmp_randclear: called automatically.
 ENTRY2(gmp_randseed, "gmp_randseed", np_gmp_randseed, void, x_gmp_randstate_ptr, mpz_ptr)
