@@ -5,7 +5,16 @@
    * Expose settable "prototype" objects to be used for getProperty on
      Integer, MpzRef, Rational, Float, and perhaps Rand.
 
+   * Consider implementing setProperty and removeProperty on various
+     objects, changing them from read-only to read-write.
+
+   * Consider making *_init* functions perform *_clear before init,
+     rather than create a new object.  And think again about how to
+     create new objects.
+
    * See list in gmp-entries.h.
+
+   * Document usage.
 
    Copyright(C) 2012 John Tobey, see ../LICENCE
 */
@@ -1123,6 +1132,53 @@ Entry_deallocate (NPObject *npobj)
     sBrowserFuncs->memfree (npobj);
 }
 
+#define STRINGIFY(x) STRINGIFY1(x)
+#define STRINGIFY1(x) # x
+
+static const char GmpProperties[] =
+#define ENTRY(string, id)                 "\0" STRINGIFY(__LINE__) "|" string
+#include "gmp-entries.h"
+#define CONSTANT(constval, string, type)  "\0" STRINGIFY(__LINE__) "|" string
+#include "gmp-constants.h"
+    "\0";
+
+static int
+name_to_number (NPUTF8* name)
+{
+    const char* n;
+    const char* p;
+
+    n = &GmpProperties[1];
+    while (*n) {
+        p = strchr (n, '|') + 1;
+        if (!strcmp (p, name))
+            return atoi (n);
+        n = p + strlen (p) + 1;
+    }
+    return 0;
+}
+
+static const char*
+number_to_name (int number)
+{
+    const char* n;
+    char buf[8];
+    size_t len;
+
+    if (number < 0 || number > 999999)
+        return "GMP function";  /* should not happen */
+
+    len = (size_t) sprintf (buf, "%d|", number);
+    n = &GmpProperties[1];
+
+    while (*n) {
+        if (!strncmp (n, buf, len))
+            return n + len;
+        n += strlen (n) + 1;
+    }
+    return 0;
+}
+
 /* Calls to most functions go through Entry_invokeDefault. */
 
 static bool
@@ -1169,7 +1225,9 @@ Entry_invokeDefault (NPObject *vEntry,
     mpf_ptr a0new_mpf;
     x_gmp_randstate_ptr a0new_rand;
 
-    switch (CONTAINING (Entry, npobj, vEntry)->number) {
+    int number = CONTAINING (Entry, npobj, vEntry)->number;
+
+    switch (number) {
 
 #define ENTRY0(name, string, id, rett)                          \
         case __LINE__:                                          \
@@ -1255,8 +1313,15 @@ Entry_invokeDefault (NPObject *vEntry,
     break;
     }
 
-    if (!ok)
-        sBrowserFuncs->setexception (vEntry, "wrong type arguments");
+    if (!ok) {
+        static const char fmt[] = "%s: wrong type arguments";
+        char message[200];
+        const char* name = number_to_name (number);
+        if (sizeof fmt - 2 + strlen (name) > sizeof message)
+            name = "GMP function";
+        sprintf (message, fmt, name);
+        sBrowserFuncs->setexception (vEntry, message);
+    }
     return true;
 }
 
@@ -1276,32 +1341,6 @@ Gmp_deallocate (NPObject *npobj)
     sBrowserFuncs->releaseobject (&top->npobjTop);
 }
 
-#define STRINGIFY(x) STRINGIFY1(x)
-#define STRINGIFY1(x) # x
-
-static const char GmpProperties[] =
-#define ENTRY(string, id)                 "\0" STRINGIFY(__LINE__) "|" string
-#include "gmp-entries.h"
-#define CONSTANT(constval, string, type)  "\0" STRINGIFY(__LINE__) "|" string
-#include "gmp-constants.h"
-    "\0";
-
-static int
-name_to_line (NPUTF8* name)
-{
-    const char* n;
-    const char* p;
-
-    n = &GmpProperties[1];
-    while (*n) {
-        p = strchr (n, '|') + 1;
-        if (!strcmp (p, name))
-            return atoi (n);
-        n = p + strlen (p) + 1;
-    }
-    return 0;
-}
-
 static bool
 Gmp_hasProperty(NPObject *npobj, NPIdentifier key)
 {
@@ -1312,7 +1351,7 @@ Gmp_hasProperty(NPObject *npobj, NPIdentifier key)
         return false;
 
     name = sBrowserFuncs->utf8fromidentifier (key);
-    ret = name_to_line (name) != 0;
+    ret = name_to_number (name) != 0;
     sBrowserFuncs->memfree (name);
     return ret;
 }
@@ -1344,7 +1383,7 @@ Gmp_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
         return false;
 
     name = sBrowserFuncs->utf8fromidentifier (key);
-    line = name_to_line (name);
+    line = name_to_number (name);
 
     if (line)
         get_entry (npobj, line, result);
