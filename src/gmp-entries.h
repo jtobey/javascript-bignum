@@ -7,8 +7,8 @@
       mpz_init_set_str
       mpz_import - what would it do?
       mpz_export - what would it do?
-      mpf_set_default_prec - as compile-time option
-      mpf_set_prec_raw
+      mpf_set_default_prec - as compile-time option or per-instance emulated
+      mpf_set_prec_raw - as compile-time option or with safety enforced
       mpf_init_set_str
 
    NOT TO DO:
@@ -36,8 +36,8 @@
       gmp_*printf - possibly with libffi
       gmp_*scanf - possibly with libffi
       BSD compatibility functions - probably not
-      mp_set_memory_functions
-      mp_get_memory_functions
+      mp_set_memory_functions - C-specific
+      mp_get_memory_functions - C-specific
 
    DONE: every remaining function and macro in the GMP v5.0.4 manual.
 */
