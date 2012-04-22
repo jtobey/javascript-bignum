@@ -3,10 +3,19 @@
 
    Copyright(C) 2012 John Tobey, see ../LICENCE
 
+   TO DO:
+      type predicates
+
    MAYBE TO DO:
+      mpz_inits
+      mpz_clears
       mpz_import - what would it do?
       mpz_export - what would it do?
+      mpq_inits
+      mpq_clears
       mpf_set_default_prec - as compile-time option or per-instance emulated
+      mpf_inits
+      mpf_clears
       mpf_set_prec_raw - as compile-time option or with safety enforced
 
    NOT TO DO:
@@ -60,10 +69,11 @@
 
 ENTRY1(mpz_init, "mpz", np_mpz, new_mpz, new_mpz)
 ENTRY1(mpz_init, "mpz_init", np_mpz_init, void, uninit_mpz)
-// mpz_inits: C-specific.
+// mpz_inits: unimplemented.
 ENTRY2(mpz_init2, "mpz_init2", np_mpz_init2, void, uninit_mpz, mp_bitcnt_t)
-// mpz_clear: called automatically.
-// mpz_clears: C-specific.
+// mpz_clear: called automatically.  Dummy version:
+ENTRY1(mpz_init, "mpz_clear", np_mpz_clear, void, uninit_mpz)
+// mpz_clears: unimplemented.
 ENTRY2(mpz_realloc2, "mpz_realloc2", np_mpz_realloc2, void, mpz_ptr, mp_bitcnt_t)
 ENTRY2(mpz_set, "mpz_set", np_mpz_set, void, mpz_ptr, mpz_ptr)
 ENTRY2(mpz_set_ui, "mpz_set_ui", np_mpz_set_ui, void, mpz_ptr, ulong)
@@ -212,9 +222,10 @@ ENTRY1(mpz_size, "mpz_size", np_mpz_size, size_t, mpz_ptr)
 ENTRY1(mpq_canonicalize, "mpq_canonicalize", np_mpq_canonicalize, void, mpq_ptr)
 ENTRY1(mpq_init, "mpq", np_mpq, new_mpq, new_mpq)
 ENTRY1(mpq_init, "mpq_init", np_mpq_init, void, uninit_mpq)
-// mpq_inits: C-specific.
-// mpq_clear: called automatically.
-// mpq_clears: C-specific.
+// mpq_inits: unimplemented.
+// mpq_clear: called automatically.  Dummy version:
+ENTRY1(mpq_init, "mpq_clear", np_mpq_clear, void, uninit_mpq)
+// mpq_clears: unimplemented.
 ENTRY2(mpq_set, "mpq_set", np_mpq_set, void, mpq_ptr, mpq_ptr)
 ENTRY2(mpq_set_z, "mpq_set_z", np_mpq_set_z, void, mpq_ptr, mpz_ptr)
 ENTRY3(mpq_set_ui, "mpq_set_ui", np_mpq_set_ui, void, mpq_ptr, ulong, ulong)
@@ -252,9 +263,10 @@ ENTRY0(mpf_get_default_prec, "mpf_get_default_prec", np_mpf_get_default_prec, mp
 ENTRY1(mpf_init, "mpf", np_mpf, new_mpf, new_mpf)
 ENTRY1(mpf_init, "mpf_init", np_mpf_init, void, uninit_mpf)
 ENTRY2(mpf_init2, "mpf_init2", np_mpf_init2, void, uninit_mpf, mp_bitcnt_t)
-// mpf_inits: C-specific.
-// mpf_clear: called automatically.
-// mpf_clears: C-specific.
+// mpf_inits: unimplemented.
+// mpf_clear: called automatically.  Dummy version:
+ENTRY1(mpf_init, "mpf_clear", np_mpf_clear, void, uninit_mpf)
+// mpf_clears: unimplemented.
 ENTRY1(mpf_get_prec, "mpf_get_prec", np_mpf_get_prec, mp_bitcnt_t, mpf_ptr)
 ENTRY2(mpf_set_prec, "mpf_set_prec", np_mpf_set_prec, void, mpf_ptr, mp_bitcnt_t)
 // mpf_set_prec_raw: requires some design thought.
@@ -324,7 +336,8 @@ ENTRY4(gmp_randinit_lc_2exp, "gmp_randinit_lc_2exp", np_gmp_randinit_lc_2exp, vo
 ENTRY2(x_randinit_lc_2exp_size, "gmp_randinit_lc_2exp_size", np_gmp_randinit_lc_2exp_size, int, uninit_rand, mp_bitcnt_t)
 ENTRY2(gmp_randinit_set, "gmp_randinit_set", np_gmp_randinit_set, void, uninit_rand, x_gmp_randstate_ptr)
 // gmp_randinit: obsolete and variadic.
-// gmp_randclear: called automatically.
+// gmp_randclear: called automatically.  Dummy version:
+ENTRY1(gmp_randinit_default, "gmp_randclear", np_gmp_randclear, void, uninit_rand)
 ENTRY2(gmp_randseed, "gmp_randseed", np_gmp_randseed, void, x_gmp_randstate_ptr, mpz_ptr)
 ENTRY2(gmp_randseed_ui, "gmp_randseed_ui", np_gmp_randseed_ui, void, x_gmp_randstate_ptr, ulong)
 ENTRY2(gmp_urandomb_ui, "gmp_urandomb_ui", np_gmp_urandomb_ui, ulong, x_gmp_randstate_ptr, ulong)
