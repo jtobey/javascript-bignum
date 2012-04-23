@@ -37,6 +37,19 @@ typedef __gmp_randstate_struct* x_gmp_randstate_ptr;
  * Global constants.
  */
 
+#ifndef NPGMP_PORTING
+# define NPGMP_PORTING 1  /* Include dummy functions for ease of porting.  */
+#endif
+#ifndef NPGMP_MPQ
+# define NPGMP_MPQ 1  /* Support rationals (mpq_t).  */
+#endif
+#ifndef NPGMP_MPF
+# define NPGMP_MPF 1  /* Support floating-point numbers (mpf_t).  */
+#endif
+#ifndef NPGMP_RAND
+# define NPGMP_RAND 1  /* Support random number generation.  */
+#endif
+
 #define PLUGIN_NAME        "GMP Arithmetic Library"
 #define PLUGIN_DESCRIPTION PLUGIN_NAME " (EXPERIMENTAL)"
 #define PLUGIN_VERSION     "0.0.0.0"
@@ -465,6 +478,7 @@ typedef struct _Integer {
     mpz_t mp;
 } Integer;
 
+#if NPGMP_MPQ
 typedef struct _MpzRef {
     NPObject npobj;
     mpz_ptr mpp;
@@ -475,16 +489,21 @@ typedef struct _Rational {
     NPObject npobj;
     mpq_t mp;
 } Rational;
+#endif  /* NPGMP_MPQ */
 
+#if NPGMP_MPF
 typedef struct _Float {
     NPObject npobj;
     mpf_t mp;
 } Float;
+#endif  /* NPGMP_MPF */
 
+#if NPGMP_RAND
 typedef struct _Rand {
     NPObject npobj;
     gmp_randstate_t state;
 } Rand;
+#endif  /* NPGMP_RAND */
 
 /*
  * Integer objects wrap mpz_t.
@@ -619,6 +638,8 @@ typedef x_gmp_randstate_ptr uninit_rand;
  * Class of objects "returned" by the mpq_numref and mpq_denref macros.
  */
 
+#if NPGMP_MPQ
+
 static NPObject*
 MpzRef_allocate (NPP npp, NPClass *aClass)
 {
@@ -687,6 +708,8 @@ static void x_mpq_denref (mpz_ptr* zp, mpq_ptr q) {
     ref->owner = sBrowserFuncs->retainobject (&rat->npobj);
 }
 
+#endif  /* NPGMP_MPQ */
+
 /*
  * Integer argument conversion.
  */
@@ -698,8 +721,10 @@ in_mpz_ptr (const NPVariant* var, int count, mpz_ptr* arg)
         return false;
     if (NPVARIANT_TO_OBJECT (*var)->_class == &Integer_npclass)
         *arg = &((Integer*) NPVARIANT_TO_OBJECT (*var))->mp[0];
+#if NPGMP_MPQ
     else if (NPVARIANT_TO_OBJECT (*var)->_class == &MpzRef_npclass)
         *arg = ((MpzRef*) NPVARIANT_TO_OBJECT (*var))->mpp;
+#endif
     else
         return false;
     return true;
@@ -739,6 +764,8 @@ z_get_d_2exp (NPObject* entry, mpz_ptr z)
 /*
  * Rational objects wrap mpq_t.
  */
+
+#if NPGMP_MPQ
 
 static NPObject*
 Rational_allocate (NPP npp, NPClass *aClass)
@@ -837,9 +864,13 @@ DEFINE_OBJECT_TYPE (new_mpq, Rational, mpq_ptr, mp[0])
 #define in_new_mpq(var, count, arg) IN_NEW (new_mpq, arg)
 #define out_new_mpq OUT_NEW
 
+#endif  /* NPGMP_MPQ */
+
 /*
  * Float objects wrap mpf_t.
  */
+
+#if NPGMP_MPF
 
 static NPObject*
 Float_allocate (NPP npp, NPClass *aClass)
@@ -1067,11 +1098,15 @@ f_get_str (NPObject* entry, int base, size_t n_digits, mpf_ptr f)
     return sBrowserFuncs->retainobject (entry);  /* any object handy */
 }
 
-#define x_mpf_get_str(base, n_digits, f) f_get_str(vEntry, base, n_digits, f) 
+#define x_mpf_get_str(base, n_digits, f) f_get_str(vEntry, base, n_digits, f)
+
+#endif  /* NPGMP_MPF */
 
 /*
  * Rand objects wrap gmp_randstate_t.
  */
+
+#if NPGMP_RAND
 
 static NPObject*
 Rand_allocate (NPP npp, NPClass *aClass)
@@ -1143,6 +1178,8 @@ x_randinit_lc_2exp_size (uninit_rand state, mp_bitcnt_t size)
         gmp_randinit_default (state);
     return ret;
 }
+
+#endif  /* NPGMP_RAND */
 
 /*
  * Class of ordinary functions like mpz_init and mpz_add.

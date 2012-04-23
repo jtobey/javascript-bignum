@@ -4,7 +4,7 @@
    Copyright(C) 2012 John Tobey, see ../LICENCE
 
    TO DO:
-      type predicates
+   * type predicates
 
    MAYBE TO DO:
       mpz_inits
@@ -69,18 +69,26 @@
 
 ENTRY1(mpz_init, "mpz", np_mpz, new_mpz, new_mpz)
 ENTRY1(mpz_init, "mpz_init", np_mpz_init, void, uninit_mpz)
+#if NPGMP_PORTING
 // mpz_inits: unimplemented.
+#endif
 ENTRY2(mpz_init2, "mpz_init2", np_mpz_init2, void, uninit_mpz, mp_bitcnt_t)
+#if NPGMP_PORTING
 // mpz_clear: called automatically.  Dummy version:
 ENTRY1(mpz_init, "mpz_clear", np_mpz_clear, void, uninit_mpz)
 // mpz_clears: unimplemented.
+#endif
 ENTRY2(mpz_realloc2, "mpz_realloc2", np_mpz_realloc2, void, mpz_ptr, mp_bitcnt_t)
 ENTRY2(mpz_set, "mpz_set", np_mpz_set, void, mpz_ptr, mpz_ptr)
 ENTRY2(mpz_set_ui, "mpz_set_ui", np_mpz_set_ui, void, mpz_ptr, ulong)
 ENTRY2(mpz_set_si, "mpz_set_si", np_mpz_set_si, void, mpz_ptr, long)
 ENTRY2(mpz_set_d, "mpz_set_d", np_mpz_set_d, void, mpz_ptr, double)
+#if NPGMP_MPQ
 ENTRY2(mpz_set_q, "mpz_set_q", np_mpz_set_q, void, mpz_ptr, mpq_ptr)
+#endif
+#if NPGMP_MPF
 ENTRY2(mpz_set_f, "mpz_set_f", np_mpz_set_f, void, mpz_ptr, mpf_ptr)
+#endif
 ENTRY3(mpz_set_str, "mpz_set_str", np_mpz_set_str, int, mpz_ptr, stringz, int_0_or_2_to_62)
 ENTRY2(mpz_swap, "mpz_swap", np_mpz_swap, void, mpz_ptr, mpz_ptr)
 ENTRY2(mpz_init_set, "mpz_init_set", np_mpz_init_set, void, uninit_mpz, mpz_ptr)
@@ -201,16 +209,20 @@ ENTRY2(mpz_clrbit, "mpz_clrbit", np_mpz_clrbit, void, mpz_ptr, mp_bitcnt_t)
 ENTRY2(mpz_combit, "mpz_combit", np_mpz_combit, void, mpz_ptr, mp_bitcnt_t)
 ENTRY2(mpz_tstbit, "mpz_tstbit", np_mpz_tstbit, int, mpz_ptr, mp_bitcnt_t)
 // mpz_out_str, mpz_inp_str, mpz_out_raw, mpz_inp_raw: not relevant to plugin.
+#if NPGMP_RAND
 ENTRY3(mpz_urandomb, "mpz_urandomb", np_mpz_urandomb, void, mpz_ptr, x_gmp_randstate_ptr, mp_bitcnt_t)
 ENTRY3(mpz_urandomm, "mpz_urandomm", np_mpz_urandomm, void, mpz_ptr, x_gmp_randstate_ptr, mpz_ptr)
 ENTRY3(mpz_rrandomb, "mpz_rrandomb", np_mpz_rrandomb, void, mpz_ptr, x_gmp_randstate_ptr, mp_bitcnt_t)
 ENTRY2(mpz_random, "mpz_random", np_mpz_random, void, mpz_ptr, mp_size_t)
 ENTRY2(mpz_random2, "mpz_random2", np_mpz_random2, void, mpz_ptr, mp_size_t)
+#endif  /* NPGMP_RAND */
 // mpz_import, mpz_export: tricky to implmement with NPAPI.
 ENTRY1(mpz_fits_ulong_p, "mpz_fits_ulong_p", np_mpz_fits_ulong_p, bool, mpz_ptr)
 ENTRY1(mpz_fits_slong_p, "mpz_fits_slong_p", np_mpz_fits_slong_p, bool, mpz_ptr)
+#if NPGMP_PORTING
 // mpz_fits_uint_p, mpz_fits_sint_p, mpz_fits_ushort_p, mpz_fits_sshort_p:
 // C-specific; let us avoid gratuitous, non-portable exposure of C type sizes.
+#endif
 ENTRY1(mpz_odd_p, "mpz_odd_p", np_mpz_odd_p, bool, mpz_ptr)
 ENTRY1(mpz_even_p, "mpz_even_p", np_mpz_even_p, bool, mpz_ptr)
 ENTRY2(mpz_sizeinbase, "mpz_sizeinbase", np_mpz_sizeinbase, size_t, mpz_ptr, int_2_to_62)
@@ -219,13 +231,16 @@ ENTRY2(_mpz_realloc, "_mpz_realloc", np__mpz_realloc, void, mpz_ptr, mp_size_t)
 ENTRY2(mpz_getlimbn, "mpz_getlimbn", np_mpz_getlimbn, mp_limb_t, mpz_ptr, mp_size_t)
 ENTRY1(mpz_size, "mpz_size", np_mpz_size, size_t, mpz_ptr)
 
+#if NPGMP_MPQ
 ENTRY1(mpq_canonicalize, "mpq_canonicalize", np_mpq_canonicalize, void, mpq_ptr)
 ENTRY1(mpq_init, "mpq", np_mpq, new_mpq, new_mpq)
 ENTRY1(mpq_init, "mpq_init", np_mpq_init, void, uninit_mpq)
+#if NPGMP_PORTING
 // mpq_inits: unimplemented.
 // mpq_clear: called automatically.  Dummy version:
 ENTRY1(mpq_init, "mpq_clear", np_mpq_clear, void, uninit_mpq)
 // mpq_clears: unimplemented.
+#endif
 ENTRY2(mpq_set, "mpq_set", np_mpq_set, void, mpq_ptr, mpq_ptr)
 ENTRY2(mpq_set_z, "mpq_set_z", np_mpq_set_z, void, mpq_ptr, mpz_ptr)
 ENTRY3(mpq_set_ui, "mpq_set_ui", np_mpq_set_ui, void, mpq_ptr, ulong, ulong)
@@ -234,7 +249,9 @@ ENTRY3(mpq_set_str, "mpq_set_str", np_mpq_set_str, int, mpq_ptr, stringz, int_0_
 ENTRY2(mpq_swap, "mpq_swap", np_mpq_swap, void, mpq_ptr, mpq_ptr)
 ENTRY1(mpq_get_d, "mpq_get_d", np_mpq_get_d, double, mpq_ptr)
 ENTRY2(mpq_set_d, "mpq_set_d", np_mpq_set_d, void, mpq_ptr, double)
+#if NPGMP_MPF
 ENTRY2(mpq_set_f, "mpq_set_f", np_mpq_set_f, void, mpq_ptr, mpf_ptr)
+#endif
 // mpq_get_str: C-specific; use numbers' toString method instead.
 ENTRY3(mpq_add, "mpq_add", np_mpq_add, void, mpq_ptr, mpq_ptr, mpq_ptr)
 ENTRY3(mpq_sub, "mpq_sub", np_mpq_sub, void, mpq_ptr, mpq_ptr, mpq_ptr)
@@ -257,16 +274,20 @@ ENTRY2(mpq_get_den, "mpq_get_den", np_mpq_get_den, void, mpz_ptr, mpq_ptr)
 ENTRY2(mpq_set_num, "mpq_set_num", np_mpq_set_num, void, mpq_ptr, mpz_ptr)
 ENTRY2(mpq_set_den, "mpq_set_den", np_mpq_set_den, void, mpq_ptr, mpz_ptr)
 // mpq_out_str, mpq_inp_str: not relevant to plugin.
+#endif  /* NPGMP_MPQ */
 
-// mpf_set_default_prec: not suitable for plugin use.
+#if NPGMP_MPF
+// mpf_set_default_prec: unimplemented.
 ENTRY0(mpf_get_default_prec, "mpf_get_default_prec", np_mpf_get_default_prec, mp_bitcnt_t)
 ENTRY1(mpf_init, "mpf", np_mpf, new_mpf, new_mpf)
 ENTRY1(mpf_init, "mpf_init", np_mpf_init, void, uninit_mpf)
 ENTRY2(mpf_init2, "mpf_init2", np_mpf_init2, void, uninit_mpf, mp_bitcnt_t)
+#if NPGMP_PORTING
 // mpf_inits: unimplemented.
 // mpf_clear: called automatically.  Dummy version:
 ENTRY1(x_mpf_clear, "mpf_clear", np_mpf_clear, void, uninit_mpf)
 // mpf_clears: unimplemented.
+#endif
 ENTRY1(mpf_get_prec, "mpf_get_prec", np_mpf_get_prec, mp_bitcnt_t, mpf_ptr)
 ENTRY2(mpf_set_prec, "mpf_set_prec", np_mpf_set_prec, void, mpf_ptr, mp_bitcnt_t)
 // mpf_set_prec_raw: requires some design thought.
@@ -275,7 +296,9 @@ ENTRY2(mpf_set_ui, "mpf_set_ui", np_mpf_set_ui, void, mpf_ptr, ulong)
 ENTRY2(mpf_set_si, "mpf_set_si", np_mpf_set_si, void, mpf_ptr, long)
 ENTRY2(mpf_set_d, "mpf_set_d", np_mpf_set_d, void, mpf_ptr, double)
 ENTRY2(mpf_set_z, "mpf_set_z", np_mpf_set_z, void, mpf_ptr, mpz_ptr)
+#if NPGMP_MPQ
 ENTRY2(mpf_set_q, "mpf_set_q", np_mpf_set_q, void, mpf_ptr, mpq_ptr)
+#endif
 ENTRY3(mpf_set_str, "mpf_set_str", np_mpf_set_str, int, mpf_ptr, stringz, int_abs_2_to_62)
 ENTRY2(mpf_swap, "mpf_swap", np_mpf_swap, void, mpf_ptr, mpf_ptr)
 ENTRY2(mpf_init_set, "mpf_init_set", np_mpf_init_set, void, uninit_mpf, mpf_ptr)
@@ -323,11 +346,15 @@ ENTRY1(mpf_fits_ulong_p, "mpf_fits_ulong_p", np_mpf_fits_ulong_p, bool, mpf_ptr)
 ENTRY1(mpf_fits_slong_p, "mpf_fits_slong_p", np_mpf_fits_slong_p, bool, mpf_ptr)
 // mpf_fits_uint_p, mpf_fits_sint_p, mpf_fits_ushort_p, mpf_fits_sshort_p:
 // C-specific; let us avoid gratuitous, non-portable exposure of C type sizes.
+#if NPGMP_RAND
 ENTRY3(mpf_urandomb, "mpf_urandomb", np_mpf_urandomb, void, mpf_ptr, x_gmp_randstate_ptr, mp_bitcnt_t)
 ENTRY3(mpf_random2, "mpf_random2", np_mpf_random2, void, mpf_ptr, mp_size_t, mp_exp_t)
+#endif  /* NPGMP_RAND */
+#endif  /* NPGMP_MPF */
 
 // mpn functions: unimplemented, not very suitable for plugins.
 
+#if NPGMP_RAND
 ENTRY1(gmp_randinit_default, "randstate", np_randstate, new_rand, new_rand)
 ENTRY1(gmp_randinit_default, "gmp_randinit_default", np_gmp_randinit_default, void, uninit_rand)
 ENTRY1(gmp_randinit_mt, "gmp_randinit_mt", np_gmp_randinit_mt, void, uninit_rand)
@@ -342,6 +369,7 @@ ENTRY2(gmp_randseed, "gmp_randseed", np_gmp_randseed, void, x_gmp_randstate_ptr,
 ENTRY2(gmp_randseed_ui, "gmp_randseed_ui", np_gmp_randseed_ui, void, x_gmp_randstate_ptr, ulong)
 ENTRY2(gmp_urandomb_ui, "gmp_urandomb_ui", np_gmp_urandomb_ui, ulong, x_gmp_randstate_ptr, ulong)
 ENTRY2(gmp_urandomm_ui, "gmp_urandomm_ui", np_gmp_urandomm_ui, ulong, x_gmp_randstate_ptr, ulong)
+#endif  /* NPGMP_RAND */
 
 // gmp_printf, gmp_scanf, and friends: something similar would be nice.
 // mp_set_memory_functions, mp_get_memory_functions: not relevant to plugin.
