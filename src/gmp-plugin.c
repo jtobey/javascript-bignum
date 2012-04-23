@@ -1215,7 +1215,7 @@ Entry_deallocate (NPObject *npobj)
 #define STRINGIFY1(x) # x
 
 static const char GmpProperties[] =
-#define ENTRY(string, id)                 "\0" STRINGIFY(__LINE__) "|" string
+#define ENTRY(nargs, string, id)          "\0" STRINGIFY(__LINE__) "|" string
 #include "gmp-entries.h"
 #define CONSTANT(constval, string, type)  "\0" STRINGIFY(__LINE__) "|" string
 #include "gmp-constants.h"
@@ -1489,7 +1489,7 @@ Gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 {
     const char* p;
     uint32_t cnt = 0
-#define ENTRY(string, id) +1
+#define ENTRY(nargs, string, id) +1
 #include "gmp-entries.h"
 #define CONSTANT(value, string, type) +1
 #include "gmp-constants.h"

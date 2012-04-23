@@ -50,19 +50,20 @@
 */
 
 #ifndef ENTRY
-# define ENTRY(__string, __id)
+# define ENTRY(__nargs, __string, __id)
 #endif
 
 #ifndef ENTRY1
-# define ENTRY0(__name, __string, __id, __r) ENTRY (__string, __id)
-# define ENTRY1(__name, __string, __id, __r, __t0) ENTRY (__string, __id)
-# define ENTRY2(__name, __string, __id, __r, __t0, __t1) ENTRY (__string, __id)
+# define ENTRY0(__name, __string, __id, __r) ENTRY (0, __string, __id)
+# define ENTRY1(__name, __string, __id, __r, __t0) ENTRY (1, __string, __id)
+# define ENTRY2(__name, __string, __id, __r, __t0, __t1) \
+    ENTRY (2, __string, __id)
 # define ENTRY3(__name, __string, __id, __r, __t0, __t1, __t2) \
-    ENTRY (__string, __id)
+    ENTRY (3, __string, __id)
 # define ENTRY4(__name, __string, __id, __r, __t0, __t1, __t2, __t3) \
-    ENTRY (__string, __id)
+    ENTRY (4, __string, __id)
 # define ENTRY5(__name, __string, __id, __r, __t0, __t1, __t2, __t3, __t4) \
-    ENTRY (__string, __id)
+    ENTRY (5, __string, __id)
 #endif
 
 // http://gmplib.org/manual/Integer-Functions.html
