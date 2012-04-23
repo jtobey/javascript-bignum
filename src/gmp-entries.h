@@ -4,7 +4,6 @@
    Copyright(C) 2012 John Tobey, see ../LICENCE
 
    TO DO:
-   * type predicates
 
    MAYBE TO DO:
       mpz_inits

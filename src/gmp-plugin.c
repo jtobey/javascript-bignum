@@ -49,6 +49,9 @@ typedef __gmp_randstate_struct* x_gmp_randstate_ptr;
 #ifndef NPGMP_RAND
 # define NPGMP_RAND 1  /* Support random number generation.  */
 #endif
+#ifndef NPGMP_RTTI
+# define NPGMP_RTTI 1  /* Provide mpz.isInstance etc.  */
+#endif
 
 #define PLUGIN_NAME        "GMP Arithmetic Library"
 #define PLUGIN_DESCRIPTION PLUGIN_NAME " (EXPERIMENTAL)"
@@ -563,8 +566,7 @@ Integer_invoke (NPObject *npobj, NPIdentifier name,
     Integer* z = (Integer*) npobj;
     if (name == ID_toString)
         return integer_toString (npobj, z->mp, args, argCount, result);
-    sBrowserFuncs->setexception (npobj, "no such method");
-    return true;
+    return false;
 }
 
 static NPClass Integer_npclass = {
@@ -673,8 +675,7 @@ MpzRef_invoke (NPObject *npobj, NPIdentifier name,
     MpzRef* ref = (MpzRef*) npobj;
     if (name == ID_toString)
         return integer_toString (npobj, ref->mpp, args, argCount, result);
-    sBrowserFuncs->setexception (npobj, "no such method");
-    return true;
+    return false;
 }
 
 static NPClass MpzRef_npclass = {
@@ -820,8 +821,7 @@ Rational_invoke (NPObject *npobj, NPIdentifier name,
     Rational* z = (Rational*) npobj;
     if (name == ID_toString)
         return rational_toString (npobj, z->mp, args, argCount, result);
-    sBrowserFuncs->setexception (npobj, "no such method");
-    return true;
+    return false;
 }
 
 static NPClass Rational_npclass = {
@@ -978,8 +978,7 @@ Float_invoke (NPObject *npobj, NPIdentifier name,
     Float* z = (Float*) npobj;
     if (name == ID_toString)
         return float_toString (npobj, z->mp, args, argCount, result);
-    sBrowserFuncs->setexception (npobj, "no such method");
-    return true;
+    return false;
 }
 
 static NPClass Float_npclass = {
@@ -1258,6 +1257,63 @@ number_to_name (int number)
     return 0;
 }
 
+#if NPGMP_RTTI
+
+enum Entry_number {
+#define ENTRY(nargs, string, id) id = __LINE__,
+#include "gmp-entries.h"
+};
+
+static NPClass*
+ctor_to_class (NPObject *npobj)
+{
+    int number = CONTAINING (Entry, npobj, npobj)->number;
+    switch (number) {
+    case np_mpz: return &Integer_npclass;
+    case np_mpq: return &Rational_npclass;
+    case np_mpf: return &Float_npclass;
+    case np_randstate: return &Rand_npclass;
+    default: return 0;
+    }
+}
+
+static bool
+Entry_hasMethod(NPObject *npobj, NPIdentifier name)
+{
+    return ctor_to_class (npobj) != 0;
+}
+
+static bool
+Entry_invoke (NPObject *npobj, NPIdentifier name,
+              const NPVariant *args, uint32_t argCount, NPVariant *result)
+{
+    if (name == sBrowserFuncs->getstringidentifier ("isInstance")) {
+        NPClass* c = ctor_to_class (npobj);
+
+        if (c) {
+            bool ret;
+
+            if (argCount != 1) {
+                sBrowserFuncs->setexception
+                    (npobj, "Usage: isInstance(OBJECT)");
+                return true;
+            }
+            ret = NPVARIANT_IS_OBJECT (args[0]) &&
+                (NPVARIANT_TO_OBJECT (args[0])->_class == c
+#if NPGMP_MPQ
+                 || (c == &Integer_npclass &&
+                     NPVARIANT_TO_OBJECT (args[0])->_class == &MpzRef_npclass)
+#endif
+                 );
+            BOOLEAN_TO_NPVARIANT (ret, *result);
+            return true;
+        }
+    }
+    return false;
+}
+
+#endif  /* NPGMP_RTTI */
+
 /* Calls to most functions go through Entry_invokeDefault. */
 
 static bool
@@ -1535,7 +1591,12 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->Entry_npclass.allocate        = Entry_allocate;
         ret->Entry_npclass.deallocate      = Entry_deallocate;
         ret->Entry_npclass.invalidate      = obj_invalidate;
+#if NPGMP_RTTI
+        ret->Entry_npclass.hasMethod       = Entry_hasMethod;
+        ret->Entry_npclass.invoke          = Entry_invoke;
+#else
         ret->Entry_npclass.hasMethod       = obj_id_false;
+#endif
         ret->Entry_npclass.invokeDefault   = Entry_invokeDefault;
         ret->Entry_npclass.hasProperty     = obj_id_false;
         ret->Entry_npclass.getProperty     = obj_id_var_void;
