@@ -1391,6 +1391,20 @@ Entry_invoke (NPObject *npobj, NPIdentifier name,
             return true;
         }
     }
+    else if (name == ID_toString) {
+        const char* name = number_to_name (((Entry*) npobj)->number);
+        const char format[] = "function %s() { [native code] }";
+        size_t len = sizeof format + strlen (name) - 2;
+        char* ret = (char*) sBrowserFuncs->memalloc (len);
+
+        if (!ret) {
+            sBrowserFuncs->setexception (npobj, "out of memory");
+            return true;
+        }
+        sprintf (ret, format, name);
+        STRINGN_TO_NPVARIANT (ret, len, *result);
+        return true;
+    }
     return false;
 }
 
