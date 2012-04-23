@@ -2,15 +2,11 @@
 
    TO DO:
 
-   * Expose settable "prototype" objects to be used for getProperty on
-     Integer, MpzRef, Rational, Float, and perhaps Rand.
+   * Consider exposing settable "prototype" objects to be used for
+     getProperty on Integer/MpzRef, Rational, Float, and Rand.
 
    * Consider implementing setProperty and removeProperty on various
      objects, changing them from read-only to read-write.
-
-   * Consider making *_init* functions perform *_clear before init,
-     rather than create a new object.  And think again about how to
-     create new objects.
 
    * See list in gmp-entries.h.
 
