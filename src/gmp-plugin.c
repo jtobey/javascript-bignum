@@ -55,7 +55,7 @@ typedef __gmp_randstate_struct* x_gmp_randstate_ptr;
 
 #define PLUGIN_NAME        "GMP Arithmetic Library"
 #define PLUGIN_DESCRIPTION PLUGIN_NAME " (EXPERIMENTAL)"
-#define PLUGIN_VERSION     "0.0.0.0"
+#define PLUGIN_VERSION     "0.1.0.0"
 
 static NPNetscapeFuncs* sBrowserFuncs = NULL;
 
@@ -67,7 +67,7 @@ typedef struct _TopObject {
     NPObject npobjGmp;
     NPClass Entry_npclass;
 #if NPGMP_MPF
-    mp_bitcnt_t default_mpf_prec;
+    mp_bitcnt_t default_mpf_prec;  /* Emulate mpf_set_default_prec. */
 #endif
 } TopObject;
 
@@ -638,6 +638,7 @@ DEFINE_OUT_NUMBER (mp_limb_t)
 typedef mpz_ptr uninit_mpz;
 typedef mpq_ptr uninit_mpq;
 typedef mpf_ptr uninit_mpf;
+typedef mpf_ptr defprec_mpf;
 typedef x_gmp_randstate_ptr uninit_rand;
 
 /*
@@ -1032,12 +1033,56 @@ in_uninit_mpf (const NPVariant* var, int count, mpf_ptr* arg)
     return ret;
 }
 
+static mp_bitcnt_t
+x_x_mpf_get_default_prec (NPObject* entry)
+{
+    return ENTRY_TO_TOP (entry)->default_mpf_prec ?: mpf_get_default_prec ();
+}
+
+#define x_mpf_get_default_prec() x_x_mpf_get_default_prec (vEntry)
+
+static void
+x_x_mpf_set_default_prec (NPObject* entry, mp_bitcnt_t prec)
+{
+    ENTRY_TO_TOP (entry)->default_mpf_prec = (prec ?: 1);
+}
+
+#define x_mpf_set_default_prec(prec) x_x_mpf_set_default_prec (vEntry, prec)
+
+static void
+x_x_mpf_init (NPObject* entry, mpf_ptr f)
+{
+    TopObject* top = ENTRY_TO_TOP (entry);
+
+    if (top->default_mpf_prec)
+        mpf_init2 (f, top->default_mpf_prec);
+    else
+        mpf_init (f);
+}
+
+static bool
+x_in_defprec_mpf (NPObject* entry,
+                  const NPVariant* var, int count, mpf_ptr* arg)
+{
+    bool ret = in_uninit_mpf (var, count, arg);
+
+    if (ret)
+        x_x_mpf_init (entry, *arg);
+    return ret;
+}
+
+#define in_defprec_mpf(var, count, arg)         \
+    x_in_defprec_mpf (vEntry, var, count, arg)
+
 #define del_mpf_ptr(arg)
 #define del_uninit_mpf(arg)
+#define del_defprec_mpf(arg)
 
 DEFINE_OBJECT_TYPE (new_mpf, Float, mpf_ptr, mp[0])
 #define in_new_mpf(var, count, arg) IN_NEW (new_mpf, arg)
 #define out_new_mpf OUT_NEW
+
+#define x_mpf_init(f) x_x_mpf_init (vEntry, f)
 
 static void
 x_mpf_clear (mpf_ptr f)
@@ -1373,6 +1418,7 @@ Entry_invokeDefault (NPObject *vEntry,
     uninit_mpz aN ## uninit_mpz UNUSED; \
     uninit_mpq aN ## uninit_mpq UNUSED; \
     uninit_mpf aN ## uninit_mpf UNUSED; \
+    defprec_mpf aN ## defprec_mpf UNUSED; \
     uninit_rand aN ## uninit_rand UNUSED; \
     mp_bitcnt_t aN ## mp_bitcnt_t UNUSED; \
     int_0_or_2_to_62 aN ## int_0_or_2_to_62 UNUSED; \

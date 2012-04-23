@@ -12,7 +12,6 @@
       mpz_export - what would it do?
       mpq_inits
       mpq_clears
-      mpf_set_default_prec - as compile-time option or per-instance emulated
       mpf_inits
       mpf_clears
 
@@ -276,10 +275,10 @@ ENTRY2(mpq_set_den, "mpq_set_den", np_mpq_set_den, void, mpq_ptr, mpz_ptr)
 #endif  /* NPGMP_MPQ */
 
 #if NPGMP_MPF
-// mpf_set_default_prec: unimplemented.
-ENTRY0(mpf_get_default_prec, "mpf_get_default_prec", np_mpf_get_default_prec, mp_bitcnt_t)
-ENTRY1(mpf_init, "mpf", np_mpf, new_mpf, new_mpf)
-ENTRY1(mpf_init, "mpf_init", np_mpf_init, void, uninit_mpf)
+ENTRY1(x_mpf_set_default_prec, "mpf_set_default_prec", np_mpf_set_default_prec, void, mp_bitcnt_t)
+ENTRY0(x_mpf_get_default_prec, "mpf_get_default_prec", np_mpf_get_default_prec, mp_bitcnt_t)
+ENTRY1(x_mpf_init, "mpf", np_mpf, new_mpf, new_mpf)
+ENTRY1(x_mpf_init, "mpf_init", np_mpf_init, void, defprec_mpf)
 ENTRY2(mpf_init2, "mpf_init2", np_mpf_init2, void, uninit_mpf, mp_bitcnt_t)
 #if NPGMP_PORTING
 // mpf_inits: unimplemented.
@@ -300,11 +299,11 @@ ENTRY2(mpf_set_q, "mpf_set_q", np_mpf_set_q, void, mpf_ptr, mpq_ptr)
 #endif
 ENTRY3(mpf_set_str, "mpf_set_str", np_mpf_set_str, int, mpf_ptr, stringz, int_abs_2_to_62)
 ENTRY2(mpf_swap, "mpf_swap", np_mpf_swap, void, mpf_ptr, mpf_ptr)
-ENTRY2(mpf_init_set, "mpf_init_set", np_mpf_init_set, void, uninit_mpf, mpf_ptr)
-ENTRY2(mpf_init_set_ui, "mpf_init_set_ui", np_mpf_init_set_ui, void, uninit_mpf, ulong)
-ENTRY2(mpf_init_set_si, "mpf_init_set_si", np_mpf_init_set_si, void, uninit_mpf, long)
-ENTRY2(mpf_init_set_d, "mpf_init_set_d", np_mpf_init_set_d, void, uninit_mpf, double)
-ENTRY3(mpf_init_set_str, "mpf_init_set_str", np_mpf_init_set_str, int, uninit_mpf, stringz, int_abs_2_to_62)
+ENTRY2(mpf_set, "mpf_init_set", np_mpf_init_set, void, defprec_mpf, mpf_ptr)
+ENTRY2(mpf_set_ui, "mpf_init_set_ui", np_mpf_init_set_ui, void, defprec_mpf, ulong)
+ENTRY2(mpf_set_si, "mpf_init_set_si", np_mpf_init_set_si, void, defprec_mpf, long)
+ENTRY2(mpf_set_d, "mpf_init_set_d", np_mpf_init_set_d, void, defprec_mpf, double)
+ENTRY3(mpf_set_str, "mpf_init_set_str", np_mpf_init_set_str, int, defprec_mpf, stringz, int_abs_2_to_62)
 ENTRY1(mpf_get_d, "mpf_get_d", np_mpf_get_d, double, mpf_ptr)
 // Usage: var a = mpf_get_d_2exp(x), d = a[0], exp = a[1];
 ENTRY1(x_mpf_get_d_2exp, "mpf_get_d_2exp", np_mpf_get_d_2exp, npobj, mpf_ptr)
