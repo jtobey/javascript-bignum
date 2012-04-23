@@ -48,6 +48,9 @@ typedef __gmp_randstate_struct* x_gmp_randstate_ptr;
 #ifndef NPGMP_RTTI
 # define NPGMP_RTTI 1  /* Provide mpz.isInstance etc.  */
 #endif
+#ifndef NPGMP_SCRIPT
+# define NPGMP_SCRIPT 1  /* Provide script interpreter.  */
+#endif
 
 #define PLUGIN_NAME        "GMP Arithmetic Library"
 #define PLUGIN_DESCRIPTION PLUGIN_NAME " (EXPERIMENTAL)"
@@ -413,7 +416,7 @@ Pair_hasProperty(NPObject *npobj, NPIdentifier key)
 }
 
 static bool
-copy_npvariant (NPObject* npobj, NPVariant* dest, NPVariant* src)
+copy_npvariant (NPObject* npobj, NPVariant* dest, const NPVariant* src)
 {
     if (NPVARIANT_IS_STRING (*src)) {
         uint32_t len = NPVARIANT_TO_STRING (*src).UTF8Length;
@@ -1723,6 +1726,205 @@ TopObject_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
     return true;
 }
 
+#if NPGMP_SCRIPT
+
+static bool
+TopObject_hasMethod(NPObject *npobj, NPIdentifier name)
+{
+    return name == sBrowserFuncs->getstringidentifier ("run");
+}
+
+static void
+free_stack (NPVariant* stack, size_t size)
+{
+    for (size_t i = 0; i < size; i++)
+        free_npvariant (&stack[i]);
+    sBrowserFuncs->memfree (stack);
+}
+
+static bool
+extend (NPVariant** pstack, size_t* palloc, size_t init, size_t count)
+{
+    NPVariant* newStack;
+    size_t want = init + count;
+
+    if (want < init)
+        return false;
+
+    if (want > *palloc) {
+        while (init >= *palloc) {
+            if (*palloc * 2 < *palloc)
+                return false;
+            *palloc *= 2;
+        }
+        newStack = (NPVariant*) sBrowserFuncs->memalloc
+            (*palloc * sizeof newStack[0]);
+        if (!newStack)
+            return false;
+        memcpy (newStack, *pstack, init * sizeof newStack[0]);
+        sBrowserFuncs->memfree (*pstack);
+        *pstack = newStack;
+    }
+    return true;
+}
+
+#define OP_DATA  -1
+#define OP_ERROR -2
+#define OP_DEL   -3
+#define OP_PICK  -4
+
+static int
+op_type (const NPVariant *value)
+{
+    const NPString* str;
+
+    if (NPVARIANT_IS_OBJECT (*value) &&
+        /* XXX function pointer comparison */
+        NPVARIANT_TO_OBJECT (*value)->_class->invokeDefault ==
+        &Entry_invokeDefault) {
+
+        switch (((Entry*) NPVARIANT_TO_OBJECT (*value))->number) {
+#define ENTRY(nargs, string, id) case __LINE__: return nargs;
+#include "gmp-entries.h"
+        default: return OP_ERROR;  /* Should not happen.  */
+        }
+    }
+    /* XXX Should use opaque tokens instead of strings, e.g. run.pick */
+    if (!NPVARIANT_IS_STRING (*value))
+        return OP_DATA;
+    str = &NPVARIANT_TO_STRING (*value);
+    if (!strncmp (str->UTF8Characters, "pick", str->UTF8Length))
+        return OP_PICK;
+    if (!strncmp (str->UTF8Characters, "del", str->UTF8Length))
+        return OP_DEL;
+    return OP_DATA;
+}
+
+static void
+run_script (NPObject* npobj,
+            const NPVariant *args, uint32_t argCount, NPVariant *result)
+{
+    size_t alloc = 8;
+    size_t init = 0;
+    int nargs;
+    NPVariant* stack;
+    NPVariant temp;
+    size_t temp_size;
+    size_t index;
+
+    stack = (NPVariant*) sBrowserFuncs->memalloc (alloc * sizeof stack[0]);
+    if (!stack) {
+        sBrowserFuncs->setexception (npobj, "out of memory");
+        return;
+    }
+
+    for (;; argCount--, args++) {
+        if (!argCount) {
+            if (init == 0)
+                VOID_TO_NPVARIANT (*result);
+            else if (init == 1)
+                *result = stack[--init];
+            else
+                sBrowserFuncs->setexception (npobj, "tuple return unsupported");
+            // XXX return something.
+            break;
+        }
+
+        // Is it a function?
+        nargs = op_type (&args[0]);
+        switch (nargs) {
+
+        case OP_PICK:
+            if (init < 1 || !in_size_t (&stack[init-1], 1, &temp_size) ||
+                temp_size >= init - 1) {
+                /* XXX poor debuggability */
+                sBrowserFuncs->setexception (npobj, "script error");
+                goto done;
+            }
+            free_npvariant (&stack[--init]);
+            if (!copy_npvariant (npobj, &stack[init],
+                                 &stack[init - temp_size - 1]))
+                goto done;
+            init++;
+            continue;
+
+        case OP_DEL:
+            if (init < 1 || !in_size_t (&stack[init-1], 1, &temp_size) ||
+                temp_size >= init - 1) {
+                /* XXX poor debuggability */
+                sBrowserFuncs->setexception (npobj, "script error");
+                goto done;
+            }
+            free_npvariant (&stack[--init]);
+            index = init - 1 - temp_size;
+            free_npvariant (&stack[index]);
+            memmove (&stack[index], &stack[index + 1],
+                     temp_size * sizeof stack[0]);
+            init--;
+            continue;
+
+        case OP_ERROR:
+            /* XXX poor debuggability */
+            sBrowserFuncs->setexception (npobj, "script error");
+            goto done;
+
+        case OP_DATA:
+            // Push data.
+            if (!extend (&stack, &alloc, init, 1)) {
+                sBrowserFuncs->setexception (npobj, "out of memory");
+                break;
+            }
+            if (!copy_npvariant (npobj, &stack[init], &args[0]))
+                break;
+            init++;
+            continue;
+        }
+
+        if (nargs > init) {
+            sBrowserFuncs->setexception (npobj, "stack underflow");
+            break;
+        }
+
+        // Set temp to something invalid to detect exceptions.
+        OBJECT_TO_NPVARIANT (0, temp);
+
+        Entry_invokeDefault (NPVARIANT_TO_OBJECT (args[0]),
+                             &stack[init - nargs], nargs, &temp);
+
+        if (NPVARIANT_IS_OBJECT (temp) && !NPVARIANT_TO_OBJECT (temp))
+            break;  /* An exception occurred.  */
+
+        while (nargs--)
+            free_npvariant (&stack[--init]);
+
+        if (NPVARIANT_IS_VOID (temp))
+            continue;
+
+        // XXX Should flatten Pairs.
+
+        if (!extend (&stack, &alloc, init, 1)) {
+            sBrowserFuncs->setexception (npobj, "out of memory");
+            break;
+        }
+        stack[init++] = temp;
+    }
+    done:
+    free_stack (stack, init);
+}
+
+static bool
+TopObject_invoke (NPObject *npobj, NPIdentifier name,
+                  const NPVariant *args, uint32_t argCount, NPVariant *result)
+{
+    if (name == sBrowserFuncs->getstringidentifier ("run")) {
+        run_script (npobj, args, argCount, result);
+        return true;
+    }
+    return false;
+}
+
+#endif  /* NPGMP_SCRIPT */
+
 static bool
 TopObject_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 {
@@ -1737,7 +1939,12 @@ static NPClass TopObject_npclass = {
     allocate        : TopObject_allocate,
     deallocate      : TopObject_deallocate,
     invalidate      : obj_invalidate,
+#if NPGMP_SCRIPT
+    hasMethod       : TopObject_hasMethod,
+    invoke          : TopObject_invoke,
+#else
     hasMethod       : obj_id_false,
+#endif
     hasProperty     : TopObject_hasProperty,
     getProperty     : TopObject_getProperty,
     setProperty     : setProperty_ro,
