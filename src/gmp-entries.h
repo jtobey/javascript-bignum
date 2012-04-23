@@ -15,7 +15,6 @@
       mpf_set_default_prec - as compile-time option or per-instance emulated
       mpf_inits
       mpf_clears
-      mpf_set_prec_raw - as compile-time option or with safety enforced
 
    NOT TO DO:
       mpz_get_str - use toString method
@@ -289,8 +288,8 @@ ENTRY1(x_mpf_clear, "mpf_clear", np_mpf_clear, void, uninit_mpf)
 // mpf_clears: unimplemented.
 #endif
 ENTRY1(mpf_get_prec, "mpf_get_prec", np_mpf_get_prec, mp_bitcnt_t, mpf_ptr)
-ENTRY2(mpf_set_prec, "mpf_set_prec", np_mpf_set_prec, void, mpf_ptr, mp_bitcnt_t)
-// mpf_set_prec_raw: requires some design thought.
+ENTRY2(x_mpf_set_prec, "mpf_set_prec", np_mpf_set_prec, void, mpf_ptr, mp_bitcnt_t)
+ENTRY2(x_mpf_set_prec_raw, "mpf_set_prec_raw", np_mpf_set_prec_raw, void, mpf_ptr, mp_bitcnt_t)
 ENTRY2(mpf_set, "mpf_set", np_mpf_set, void, mpf_ptr, mpf_ptr)
 ENTRY2(mpf_set_ui, "mpf_set_ui", np_mpf_set_ui, void, mpf_ptr, ulong)
 ENTRY2(mpf_set_si, "mpf_set_si", np_mpf_set_si, void, mpf_ptr, long)

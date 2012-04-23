@@ -66,6 +66,9 @@ typedef struct _TopObject {
     NPP instance;
     NPObject npobjGmp;
     NPClass Entry_npclass;
+#if NPGMP_MPF
+    mp_bitcnt_t default_mpf_prec;
+#endif
 } TopObject;
 
 #define CONTAINING(outer, member, member_ptr)                           \
@@ -497,6 +500,7 @@ typedef struct _Rational {
 #if NPGMP_MPF
 typedef struct _Float {
     NPObject npobj;
+    mp_bitcnt_t oprec;
     mpf_t mp;
 } Float;
 #endif  /* NPGMP_MPF */
@@ -1005,12 +1009,26 @@ in_mpf_ptr (const NPVariant* var, int count, mpf_ptr* arg)
     return true;
 }
 
+static void
+restore_prec (mpf_ptr mpp)
+{
+    Float* f = CONTAINING (Float, mp[0], mpp);
+
+    if (f->oprec) {
+        mpf_set_prec_raw (mpp, f->oprec);
+        f->oprec = 0;
+    }
+}
+
 static bool
 in_uninit_mpf (const NPVariant* var, int count, mpf_ptr* arg)
 {
     bool ret = in_mpf_ptr (var, count, arg);
-    if (ret)
+
+    if (ret) {
+        restore_prec (*arg);
         mpf_clear (*arg);
+    }
     return ret;
 }
 
@@ -1025,6 +1043,24 @@ static void
 x_mpf_clear (mpf_ptr f)
 {
     mpf_init2 (f, 1);
+}
+
+static void
+x_mpf_set_prec (mpf_ptr f, mp_bitcnt_t prec)
+{
+    restore_prec (f);
+    mpf_set_prec (f, prec);
+}
+
+static void
+x_mpf_set_prec_raw (mpf_ptr mpp, mp_bitcnt_t prec)
+{
+    Float* f = CONTAINING (Float, mp[0], mpp);
+
+    if (!f->oprec)
+        f->oprec = mpf_get_prec (mpp);
+    if (prec <= f->oprec)
+        mpf_set_prec_raw (mpp, prec);
 }
 
 static NPObject*
@@ -1603,6 +1639,9 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->Entry_npclass.setProperty     = setProperty_ro;
         ret->Entry_npclass.removeProperty  = removeProperty_ro;
         ret->Entry_npclass.enumerate       = enumerate_empty;
+#if NPGMP_MPF
+        ret->default_mpf_prec = 0;
+#endif
     }
     return &ret->npobjTop;
 }
