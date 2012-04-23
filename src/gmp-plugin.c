@@ -2,17 +2,13 @@
 
    TO DO:
 
+   * Document usage.
+
    * Fix crash on reload test.html on FF 11.
 
-   * Consider exposing settable "prototype" objects to be used for
-     getProperty on Integer/MpzRef, Rational, Float, and Rand.
+   * Introspection: length property of Entry objects.
 
-   * Consider implementing setProperty and removeProperty on various
-     objects, changing them from read-only to read-write.
-
-   * See list in gmp-entries.h.
-
-   * Document usage.
+   * mp*_inits and mp*_clears functions if NPGMP_PORTING.
 
    Copyright(C) 2012 John Tobey, see ../LICENCE
 */
