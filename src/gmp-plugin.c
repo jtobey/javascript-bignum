@@ -613,6 +613,7 @@ in_int_2_to_62 (const NPVariant* var, int count, int* arg)
 }
 #define del_int_2_to_62(arg)
 
+#if NPGMP_MPF
 static bool
 in_int_abs_2_to_62 (const NPVariant* var, int count, int* arg)
 {
@@ -620,6 +621,7 @@ in_int_abs_2_to_62 (const NPVariant* var, int count, int* arg)
     return in_int (var, count, arg) && i >= 2 && i <= 62;
 }
 #define del_int_abs_2_to_62(arg)
+#endif  /* NPGMP_MPF */
 
 DEFINE_IN_UNSIGNED (mp_bitcnt_t)
 DEFINE_OUT_NUMBER (mp_bitcnt_t)
@@ -1441,10 +1443,16 @@ Entry_invokeDefault (NPObject *vEntry,
 #define IN_NEW(func, arg) (vArgNumber--, func (vEntry, vResult, arg))
 
     mpz_ptr a0new_mpz;
+#if NPGMP_MPQ
     mpz_ptr* a0new_mpzref;
     mpq_ptr a0new_mpq;
+#endif
+#if NPGMP_MPF
     mpf_ptr a0new_mpf;
+#endif
+#if NPGMP_RAND
     x_gmp_randstate_ptr a0new_rand;
+#endif
 
     int number = CONTAINING (Entry, npobj, vEntry)->number;
 
