@@ -1279,7 +1279,7 @@ Entry_deallocate (NPObject *npobj)
 static const char GmpProperties[] =
 #define ENTRY(nargs, string, id)          "\0" STRINGIFY(__LINE__) "|" string
 #include "gmp-entries.h"
-#define CONSTANT(constval, string, type)  "\0" STRINGIFY(__LINE__) "|" string
+#define CONSTANT(constval, string, type)  "\0|" string
 #include "gmp-constants.h"
     "\0";
 
@@ -1296,7 +1296,7 @@ name_to_number (NPUTF8* name)
             return atoi (n);
         n = p + strlen (p) + 1;
     }
-    return 0;
+    return -1;
 }
 
 static const char*
@@ -1312,7 +1312,7 @@ number_to_name (int number)
     len = (size_t) sprintf (buf, "%d|", number);
     n = &GmpProperties[1];
 
-    while (*n) {
+    while (*n != '|') {
         if (!strncmp (n, buf, len))
             return n + len;
         n += strlen (n) + 1;
@@ -1567,29 +1567,23 @@ Gmp_deallocate (NPObject *npobj)
     NPN_ReleaseObject (&top->npobj);
 }
 
-static int
-id_to_number (NPObject *npobj, NPIdentifier key)
+static bool
+Gmp_hasProperty (NPObject *npobj, NPIdentifier key)
 {
     NPUTF8* name;
     int ret;
 
     if (!NPN_IdentifierIsString (key))
-        return 0;
+        return false;
 
     name = NPN_UTF8FromIdentifier (key);
     if (!name) {
         NPN_SetException (npobj, "out of memory");
-        return -1;
+        return false;
     }
     ret = name_to_number (name);
     NPN_MemFree (name);
-    return ret;
-}
-
-static bool
-Gmp_hasProperty (NPObject *npobj, NPIdentifier key)
-{
-    return id_to_number (npobj, key) > 0;
+    return ret >= 0;
 }
 
 static void
@@ -1627,16 +1621,15 @@ Gmp_getProperty (NPObject *npobj, NPIdentifier key, NPVariant *result)
     }
     number = name_to_number (name);
 
-    if (number)
+    if (number < 0)
+        VOID_TO_NPVARIANT (*result);
+    else if (number > 0)
         get_entry (npobj, number, result);
 
 #define CONSTANT(value, string, type)           \
     else if (!strcmp (string, name))            \
         out_ ## type (value, result);
 #include "gmp-constants.h"
-
-    else
-        VOID_TO_NPVARIANT (*result);
 
     NPN_MemFree (name);
     return true;
