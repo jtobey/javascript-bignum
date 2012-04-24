@@ -4,7 +4,7 @@
 
    * Document usage.
 
-   * Fix crash on reload test.html on FF 11.
+   * Reliable crash on reload test.html on FF 11.  Run under Valgrind.
 
    * Introspection: length property of Entry objects.
 
@@ -1558,7 +1558,7 @@ Entry_invokeDefault (NPObject *vEntry,
 static void
 Gmp_deallocate (NPObject *npobj)
 {
-    TopObject* top = CONTAINING (TopObject, npobjGmp, npobj);
+    TopObject* top = Gmp_getTop (npobj);
 #if DEBUG_ALLOC
     fprintf (stderr, "Gmp deallocate %p; %u\n", npobj, (unsigned int) top->npobj.referenceCount);
 #endif  /* DEBUG_ALLOC */
@@ -1738,7 +1738,7 @@ op_to_number (NPObject* npobj)
 static void
 Run_deallocate (NPObject *npobj)
 {
-    TopObject* top = CONTAINING (TopObject, npobjRun, npobj);
+    TopObject* top = Run_getTop (npobj);
 #if DEBUG_ALLOC
     fprintf (stderr, "Run deallocate %p; %u\n", npobj, (unsigned int) top->npobj.referenceCount);
 #endif  /* DEBUG_ALLOC */
@@ -2117,6 +2117,16 @@ TopObject_deallocate (NPObject *npobj)
 #if DEBUG_ALLOC
     fprintf (stderr, "TopObject deallocate %p\n", npobj);
 #endif  /* DEBUG_ALLOC */
+
+#if 0
+    if (((TopObject*) npobj)->destroying) {
+#if DEBUG_ALLOC
+        fprintf (stderr, "TopObject deallocate %p: skipping free\n", npobj);
+#endif  /* DEBUG_ALLOC */
+        return;
+    }
+#endif
+
     NPN_MemFree (npobj);
 }
 
@@ -2134,21 +2144,24 @@ static bool
 TopObject_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
 {
     TopObject* top = (TopObject*) npobj;
-
-    NPN_RetainObject (npobj);
+    NPObject* ret = 0;
 
     if (key == NPN_GetStringIdentifier ("gmp"))
-        OBJECT_TO_NPVARIANT (&top->npobjGmp, *result);
+        ret = &top->npobjGmp;
 
 #if NPGMP_SCRIPT
     else if (key == NPN_GetStringIdentifier ("run"))
-        OBJECT_TO_NPVARIANT (&top->npobjRun, *result);
+        ret = &top->npobjRun;
 #endif
 
-    else {
-        NPN_ReleaseObject (npobj);
-        VOID_TO_NPVARIANT (*result);
+    if (ret) {
+        if (!ret->referenceCount)
+            NPN_RetainObject (npobj);
+        OBJECT_TO_NPVARIANT (NPN_RetainObject (ret), *result);
     }
+    else
+        VOID_TO_NPVARIANT (*result);
+
     return true;
 }
 
