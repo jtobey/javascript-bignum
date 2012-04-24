@@ -27,6 +27,16 @@ typedef __gmp_randstate_struct* x_gmp_randstate_ptr;
 #include <stddef.h>
 #include <math.h>
 
+#if __GNUC__
+#define UNUSED __attribute__ ((unused))
+#else
+#define UNUSED
+#endif
+
+#define CONTAINING(outer, member, member_ptr)                           \
+    ((outer*) (((char*) member_ptr) - offsetof (outer, member)))
+
+
 /*
  * Global constants.
  */
@@ -54,31 +64,71 @@ typedef __gmp_randstate_struct* x_gmp_randstate_ptr;
 #define PLUGIN_DESCRIPTION PLUGIN_NAME " (EXPERIMENTAL)"
 #define PLUGIN_VERSION     "0.1.0.0"
 
-static NPNetscapeFuncs* sBrowserFuncs = NULL;
+static NPNetscapeFuncs* sBrowserFuncs;
+
+#define NPN_SetException(npobj, msg)  sBrowserFuncs->setexception (npobj, msg)
+#define NPN_CreateObject(npp, aClass) sBrowserFuncs->createobject (npp, aClass)
+#define NPN_RetainObject(npobj)       sBrowserFuncs->retainobject (npobj)
+#define NPN_ReleaseObject(npobj)      sBrowserFuncs->releaseobject (npobj)
+#define NPN_MemAlloc(size)            sBrowserFuncs->memalloc (size)
+#define NPN_MemFree(ptr)              sBrowserFuncs->memfree (ptr)
+#define NPN_IdentifierIsString(id)    sBrowserFuncs->identifierisstring (id)
+#define NPN_UTF8FromIdentifier(id)    sBrowserFuncs->utf8fromidentifier (id)
+#define NPN_GetStringIdentifier(name) sBrowserFuncs->getstringidentifier (name)
+#define NPN_IntFromIdentifier(id)     sBrowserFuncs->intfromidentifier (id)
+#define NPN_GetIntIdentifier(intid)   sBrowserFuncs->getintidentifier (intid)
+#define NPN_SetValue(npp, var, value) sBrowserFuncs->setvalue (npp, var, value)
 
 static NPIdentifier ID_toString;
 
+
+/*
+ * Top-level per-instance structure.
+ */
+
+#define GET_TOP(__class, __object)                                      \
+    CONTAINING (TopObject, npclass ## __class, (__object)->_class)
+
 typedef struct _TopObject {
-    NPObject npobjTop;
-    NPP instance;
-    NPObject npobjGmp;
-    NPClass Entry_npclass;
-#if NPGMP_SCRIPT
-    NPObject npobjRun;
+    NPObject    npobj;
+    NPP         instance;
+    bool        destroying;
+    NPClass     npclassGmp;
+    NPObject    npobjGmp;
+#define Gmp_getTop(object) CONTAINING (TopObject, npobjGmp, object)
+    NPClass     npclassEntry;
+#define Entry_getTop(object) GET_TOP (Entry, object)
+    NPClass     npclassTuple;
+#define Tuple_getTop(object) GET_TOP (Tuple, object)
+    NPClass     npclassInteger;
+#define Integer_getTop(object) GET_TOP (Integer, object)
+
+#if NPGMP_MPQ
+    NPClass     npclassMpzRef;
+#define MpzRef_getTop(object) GET_TOP (MpzRef, object)
+    NPClass     npclassRational;
+#define Rational_getTop(object) GET_TOP (Rational, object)
 #endif
+
+#if NPGMP_RAND
+    NPClass     npclassRand;
+#define Rand_getTop(object) GET_TOP (Rand, object)
+#endif
+
 #if NPGMP_MPF
+    NPClass     npclassFloat;
+#define Float_getTop(object) GET_TOP (Float, object)
     mp_bitcnt_t default_mpf_prec;  /* Emulate mpf_set_default_prec. */
 #endif
+
+#if NPGMP_SCRIPT
+    NPClass     npclassRun;
+    NPObject    npobjRun;
+#define Run_getTop(object) CONTAINING (TopObject, npobjRun, object)
+#endif
+
 } TopObject;
 
-#define CONTAINING(outer, member, member_ptr)                           \
-    ((outer*) (((char*) member_ptr) - offsetof (outer, member)))
-
-#if __GNUC__
-#define UNUSED __attribute__ ((unused))
-#else
-#define UNUSED
-#endif
 
 /*
  * Argument conversion.
@@ -89,9 +139,11 @@ typedef char const* stringz;
 
 #define DEFINE_IN_NUMBER(type)                                          \
     static bool                                                         \
-    in_ ## type (const NPVariant* var, int count, type* arg) UNUSED;    \
+    in_ ## type (TopObject* top, const NPVariant* var, int count,       \
+                 type* arg) UNUSED;                                     \
     static bool                                                         \
-    in_ ## type (const NPVariant* var, int count, type* arg)            \
+    in_ ## type (TopObject* top, const NPVariant* var, int count,       \
+                 type* arg)                                             \
     {                                                                   \
         if (count < 1)                                                  \
             return false;                                               \
@@ -108,9 +160,11 @@ typedef char const* stringz;
 
 #define DEFINE_IN_UNSIGNED(type)                                        \
     static bool                                                         \
-    in_ ## type (const NPVariant* var, int count, type* arg) UNUSED;    \
+    in_ ## type (TopObject* top, const NPVariant* var, int count,       \
+                 type* arg) UNUSED;                                     \
     static bool                                                         \
-    in_ ## type (const NPVariant* var, int count, type* arg)            \
+    in_ ## type (TopObject* top, const NPVariant* var, int count,       \
+                 type* arg)                                             \
     {                                                                   \
         if (count < 1)                                                  \
             return false;                                               \
@@ -136,7 +190,7 @@ DEFINE_IN_UNSIGNED (size_t)
 #define del_size_t(arg)
 
 static bool
-in_double (const NPVariant* var, int count, double* arg)
+in_double (TopObject* top, const NPVariant* var, int count, double* arg)
 {
     if (count < 1)
         return false;
@@ -154,7 +208,7 @@ in_double (const NPVariant* var, int count, double* arg)
 /* Chrome does not terminate its NPString with NUL.  Cope.  */
 
 static bool
-in_stringz (const NPVariant* var, int count, stringz* arg)
+in_stringz (TopObject* top, const NPVariant* var, int count, stringz* arg)
 {
     const NPString* npstr;
     NPUTF8* str;
@@ -162,7 +216,7 @@ in_stringz (const NPVariant* var, int count, stringz* arg)
     if (count < 1 || !NPVARIANT_IS_STRING (*var))
         return false;
     npstr = &NPVARIANT_TO_STRING (*var);
-    str = sBrowserFuncs->memalloc (npstr->UTF8Length + 1);
+    str = NPN_MemAlloc (npstr->UTF8Length + 1);
     if (!str)
         return false;  // XXX Should throw.
     *arg = str;
@@ -174,7 +228,7 @@ in_stringz (const NPVariant* var, int count, stringz* arg)
 static void
 del_stringz (stringz arg)
 {
-    sBrowserFuncs->memfree ((char*) arg);
+    NPN_MemFree ((char*) arg);
 }
 
 /*
@@ -192,30 +246,30 @@ out_double (double value, NPVariant* result)
     DOUBLE_TO_NPVARIANT (value, *result);
 }
 
-#define DEFINE_OUT_NUMBER(type)                                         \
-    static void                                                         \
-    out_ ## type (type value, NPVariant* result) UNUSED;                \
-    static void                                                         \
-    out_ ## type (type value, NPVariant* result)                        \
-    {                                                                   \
-        if (value == (int32_t) value)                                   \
-            INT32_TO_NPVARIANT (value, *result);                        \
-        else if (value == (double) value)                               \
-            DOUBLE_TO_NPVARIANT ((double) value, *result);              \
-        else {                                                          \
-            size_t len = 3 * sizeof (type) + 2;                         \
-            NPUTF8* ret = (NPUTF8*) sBrowserFuncs->memalloc (len);      \
-            if (ret) {                                                  \
-                if (value >= 0)                                         \
-                    len = sprintf (ret, "%lu", (ulong) value);          \
-                else                                                    \
-                    len = sprintf (ret, "%ld", (long) value);           \
-                STRINGN_TO_NPVARIANT (ret, len, *result);               \
-            }                                                           \
-            else                                                        \
-                /* XXX Should make this throw. */                       \
-                VOID_TO_NPVARIANT (*result);                            \
-        }                                                               \
+#define DEFINE_OUT_NUMBER(type)                                 \
+    static void                                                 \
+    out_ ## type (type value, NPVariant* result) UNUSED;        \
+    static void                                                 \
+    out_ ## type (type value, NPVariant* result)                \
+    {                                                           \
+        if (value == (int32_t) value)                           \
+            INT32_TO_NPVARIANT (value, *result);                \
+        else if (value == (double) value)                       \
+            DOUBLE_TO_NPVARIANT ((double) value, *result);      \
+        else {                                                  \
+            size_t len = 3 * sizeof (type) + 2;                 \
+            NPUTF8* ret = (NPUTF8*) NPN_MemAlloc (len);         \
+            if (ret) {                                          \
+                if (value >= 0)                                 \
+                    len = sprintf (ret, "%lu", (ulong) value);  \
+                else                                            \
+                    len = sprintf (ret, "%ld", (long) value);   \
+                STRINGN_TO_NPVARIANT (ret, len, *result);       \
+            }                                                   \
+            else                                                \
+                /* XXX Should make this throw. */               \
+                VOID_TO_NPVARIANT (*result);                    \
+        }                                                       \
     }
 
 DEFINE_OUT_NUMBER(ulong)
@@ -233,7 +287,7 @@ static void
 out_stringz (stringz value, NPVariant* result)
 {
     size_t len = strlen (value);
-    NPUTF8* ret = (NPUTF8*) sBrowserFuncs->memalloc (len + 1);
+    NPUTF8* ret = (NPUTF8*) NPN_MemAlloc (len + 1);
     if (ret) {
         memcpy (ret, value, len + 1);
         STRINGN_TO_NPVARIANT (ret, len, *result);
@@ -243,24 +297,21 @@ out_stringz (stringz value, NPVariant* result)
         VOID_TO_NPVARIANT (*result);
 }
 
-#define OUT_NEW(value, result)                                          \
-    do {                                                                \
-        value;                                                          \
-        sBrowserFuncs->retainobject (NPVARIANT_TO_OBJECT (*result));    \
+#define OUT_NEW(value, result)                                  \
+    do {                                                        \
+        value;                                                  \
+        NPN_RetainObject (NPVARIANT_TO_OBJECT (*result));       \
     } while (0)
-
-#define ENTRY_TO_TOP(entry) CONTAINING (TopObject, Entry_npclass, entry->_class)
 
 #define DEFINE_OBJECT_TYPE(ctor, name, type, field)                     \
     static bool                                                         \
-    ctor (NPObject* entry, NPVariant* result, type* arg)                \
+    ctor (TopObject* top, NPVariant* result, type* arg)                 \
     {                                                                   \
-        TopObject* top = ENTRY_TO_TOP (entry);                          \
-        name* ret = (name*) sBrowserFuncs->createobject                 \
-            (top->instance, &name ## _npclass);                         \
+        name* ret = (name*) NPN_CreateObject                            \
+            (top->instance, &top->npclass ## name);                     \
                                                                         \
         if (!ret) {                                                     \
-            sBrowserFuncs->setexception (entry, "out of memory");       \
+            NPN_SetException (&top->npobj, "out of memory");            \
             return false;                                               \
         }                                                               \
         OBJECT_TO_NPVARIANT (&ret->npobj, *result);                     \
@@ -271,8 +322,7 @@ out_stringz (stringz value, NPVariant* result)
     static void                                                         \
     del_ ## ctor (type arg)                                             \
     {                                                                   \
-        sBrowserFuncs->releaseobject                                    \
-            (&CONTAINING (name, field, arg)->npobj);                    \
+        NPN_ReleaseObject (&CONTAINING (name, field, arg)->npobj);      \
     }
 
 static void
@@ -305,14 +355,14 @@ obj_id_var_void(NPObject *npobj, NPIdentifier name, NPVariant *result)
 static bool
 setProperty_ro(NPObject *npobj, NPIdentifier name, const NPVariant *value)
 {
-    sBrowserFuncs->setexception (npobj, "read-only object");
+    NPN_SetException (npobj, "read-only object");
     return true;
 }
 
 static bool
 removeProperty_ro(NPObject *npobj, NPIdentifier name)
 {
-    sBrowserFuncs->setexception (npobj, "read-only object");
+    NPN_SetException (npobj, "read-only object");
     return true;
 }
 
@@ -333,7 +383,7 @@ hasMethod_only_toString(NPObject *npobj, NPIdentifier name)
 static bool
 enumerate_only_toString(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 {
-    *value = sBrowserFuncs->memalloc (1 * sizeof (NPIdentifier*));
+    *value = (NPIdentifier*) NPN_MemAlloc (1 * sizeof (NPIdentifier*));
     *count = 1;
     (*value)[0] = ID_toString;
     return true;
@@ -360,7 +410,7 @@ typedef struct _Tuple {
 static NPObject*
 Tuple_allocate (NPP npp, NPClass *aClass)
 {
-    Tuple* ret = (Tuple*) sBrowserFuncs->memalloc (sizeof (Tuple));
+    Tuple* ret = (Tuple*) NPN_MemAlloc (sizeof (Tuple));
 #if DEBUG_ALLOC
     fprintf (stderr, "Tuple allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
@@ -375,10 +425,9 @@ static void
 free_npvariant (NPVariant* var)
 {
     if (NPVARIANT_IS_STRING (*var))
-        sBrowserFuncs->memfree
-            ((NPUTF8*) NPVARIANT_TO_STRING (*var).UTF8Characters);
+        NPN_MemFree ((NPUTF8*) NPVARIANT_TO_STRING (*var).UTF8Characters);
     else if (NPVARIANT_IS_OBJECT (*var))
-        sBrowserFuncs->releaseobject (NPVARIANT_TO_OBJECT (*var));
+        NPN_ReleaseObject (NPVARIANT_TO_OBJECT (*var));
 }
 
 static void
@@ -392,19 +441,19 @@ Tuple_deallocate (NPObject *npobj)
     for (i = tuple->nelts; i > 0; )
         free_npvariant (&tuple->array[--i]);
     if (tuple->array)
-        sBrowserFuncs->memfree (tuple->array);
-    sBrowserFuncs->memfree (tuple);
+        NPN_MemFree (tuple->array);
+    NPN_MemFree (tuple);
 }
 
 static int32_t
 tuple_property_number (NPIdentifier key)
 {
-    if (sBrowserFuncs->identifierisstring (key)) {
-        if (key == sBrowserFuncs->getstringidentifier ("length"))
+    if (NPN_IdentifierIsString (key)) {
+        if (key == NPN_GetStringIdentifier ("length"))
             return -1;
         return -2;
     }
-    return sBrowserFuncs->intfromidentifier (key);
+    return NPN_IntFromIdentifier (key);
 }
 
 static bool
@@ -419,9 +468,9 @@ copy_npvariant (NPObject* npobj, NPVariant* dest, const NPVariant* src)
 {
     if (NPVARIANT_IS_STRING (*src)) {
         uint32_t len = NPVARIANT_TO_STRING (*src).UTF8Length;
-        NPUTF8* s = sBrowserFuncs->memalloc (len);
+        NPUTF8* s = NPN_MemAlloc (len);
         if (!s) {
-            sBrowserFuncs->setexception (npobj, "out of memory");
+            NPN_SetException (npobj, "out of memory");
             return false;
         }
         memcpy (s, NPVARIANT_TO_STRING (*src).UTF8Characters, len);
@@ -429,7 +478,7 @@ copy_npvariant (NPObject* npobj, NPVariant* dest, const NPVariant* src)
     }
     else {
         if (NPVARIANT_IS_OBJECT (*src))
-            sBrowserFuncs->retainobject (NPVARIANT_TO_OBJECT (*src));
+            NPN_RetainObject (NPVARIANT_TO_OBJECT (*src));
         *dest = *src;
     }
     return true;
@@ -456,39 +505,24 @@ Tuple_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
     Tuple* tuple = (Tuple*) npobj;
     uint32_t i;
 
-    *count = tuple->nelts + 1;
-    *value = sBrowserFuncs->memalloc (*count * sizeof (NPIdentifier*));
+    *count = tuple->nelts;
+    *value = NPN_MemAlloc (*count * sizeof (NPIdentifier*));
     for (i = 0; i < tuple->nelts; i++)
-        (*value)[i] = sBrowserFuncs->getintidentifier (i);
-    (*value)[tuple->nelts] = sBrowserFuncs->getstringidentifier ("length");
+        (*value)[i] = NPN_GetIntIdentifier (i);
     return true;
 }
 
-static NPClass Tuple_npclass = {
-    structVersion   : NP_CLASS_STRUCT_VERSION,
-    allocate        : Tuple_allocate,
-    deallocate      : Tuple_deallocate,
-    invalidate      : obj_invalidate,
-    hasMethod       : obj_id_false,
-    hasProperty     : Tuple_hasProperty,
-    getProperty     : Tuple_getProperty,
-    setProperty     : setProperty_ro,
-    removeProperty  : removeProperty_ro,
-    enumerate       : Tuple_enumerate
-};
-
 static Tuple*
-make_tuple (NPP instance, uint32_t size)
+make_tuple (TopObject* top, uint32_t size)
 {
-    Tuple* ret = (Tuple*)
-        sBrowserFuncs->createobject (instance, &Tuple_npclass);
+    Tuple* ret = (Tuple*) NPN_CreateObject (top->instance, &top->npclassTuple);
     if (ret) {
-        ret->array = (NPVariant*) sBrowserFuncs->memalloc
+        ret->array = (NPVariant*) NPN_MemAlloc
             (size * sizeof ret->array[0]);
         if (ret->array)
             ret->nelts = size;
         else {
-            sBrowserFuncs->memfree (ret);
+            NPN_MemFree (ret);
             ret = 0;
         }
     }
@@ -535,7 +569,7 @@ typedef struct _Rand {
 static NPObject*
 Integer_allocate (NPP npp, NPClass *aClass)
 {
-    Integer* ret = (Integer*) sBrowserFuncs->memalloc (sizeof (Integer));
+    Integer* ret = (Integer*) NPN_MemAlloc (sizeof (Integer));
 #if DEBUG_ALLOC
     fprintf (stderr, "Integer allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
@@ -550,21 +584,21 @@ Integer_deallocate (NPObject *npobj)
 #endif  /* DEBUG_ALLOC */
     if (npobj)
         mpz_clear (((Integer*) npobj)->mp);
-    sBrowserFuncs->memfree (npobj);
+    NPN_MemFree (npobj);
 }
 
 static bool
-integer_toString (NPObject *npobj, mpz_ptr mpp, const NPVariant *args,
+integer_toString (TopObject *top, mpz_ptr mpp, const NPVariant *args,
                   uint32_t argCount, NPVariant *result)
 {
     int base = 0;
 
-    if (!in_int (&args[0], argCount, &base))
+    if (!in_int (top, &args[0], argCount, &base))
         base = 10;
 
     if (base >= -36 && base <= 62 && base != 0 && base != -1 && base != 1) {
         size_t len = mpz_sizeinbase (mpp, base) + 2;
-        NPUTF8* s = sBrowserFuncs->memalloc (len);
+        NPUTF8* s = NPN_MemAlloc (len);
         if (s) {
             mpz_get_str (s, base, mpp);
             if (s[0] != '-')
@@ -572,10 +606,10 @@ integer_toString (NPObject *npobj, mpz_ptr mpp, const NPVariant *args,
             STRINGN_TO_NPVARIANT (s, s[len-2] ? len-1 : len-2, *result);
         }
         else
-            sBrowserFuncs->setexception (npobj, "out of memory");
+            NPN_SetException (&top->npobj, "out of memory");
     }
     else
-        sBrowserFuncs->setexception (npobj, "invalid argument");
+        NPN_SetException (&top->npobj, "invalid argument");
     return true;
 }
 
@@ -585,26 +619,13 @@ Integer_invoke (NPObject *npobj, NPIdentifier name,
 {
     Integer* z = (Integer*) npobj;
     if (name == ID_toString)
-        return integer_toString (npobj, z->mp, args, argCount, result);
+        return integer_toString (Integer_getTop (npobj),
+                                 z->mp, args, argCount, result);
     return false;
 }
 
-static NPClass Integer_npclass = {
-    structVersion   : NP_CLASS_STRUCT_VERSION,
-    allocate        : Integer_allocate,
-    deallocate      : Integer_deallocate,
-    invalidate      : obj_invalidate,
-    hasMethod       : hasMethod_only_toString,
-    invoke          : Integer_invoke,
-    hasProperty     : obj_id_false,
-    getProperty     : obj_id_var_void,
-    setProperty     : setProperty_ro,
-    removeProperty  : removeProperty_ro,
-    enumerate       : enumerate_only_toString
-};
-
 DEFINE_OBJECT_TYPE (new_mpz, Integer, mpz_ptr, mp[0])
-#define in_new_mpz(var, count, arg) IN_NEW (new_mpz, arg)
+#define in_new_mpz(top, var, count, arg) IN_NEW (top, new_mpz, arg)
 #define out_new_mpz OUT_NEW
 
 /*
@@ -616,25 +637,26 @@ typedef int int_2_to_62;
 typedef int int_abs_2_to_62;
 
 static bool
-in_int_0_or_2_to_62 (const NPVariant* var, int count, int* arg)
+in_int_0_or_2_to_62 (TopObject* top, const NPVariant* var, int count, int* arg)
 {
-    return in_int (var, count, arg) && (*arg == 0 || (*arg >= 2 && *arg <= 62));
+    return in_int (top, var, count, arg) &&
+        (*arg == 0 || (*arg >= 2 && *arg <= 62));
 }
 #define del_int_0_or_2_to_62(arg)
 
 static bool
-in_int_2_to_62 (const NPVariant* var, int count, int* arg)
+in_int_2_to_62 (TopObject* top, const NPVariant* var, int count, int* arg)
 {
-    return in_int (var, count, arg) && *arg >= 2 && *arg <= 62;
+    return in_int (top, var, count, arg) && *arg >= 2 && *arg <= 62;
 }
 #define del_int_2_to_62(arg)
 
 #if NPGMP_MPF
 static bool
-in_int_abs_2_to_62 (const NPVariant* var, int count, int* arg)
+in_int_abs_2_to_62 (TopObject* top, const NPVariant* var, int count, int* arg)
 {
     int i = (*arg > 0 ? *arg : -*arg);
-    return in_int (var, count, arg) && i >= 2 && i <= 62;
+    return in_int (top, var, count, arg) && i >= 2 && i <= 62;
 }
 #define del_int_abs_2_to_62(arg)
 #endif  /* NPGMP_MPF */
@@ -668,7 +690,7 @@ typedef x_gmp_randstate_ptr uninit_rand;
 static NPObject*
 MpzRef_allocate (NPP npp, NPClass *aClass)
 {
-    MpzRef* ret = (MpzRef*) sBrowserFuncs->memalloc (sizeof (MpzRef));
+    MpzRef* ret = (MpzRef*) NPN_MemAlloc (sizeof (MpzRef));
 #if DEBUG_ALLOC
     fprintf (stderr, "MpzRef allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
@@ -687,8 +709,8 @@ MpzRef_deallocate (NPObject *npobj)
     if (ref->owner)
         /* Decrement the Rational's reference count.  See comments in
            Mpz_deallocate.  */
-        sBrowserFuncs->releaseobject (ref->owner);
-    sBrowserFuncs->memfree (npobj);
+        NPN_ReleaseObject (ref->owner);
+    NPN_MemFree (npobj);
 }
 
 static bool
@@ -697,39 +719,26 @@ MpzRef_invoke (NPObject *npobj, NPIdentifier name,
 {
     MpzRef* ref = (MpzRef*) npobj;
     if (name == ID_toString)
-        return integer_toString (npobj, ref->mpp, args, argCount, result);
+        return integer_toString (MpzRef_getTop (npobj),
+                                 ref->mpp, args, argCount, result);
     return false;
 }
 
-static NPClass MpzRef_npclass = {
-    structVersion   : NP_CLASS_STRUCT_VERSION,
-    allocate        : MpzRef_allocate,
-    deallocate      : MpzRef_deallocate,
-    invalidate      : obj_invalidate,
-    hasMethod       : hasMethod_only_toString,
-    invoke          : MpzRef_invoke,
-    hasProperty     : obj_id_false,
-    getProperty     : obj_id_var_void,
-    setProperty     : setProperty_ro,
-    removeProperty  : removeProperty_ro,
-    enumerate       : enumerate_only_toString
-};
-
 DEFINE_OBJECT_TYPE (new_mpzref, MpzRef, mpz_ptr*, mpp)
-#define in_new_mpzref(var, count, arg) IN_NEW (new_mpzref, arg)
+#define in_new_mpzref(top, var, count, arg) IN_NEW (top, new_mpzref, arg)
 #define out_new_mpzref OUT_NEW
 
 static void x_mpq_numref (mpz_ptr* zp, mpq_ptr q) {
     MpzRef* ref = CONTAINING (MpzRef, mpp, zp);
     Rational* rat = CONTAINING (Rational, mp[0], q);
     *zp = &mpq_numref (q)[0];
-    ref->owner = sBrowserFuncs->retainobject (&rat->npobj);
+    ref->owner = NPN_RetainObject (&rat->npobj);
 }
 static void x_mpq_denref (mpz_ptr* zp, mpq_ptr q) {
     MpzRef* ref = CONTAINING (MpzRef, mpp, zp);
     Rational* rat = CONTAINING (Rational, mp[0], q);
     *zp = &mpq_denref (q)[0];
-    ref->owner = sBrowserFuncs->retainobject (&rat->npobj);
+    ref->owner = NPN_RetainObject (&rat->npobj);
 }
 
 #endif  /* NPGMP_MPQ */
@@ -739,14 +748,14 @@ static void x_mpq_denref (mpz_ptr* zp, mpq_ptr q) {
  */
 
 static bool
-in_mpz_ptr (const NPVariant* var, int count, mpz_ptr* arg)
+in_mpz_ptr (TopObject* top, const NPVariant* var, int count, mpz_ptr* arg)
 {
     if (count < 1 || !NPVARIANT_IS_OBJECT (*var))
         return false;
-    if (NPVARIANT_TO_OBJECT (*var)->_class == &Integer_npclass)
+    if (NPVARIANT_TO_OBJECT (*var)->_class == &top->npclassInteger)
         *arg = &((Integer*) NPVARIANT_TO_OBJECT (*var))->mp[0];
 #if NPGMP_MPQ
-    else if (NPVARIANT_TO_OBJECT (*var)->_class == &MpzRef_npclass)
+    else if (NPVARIANT_TO_OBJECT (*var)->_class == &top->npclassMpzRef)
         *arg = ((MpzRef*) NPVARIANT_TO_OBJECT (*var))->mpp;
 #endif
     else
@@ -755,9 +764,9 @@ in_mpz_ptr (const NPVariant* var, int count, mpz_ptr* arg)
 }
 
 static bool
-in_uninit_mpz (const NPVariant* var, int count, mpz_ptr* arg)
+in_uninit_mpz (TopObject* top, const NPVariant* var, int count, mpz_ptr* arg)
 {
-    bool ret = in_mpz_ptr (var, count, arg);
+    bool ret = in_mpz_ptr (top, var, count, arg);
     if (ret)
         mpz_clear (*arg);
     return ret;
@@ -767,22 +776,21 @@ in_uninit_mpz (const NPVariant* var, int count, mpz_ptr* arg)
 #define del_uninit_mpz(arg)
 
 static NPObject*
-z_get_d_2exp (NPObject* entry, mpz_ptr z)
+z_get_d_2exp (TopObject* top, mpz_ptr z)
 {
-    TopObject* top = ENTRY_TO_TOP (entry);
-    Tuple* ret = make_tuple (top->instance, 2);
+    Tuple* ret = make_tuple (top, 2);
     long exp;
 
     if (!ret) {
-        sBrowserFuncs->setexception (entry, "out of memory");
-        return entry;  /* any object that is handy.  XXX need retainobject? */
+        NPN_SetException (&top->npobj, "out of memory");
+        return 0;
     }
     DOUBLE_TO_NPVARIANT (mpz_get_d_2exp (&exp, z), ret->array[0]);
     out_long (exp, &ret->array[1]);
     return &ret->npobj;
 }
 
-#define x_mpz_get_d_2exp(z) z_get_d_2exp (vEntry, z)
+#define x_mpz_get_d_2exp(z) z_get_d_2exp (vTop, z)
 
 /*
  * Rational objects wrap mpq_t.
@@ -793,7 +801,7 @@ z_get_d_2exp (NPObject* entry, mpz_ptr z)
 static NPObject*
 Rational_allocate (NPP npp, NPClass *aClass)
 {
-    Rational* ret = (Rational*) sBrowserFuncs->memalloc (sizeof (Rational));
+    Rational* ret = (Rational*) NPN_MemAlloc (sizeof (Rational));
 #if DEBUG_ALLOC
     fprintf (stderr, "Rational allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
@@ -808,31 +816,31 @@ Rational_deallocate (NPObject *npobj)
 #endif  /* DEBUG_ALLOC */
     if (npobj)
         mpq_clear (((Rational*) npobj)->mp);
-    sBrowserFuncs->memfree (npobj);
+    NPN_MemFree (npobj);
 }
 
 static bool
-rational_toString (NPObject *npobj, mpq_ptr mpp, const NPVariant *args,
+rational_toString (TopObject* top, mpq_ptr mpp, const NPVariant *args,
                    uint32_t argCount, NPVariant *result)
 {
     int base = 0;
 
-    if (!in_int (&args[0], argCount, &base))
+    if (!in_int (top, &args[0], argCount, &base))
         base = 10;
 
     if (base >= -36 && base <= 62 && base != 0 && base != -1 && base != 1) {
         size_t len = mpz_sizeinbase (mpq_numref (mpp), base)
             + mpz_sizeinbase (mpq_denref (mpp), base) + 3;
-        NPUTF8* s = sBrowserFuncs->memalloc (len);
+        NPUTF8* s = NPN_MemAlloc (len);
         if (s) {
             mpq_get_str (s, base, mpp);
             STRINGN_TO_NPVARIANT (s, len-5 + strlen (s + len-5), *result);
         }
         else
-            sBrowserFuncs->setexception (npobj, "out of memory");
+            NPN_SetException (&top->npobj, "out of memory");
     }
     else
-        sBrowserFuncs->setexception (npobj, "invalid argument");
+        NPN_SetException (&top->npobj, "invalid argument");
     return true;
 }
 
@@ -842,38 +850,25 @@ Rational_invoke (NPObject *npobj, NPIdentifier name,
 {
     Rational* z = (Rational*) npobj;
     if (name == ID_toString)
-        return rational_toString (npobj, z->mp, args, argCount, result);
+        return rational_toString (Rational_getTop (npobj),
+                                  z->mp, args, argCount, result);
     return false;
 }
 
-static NPClass Rational_npclass = {
-    structVersion   : NP_CLASS_STRUCT_VERSION,
-    allocate        : Rational_allocate,
-    deallocate      : Rational_deallocate,
-    invalidate      : obj_invalidate,
-    hasMethod       : hasMethod_only_toString,
-    invoke          : Rational_invoke,
-    hasProperty     : obj_id_false,
-    getProperty     : obj_id_var_void,
-    setProperty     : setProperty_ro,
-    removeProperty  : removeProperty_ro,
-    enumerate       : enumerate_only_toString
-};
-
 static bool
-in_mpq_ptr (const NPVariant* var, int count, mpq_ptr* arg)
+in_mpq_ptr (TopObject* top, const NPVariant* var, int count, mpq_ptr* arg)
 {
     if (count < 1 || !NPVARIANT_IS_OBJECT (*var)
-        || NPVARIANT_TO_OBJECT (*var)->_class != &Rational_npclass)
+        || NPVARIANT_TO_OBJECT (*var)->_class != &top->npclassRational)
         return false;
     *arg = &((Rational*) NPVARIANT_TO_OBJECT (*var))->mp[0];
     return true;
 }
 
 static bool
-in_uninit_mpq (const NPVariant* var, int count, mpq_ptr* arg)
+in_uninit_mpq (TopObject* top, const NPVariant* var, int count, mpq_ptr* arg)
 {
-    bool ret = in_mpq_ptr (var, count, arg);
+    bool ret = in_mpq_ptr (top, var, count, arg);
     if (ret)
         mpq_clear (*arg);
     return ret;
@@ -883,7 +878,7 @@ in_uninit_mpq (const NPVariant* var, int count, mpq_ptr* arg)
 #define del_uninit_mpq(arg)
 
 DEFINE_OBJECT_TYPE (new_mpq, Rational, mpq_ptr, mp[0])
-#define in_new_mpq(var, count, arg) IN_NEW (new_mpq, arg)
+#define in_new_mpq(top, var, count, arg) IN_NEW (top, new_mpq, arg)
 #define out_new_mpq OUT_NEW
 
 #endif  /* NPGMP_MPQ */
@@ -897,7 +892,7 @@ DEFINE_OBJECT_TYPE (new_mpq, Rational, mpq_ptr, mp[0])
 static NPObject*
 Float_allocate (NPP npp, NPClass *aClass)
 {
-    Float* ret = (Float*) sBrowserFuncs->memalloc (sizeof (Float));
+    Float* ret = (Float*) NPN_MemAlloc (sizeof (Float));
 #if DEBUG_ALLOC
     fprintf (stderr, "Float allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
@@ -912,7 +907,7 @@ Float_deallocate (NPObject *npobj)
 #endif  /* DEBUG_ALLOC */
     if (npobj)
         mpf_clear (((Float*) npobj)->mp);
-    sBrowserFuncs->memfree (npobj);
+    NPN_MemFree (npobj);
 }
 
 static void
@@ -930,7 +925,7 @@ x_gmp_free (void *ptr, size_t size)
 /* XXX toString should behave a little differently.  toExponential would
    be closer, but not exactly this.  */
 static bool
-float_toString (NPObject *npobj, mpf_ptr mpp, const NPVariant *args,
+float_toString (TopObject *top, mpf_ptr mpp, const NPVariant *args,
                 uint32_t argCount, NPVariant *result)
 {
     int base;
@@ -939,14 +934,14 @@ float_toString (NPObject *npobj, mpf_ptr mpp, const NPVariant *args,
     char* str;
     size_t allocated;
 
-    if (in_int (args, argCount, &base)) {
+    if (in_int (top, args, argCount, &base)) {
         args++;
         argCount--;
     }
     else
         base = 10;
 
-    if (!in_size_t (args, argCount, &n_digits))
+    if (!in_size_t (top, args, argCount, &n_digits))
         n_digits = 0;
 
     if (base >= -36 && base <= 62 && base != 0 && base != -1 && base != 1) {
@@ -955,24 +950,24 @@ float_toString (NPObject *npobj, mpf_ptr mpp, const NPVariant *args,
         /* XXX could preallocate for n_digits != 0. */
         str = mpf_get_str (NULL, &expt, base, n_digits, mpp);
         if (!str) {
-            sBrowserFuncs->setexception (npobj, "out of memory");
+            NPN_SetException (&top->npobj, "out of memory");
             return true;
         }
         allocated = strlen (str) + 1;
         if (allocated == 1) {
-            s = sBrowserFuncs->memalloc (sizeof "0");
+            s = NPN_MemAlloc (sizeof "0");
             if (s) {
                 strcpy (s, "0");
                 STRINGZ_TO_NPVARIANT (s, *result);
             }
             else
-                sBrowserFuncs->setexception (npobj, "out of memory");
+                NPN_SetException (&top->npobj, "out of memory");
         }
         else {
             size_t len = allocated + 4 + 3 * sizeof expt;
             size_t pos = 0;
 
-            s = sBrowserFuncs->memalloc (len);
+            s = NPN_MemAlloc (len);
             if (s) {
                 if (str[pos] == '-') {
                     s[pos] = str[pos];
@@ -983,13 +978,13 @@ float_toString (NPObject *npobj, mpf_ptr mpp, const NPVariant *args,
                 STRINGZ_TO_NPVARIANT (s, *result);
             }
             else
-                sBrowserFuncs->setexception (npobj, "out of memory");
+                NPN_SetException (&top->npobj, "out of memory");
         }
 
         x_gmp_free (str, allocated);
     }
     else
-        sBrowserFuncs->setexception (npobj, "invalid base");
+        NPN_SetException (&top->npobj, "invalid base");
     return true;
 }
 
@@ -999,29 +994,16 @@ Float_invoke (NPObject *npobj, NPIdentifier name,
 {
     Float* z = (Float*) npobj;
     if (name == ID_toString)
-        return float_toString (npobj, z->mp, args, argCount, result);
+        return float_toString (Float_getTop (npobj),
+                               z->mp, args, argCount, result);
     return false;
 }
 
-static NPClass Float_npclass = {
-    structVersion   : NP_CLASS_STRUCT_VERSION,
-    allocate        : Float_allocate,
-    deallocate      : Float_deallocate,
-    invalidate      : obj_invalidate,
-    hasMethod       : hasMethod_only_toString,
-    invoke          : Float_invoke,
-    hasProperty     : obj_id_false,
-    getProperty     : obj_id_var_void,
-    setProperty     : setProperty_ro,
-    removeProperty  : removeProperty_ro,
-    enumerate       : enumerate_only_toString
-};
-
 static bool
-in_mpf_ptr (const NPVariant* var, int count, mpf_ptr* arg)
+in_mpf_ptr (TopObject* top, const NPVariant* var, int count, mpf_ptr* arg)
 {
     if (count < 1 || !NPVARIANT_IS_OBJECT (*var)
-        || NPVARIANT_TO_OBJECT (*var)->_class != &Float_npclass)
+        || NPVARIANT_TO_OBJECT (*var)->_class != &top->npclassFloat)
         return false;
     *arg = &((Float*) NPVARIANT_TO_OBJECT (*var))->mp[0];
     return true;
@@ -1039,9 +1021,9 @@ restore_prec (mpf_ptr mpp)
 }
 
 static bool
-in_uninit_mpf (const NPVariant* var, int count, mpf_ptr* arg)
+in_uninit_mpf (TopObject* top, const NPVariant* var, int count, mpf_ptr* arg)
 {
-    bool ret = in_mpf_ptr (var, count, arg);
+    bool ret = in_mpf_ptr (top, var, count, arg);
 
     if (ret) {
         restore_prec (*arg);
@@ -1053,7 +1035,7 @@ in_uninit_mpf (const NPVariant* var, int count, mpf_ptr* arg)
 static mp_bitcnt_t
 x_x_mpf_get_default_prec (NPObject* entry)
 {
-    return ENTRY_TO_TOP (entry)->default_mpf_prec ?: mpf_get_default_prec ();
+    return Entry_getTop (entry)->default_mpf_prec ?: mpf_get_default_prec ();
 }
 
 #define x_mpf_get_default_prec() x_x_mpf_get_default_prec (vEntry)
@@ -1061,16 +1043,14 @@ x_x_mpf_get_default_prec (NPObject* entry)
 static void
 x_x_mpf_set_default_prec (NPObject* entry, mp_bitcnt_t prec)
 {
-    ENTRY_TO_TOP (entry)->default_mpf_prec = (prec ?: 1);
+    Entry_getTop (entry)->default_mpf_prec = (prec ?: 1);
 }
 
 #define x_mpf_set_default_prec(prec) x_x_mpf_set_default_prec (vEntry, prec)
 
 static void
-x_x_mpf_init (NPObject* entry, mpf_ptr f)
+x_x_mpf_init (TopObject* top, mpf_ptr f)
 {
-    TopObject* top = ENTRY_TO_TOP (entry);
-
     if (top->default_mpf_prec)
         mpf_init2 (f, top->default_mpf_prec);
     else
@@ -1078,28 +1058,27 @@ x_x_mpf_init (NPObject* entry, mpf_ptr f)
 }
 
 static bool
-x_in_defprec_mpf (NPObject* entry,
+x_in_defprec_mpf (TopObject* top,
                   const NPVariant* var, int count, mpf_ptr* arg)
 {
-    bool ret = in_uninit_mpf (var, count, arg);
-
+    bool ret = in_uninit_mpf (top, var, count, arg);
     if (ret)
-        x_x_mpf_init (entry, *arg);
+        x_x_mpf_init (top, *arg);
     return ret;
 }
 
-#define in_defprec_mpf(var, count, arg)         \
-    x_in_defprec_mpf (vEntry, var, count, arg)
+#define in_defprec_mpf(top, var, count, arg)     \
+    x_in_defprec_mpf (top, var, count, arg)
 
 #define del_mpf_ptr(arg)
 #define del_uninit_mpf(arg)
 #define del_defprec_mpf(arg)
 
 DEFINE_OBJECT_TYPE (new_mpf, Float, mpf_ptr, mp[0])
-#define in_new_mpf(var, count, arg) IN_NEW (new_mpf, arg)
+#define in_new_mpf(top, var, count, arg) IN_NEW (top, new_mpf, arg)
 #define out_new_mpf OUT_NEW
 
-#define x_mpf_init(f) x_x_mpf_init (vEntry, f)
+#define x_mpf_init(f) x_x_mpf_init (vTop, f)
 
 static void
 x_mpf_clear (mpf_ptr f)
@@ -1128,13 +1107,13 @@ x_mpf_set_prec_raw (mpf_ptr mpp, mp_bitcnt_t prec)
 static NPObject*
 f_get_d_2exp (NPObject* entry, mpf_ptr f)
 {
-    TopObject* top = ENTRY_TO_TOP (entry);
-    Tuple* ret = make_tuple (top->instance, 2);
+    TopObject* top = Entry_getTop (entry);
+    Tuple* ret = make_tuple (top, 2);
     long exp;
 
     if (!ret) {
-        sBrowserFuncs->setexception (entry, "out of memory");
-        return entry;  /* any object that is handy */
+        NPN_SetException (entry, "out of memory");
+        return 0;
     }
     DOUBLE_TO_NPVARIANT (mpf_get_d_2exp (&exp, f), ret->array[0]);
     out_long (exp, &ret->array[1]);
@@ -1146,39 +1125,39 @@ f_get_d_2exp (NPObject* entry, mpf_ptr f)
 static NPObject*
 f_get_str (NPObject* entry, int base, size_t n_digits, mpf_ptr f)
 {
-    TopObject* top = ENTRY_TO_TOP (entry);
-    Tuple* ret = make_tuple (top->instance, 2);
+    TopObject* top = Entry_getTop (entry);
+    Tuple* ret = make_tuple (top, 2);
     mp_exp_t exp;
     char* str;
     size_t len;
     NPUTF8* s;
 
     if (!ret) {
-        sBrowserFuncs->setexception (entry, "out of memory");
+        NPN_SetException (entry, "out of memory");
         goto error_out;
     }
 
     if (base < -36 || base > 62 || (base >= -1 && base <= 1)) {
-        sBrowserFuncs->setexception (entry, "invalid base");
+        NPN_SetException (entry, "invalid base");
         goto error_release;
     }
 
     /* XXX could preallocate for n_digits != 0. */
     str = mpf_get_str (NULL, &exp, base, n_digits, f);
     if (!str) {
-        sBrowserFuncs->setexception (entry, "out of memory");
+        NPN_SetException (entry, "out of memory");
         goto error_release;
     }
 
     len = strlen (str);
-    s = sBrowserFuncs->memalloc (len);
+    s = NPN_MemAlloc (len);
     if (s || !len) {
         memcpy (s, str, len);
         x_gmp_free (str, len + 1);
         STRINGN_TO_NPVARIANT (s, len, ret->array[0]);
     }
     else {
-        sBrowserFuncs->setexception (entry, "out of memory");
+        NPN_SetException (entry, "out of memory");
         goto error_free;
     }
 
@@ -1188,9 +1167,9 @@ f_get_str (NPObject* entry, int base, size_t n_digits, mpf_ptr f)
     error_free:
     x_gmp_free (str, len + 1);
     error_release:
-    sBrowserFuncs->releaseobject (&ret->npobj);
+    NPN_ReleaseObject (&ret->npobj);
     error_out:
-    return sBrowserFuncs->retainobject (entry);  /* any object handy */
+    return 0;
 }
 
 #define x_mpf_get_str(base, n_digits, f) f_get_str(vEntry, base, n_digits, f)
@@ -1206,7 +1185,7 @@ f_get_str (NPObject* entry, int base, size_t n_digits, mpf_ptr f)
 static NPObject*
 Rand_allocate (NPP npp, NPClass *aClass)
 {
-    Rand* ret = (Rand*) sBrowserFuncs->memalloc (sizeof (Rand));
+    Rand* ret = (Rand*) NPN_MemAlloc (sizeof (Rand));
 #if DEBUG_ALLOC
     fprintf (stderr, "Rand allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
@@ -1221,37 +1200,25 @@ Rand_deallocate (NPObject *npobj)
 #endif  /* DEBUG_ALLOC */
     if (npobj)
         gmp_randclear (((Rand*) npobj)->state);
-    sBrowserFuncs->memfree (npobj);
+    NPN_MemFree (npobj);
 }
 
-static NPClass Rand_npclass = {
-    structVersion   : NP_CLASS_STRUCT_VERSION,
-    allocate        : Rand_allocate,
-    deallocate      : Rand_deallocate,
-    invalidate      : obj_invalidate,
-    hasMethod       : obj_id_false,
-    hasProperty     : obj_id_false,
-    getProperty     : obj_id_var_void,
-    setProperty     : setProperty_ro,
-    removeProperty  : removeProperty_ro,
-    enumerate       : enumerate_empty
-};
-
 static bool
-in_x_gmp_randstate_ptr (const NPVariant* var, int count,
+in_x_gmp_randstate_ptr (TopObject* top, const NPVariant* var, int count,
                         x_gmp_randstate_ptr* arg)
 {
     if (count < 1 || !NPVARIANT_IS_OBJECT (*var)
-        || NPVARIANT_TO_OBJECT (*var)->_class != &Rand_npclass)
+        || NPVARIANT_TO_OBJECT (*var)->_class != &top->npclassRand)
         return false;
     *arg = &((Rand*) NPVARIANT_TO_OBJECT (*var))->state[0];
     return true;
 }
 
 static bool
-in_uninit_rand (const NPVariant* var, int count, x_gmp_randstate_ptr* arg)
+in_uninit_rand (TopObject* top,
+                const NPVariant* var, int count, x_gmp_randstate_ptr* arg)
 {
-    bool ret = in_x_gmp_randstate_ptr (var, count, arg);
+    bool ret = in_x_gmp_randstate_ptr (top, var, count, arg);
     if (ret)
         gmp_randclear (*arg);
     return ret;
@@ -1261,7 +1228,7 @@ in_uninit_rand (const NPVariant* var, int count, x_gmp_randstate_ptr* arg)
 #define del_uninit_rand(arg)
 
 DEFINE_OBJECT_TYPE (new_rand, Rand, x_gmp_randstate_ptr, state[0])
-#define in_new_rand(var, count, arg) IN_NEW (new_rand, arg)
+#define in_new_rand(top, var, count, arg) IN_NEW (top, new_rand, arg)
 #define out_new_rand OUT_NEW
 
 static int
@@ -1288,7 +1255,7 @@ typedef struct _Entry {
 static NPObject*
 Entry_allocate (NPP npp, NPClass *aClass)
 {
-    Entry* ret = (Entry*) sBrowserFuncs->memalloc (sizeof (Entry));
+    Entry* ret = (Entry*) NPN_MemAlloc (sizeof (Entry));
 #if DEBUG_ALLOC
     fprintf (stderr, "Entry allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
@@ -1301,9 +1268,9 @@ Entry_deallocate (NPObject *npobj)
 #if DEBUG_ALLOC
     fprintf (stderr, "Entry deallocate %p\n", npobj);
 #endif  /* DEBUG_ALLOC */
-    TopObject* top = CONTAINING (TopObject, Entry_npclass, npobj->_class);
-    sBrowserFuncs->releaseobject (&top->npobjTop);
-    sBrowserFuncs->memfree (npobj);
+    TopObject* top = Entry_getTop (npobj);
+    NPN_ReleaseObject (&top->npobj);
+    NPN_MemFree (npobj);
 }
 
 #define STRINGIFY(x) STRINGIFY1(x)
@@ -1363,12 +1330,13 @@ enum Entry_number {
 static NPClass*
 ctor_to_class (NPObject *npobj)
 {
+    TopObject* top = Entry_getTop (npobj);
     int number = CONTAINING (Entry, npobj, npobj)->number;
     switch (number) {
-    case np_mpz: return &Integer_npclass;
-    case np_mpq: return &Rational_npclass;
-    case np_mpf: return &Float_npclass;
-    case np_randstate: return &Rand_npclass;
+    case np_mpz: return &top->npclassInteger;
+    case np_mpq: return &top->npclassRational;
+    case np_mpf: return &top->npclassFloat;
+    case np_randstate: return &top->npclassRand;
     default: return 0;
     }
 }
@@ -1383,22 +1351,24 @@ static bool
 Entry_invoke (NPObject *npobj, NPIdentifier name,
               const NPVariant *args, uint32_t argCount, NPVariant *result)
 {
-    if (name == sBrowserFuncs->getstringidentifier ("isInstance")) {
+    TopObject* top = Entry_getTop (npobj);
+
+    if (name == NPN_GetStringIdentifier ("isInstance")) {
         NPClass* c = ctor_to_class (npobj);
 
         if (c) {
             bool ret;
 
             if (argCount != 1) {
-                sBrowserFuncs->setexception
-                    (npobj, "Usage: isInstance(OBJECT)");
+                NPN_SetException (npobj, "Usage: isInstance(OBJECT)");
                 return true;
             }
             ret = NPVARIANT_IS_OBJECT (args[0]) &&
                 (NPVARIANT_TO_OBJECT (args[0])->_class == c
 #if NPGMP_MPQ
-                 || (c == &Integer_npclass &&
-                     NPVARIANT_TO_OBJECT (args[0])->_class == &MpzRef_npclass)
+                 || (c == &top->npclassInteger &&
+                     NPVARIANT_TO_OBJECT (args[0])->_class ==
+                     &top->npclassMpzRef)
 #endif
                  );
             BOOLEAN_TO_NPVARIANT (ret, *result);
@@ -1409,10 +1379,10 @@ Entry_invoke (NPObject *npobj, NPIdentifier name,
         const char* name = number_to_name (((Entry*) npobj)->number);
         const char format[] = "function %s() { [native code] }";
         size_t len = sizeof format + strlen (name) - 2;
-        char* ret = (char*) sBrowserFuncs->memalloc (len);
+        char* ret = (char*) NPN_MemAlloc (len);
 
         if (!ret) {
-            sBrowserFuncs->setexception (npobj, "out of memory");
+            NPN_SetException (npobj, "out of memory");
             return true;
         }
         sprintf (ret, format, name);
@@ -1431,6 +1401,7 @@ Entry_invokeDefault (NPObject *vEntry,
                      const NPVariant *vArgs, uint32_t vArgCount,
                      NPVariant *vResult)
 {
+    TopObject* vTop = Entry_getTop (vEntry);
     bool ok = false;
     int vArgNumber = 0;
 
@@ -1465,9 +1436,9 @@ Entry_invokeDefault (NPObject *vEntry,
 
 #define IN(a, t)                                                        \
     (vArgNumber++,                                                      \
-     in_ ## t (&vArgs[vArgNumber-1], vArgCount + 1 - vArgNumber, &a ## t))
+     in_ ## t (vTop, &vArgs[vArgNumber-1], vArgCount + 1 - vArgNumber, &a ## t))
 
-#define IN_NEW(func, arg) (vArgNumber--, func (vEntry, vResult, arg))
+#define IN_NEW(top, func, arg) (vArgNumber--, func (top, vResult, arg))
 
     mpz_ptr a0new_mpz;
 #if NPGMP_MPQ
@@ -1563,8 +1534,7 @@ Entry_invokeDefault (NPObject *vEntry,
 #include "gmp-entries.h"
 
     default:
-        sBrowserFuncs->setexception (vEntry,
-                                     "internal error, bad entry number");
+        NPN_SetException (vEntry, "internal error, bad entry number");
         ok = true;
     break;
     }
@@ -1576,7 +1546,7 @@ Entry_invokeDefault (NPObject *vEntry,
         if (sizeof fmt - 2 + strlen (name) > sizeof message)
             name = "GMP function";
         sprintf (message, fmt, name);
-        sBrowserFuncs->setexception (vEntry, message);
+        NPN_SetException (vEntry, message);
     }
     return true;
 }
@@ -1590,11 +1560,11 @@ Gmp_deallocate (NPObject *npobj)
 {
     TopObject* top = CONTAINING (TopObject, npobjGmp, npobj);
 #if DEBUG_ALLOC
-    fprintf (stderr, "Gmp deallocate %p; %u\n", npobj, (unsigned int) top->npobjTop.referenceCount);
+    fprintf (stderr, "Gmp deallocate %p; %u\n", npobj, (unsigned int) top->npobj.referenceCount);
 #endif  /* DEBUG_ALLOC */
     /* Decrement the top object's reference count.  See comments in
        Mpz_deallocate.  */
-    sBrowserFuncs->releaseobject (&top->npobjTop);
+    NPN_ReleaseObject (&top->npobj);
 }
 
 static int
@@ -1603,16 +1573,16 @@ id_to_number (NPObject *npobj, NPIdentifier key)
     NPUTF8* name;
     int ret;
 
-    if (!sBrowserFuncs->identifierisstring (key))
+    if (!NPN_IdentifierIsString (key))
         return 0;
 
-    name = sBrowserFuncs->utf8fromidentifier (key);
+    name = NPN_UTF8FromIdentifier (key);
     if (!name) {
-        sBrowserFuncs->setexception (npobj, "out of memory");
+        NPN_SetException (npobj, "out of memory");
         return -1;
     }
     ret = name_to_number (name);
-    sBrowserFuncs->memfree (name);
+    NPN_MemFree (name);
     return ret;
 }
 
@@ -1627,16 +1597,16 @@ get_entry (NPObject *npobj, int number, NPVariant *result)
 {
     TopObject* top = CONTAINING (TopObject, npobjGmp, npobj);
 
-    Entry* entry = (Entry*) sBrowserFuncs->createobject
-        (top->instance, &top->Entry_npclass);
+    Entry* entry = (Entry*) NPN_CreateObject
+        (top->instance, &top->npclassEntry);
 
     if (entry) {
-        sBrowserFuncs->retainobject (&top->npobjTop);
+        NPN_RetainObject (&top->npobj);
         entry->number = number;
         OBJECT_TO_NPVARIANT (&entry->npobj, *result);
     }
     else
-        sBrowserFuncs->setexception (npobj, "out of memory");
+        NPN_SetException (npobj, "out of memory");
 }
 
 static bool
@@ -1645,14 +1615,14 @@ Gmp_getProperty (NPObject *npobj, NPIdentifier key, NPVariant *result)
     NPUTF8* name;
     int number;
 
-    if (!sBrowserFuncs->identifierisstring (key)) {
+    if (!NPN_IdentifierIsString (key)) {
         VOID_TO_NPVARIANT (*result);
         return true;
     }
 
-    name = sBrowserFuncs->utf8fromidentifier (key);
+    name = NPN_UTF8FromIdentifier (key);
     if (!name) {
-        sBrowserFuncs->setexception (npobj, "out of memory");
+        NPN_SetException (npobj, "out of memory");
         return true;
     }
     number = name_to_number (name);
@@ -1668,7 +1638,7 @@ Gmp_getProperty (NPObject *npobj, NPIdentifier key, NPVariant *result)
     else
         VOID_TO_NPVARIANT (*result);
 
-    sBrowserFuncs->memfree (name);
+    NPN_MemFree (name);
     return true;
 }
 
@@ -1682,26 +1652,13 @@ Gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 #define CONSTANT(value, string, type) +1
 #include "gmp-constants.h"
         ;
-    *value = sBrowserFuncs->memalloc (cnt * sizeof (NPIdentifier*));
+    *value = NPN_MemAlloc (cnt * sizeof (NPIdentifier*));
     *count = cnt;
     cnt = 0;
     for (p = &GmpProperties[1]; *p; p += strlen (p) + 1)
-        (*value)[cnt++] = sBrowserFuncs->getstringidentifier
-            (strchr (p, '|') + 1);
+        (*value)[cnt++] = NPN_GetStringIdentifier (strchr (p, '|') + 1);
     return true;
 }
-
-static NPClass Gmp_npclass = {
-    structVersion   : NP_CLASS_STRUCT_VERSION,
-    deallocate      : Gmp_deallocate,
-    invalidate      : obj_invalidate,
-    hasMethod       : obj_id_false,
-    hasProperty     : Gmp_hasProperty,
-    getProperty     : Gmp_getProperty,
-    setProperty     : setProperty_ro,
-    removeProperty  : removeProperty_ro,
-    enumerate       : Gmp_enumerate
-};
 
 #if NPGMP_SCRIPT
 
@@ -1746,12 +1703,12 @@ id_to_op (NPObject *npobj, NPIdentifier key)
     NPUTF8* name;
     int ret;
 
-    if (!sBrowserFuncs->identifierisstring (key))
+    if (!NPN_IdentifierIsString (key))
         return 0;
 
-    name = sBrowserFuncs->utf8fromidentifier (key);
+    name = NPN_UTF8FromIdentifier (key);
     if (!name) {
-        sBrowserFuncs->setexception (npobj, "out of memory");
+        NPN_SetException (npobj, "out of memory");
         return -OP_ERROR;
     }
 
@@ -1762,7 +1719,7 @@ id_to_op (NPObject *npobj, NPIdentifier key)
     else if (!strcmp (name, "dump")) ret = -OP_DUMP;
     else ret = 0;
 
-    sBrowserFuncs->memfree (name);
+    NPN_MemFree (name);
     return ret;
 }
 
@@ -1783,11 +1740,11 @@ Run_deallocate (NPObject *npobj)
 {
     TopObject* top = CONTAINING (TopObject, npobjRun, npobj);
 #if DEBUG_ALLOC
-    fprintf (stderr, "Run deallocate %p; %u\n", npobj, (unsigned int) top->npobjTop.referenceCount);
+    fprintf (stderr, "Run deallocate %p; %u\n", npobj, (unsigned int) top->npobj.referenceCount);
 #endif  /* DEBUG_ALLOC */
     /* Decrement the top object's reference count.  See comments in
        Mpz_deallocate.  */
-    sBrowserFuncs->releaseobject (&top->npobjTop);
+    NPN_ReleaseObject (&top->npobj);
 }
 
 static bool
@@ -1817,7 +1774,7 @@ free_stack (NPVariant* stack, size_t size)
 {
     for (size_t i = 0; i < size; i++)
         free_npvariant (&stack[i]);
-    sBrowserFuncs->memfree (stack);
+    NPN_MemFree (stack);
 }
 
 static bool
@@ -1835,12 +1792,11 @@ extend (NPVariant** pstack, size_t* palloc, size_t init, size_t count)
                 return false;
             *palloc *= 2;
         }
-        newStack = (NPVariant*) sBrowserFuncs->memalloc
-            (*palloc * sizeof newStack[0]);
+        newStack = (NPVariant*) NPN_MemAlloc (*palloc * sizeof newStack[0]);
         if (!newStack)
             return false;
         memcpy (newStack, *pstack, init * sizeof newStack[0]);
-        sBrowserFuncs->memfree (*pstack);
+        NPN_MemFree (*pstack);
         *pstack = newStack;
     }
     return true;
@@ -1878,7 +1834,7 @@ static bool
 Run_invokeDefault (NPObject* npobj,
                    const NPVariant *args, uint32_t argCount, NPVariant *result)
 {
-    TopObject* top = CONTAINING (TopObject, npobjRun, npobj);
+    TopObject* top = Run_getTop (npobj);
     size_t alloc = 8;
     size_t init = 0;
     int nargs;
@@ -1888,9 +1844,9 @@ Run_invokeDefault (NPObject* npobj,
     size_t index;
     Tuple* temp_tuple;
 
-    stack = (NPVariant*) sBrowserFuncs->memalloc (alloc * sizeof stack[0]);
+    stack = (NPVariant*) NPN_MemAlloc (alloc * sizeof stack[0]);
     if (!stack) {
-        sBrowserFuncs->setexception (npobj, "out of memory");
+        NPN_SetException (npobj, "out of memory");
         return true;
     }
 
@@ -1901,7 +1857,7 @@ Run_invokeDefault (NPObject* npobj,
             else if (init == 1)
                 *result = stack[--init];
             else
-                sBrowserFuncs->setexception (npobj, "tuple return unsupported");
+                NPN_SetException (npobj, "tuple return unsupported");
             break;
         }
 
@@ -1910,10 +1866,10 @@ Run_invokeDefault (NPObject* npobj,
         switch (nargs) {
 
         case -OP_PICK:
-            if (init < 1 || !in_size_t (&stack[init-1], 1, &temp_size) ||
+            if (init < 1 || !in_size_t (top, &stack[init-1], 1, &temp_size) ||
                 temp_size >= init - 1) {
                 /* XXX poor debuggability */
-                sBrowserFuncs->setexception (npobj, "script error");
+                NPN_SetException (npobj, "script error");
                 goto done;
             }
             free_npvariant (&stack[--init]);
@@ -1924,10 +1880,10 @@ Run_invokeDefault (NPObject* npobj,
             continue;
 
         case -OP_ROLL:
-            if (init < 1 || !in_size_t (&stack[init-1], 1, &temp_size) ||
+            if (init < 1 || !in_size_t (top, &stack[init-1], 1, &temp_size) ||
                 temp_size >= init - 1) {
                 /* XXX poor debuggability */
-                sBrowserFuncs->setexception (npobj, "script error");
+                NPN_SetException (npobj, "script error");
                 goto done;
             }
             free_npvariant (&stack[--init]);
@@ -1940,16 +1896,16 @@ Run_invokeDefault (NPObject* npobj,
 
         case -OP_DROP:
             if (init < 1) {
-                sBrowserFuncs->setexception (npobj, "stack underflow");
+                NPN_SetException (npobj, "stack underflow");
                 goto done;
             }
             free_npvariant (&stack[--init]);
             continue;
 
         case -OP_DUMP:
-            temp_tuple = make_tuple (top->instance, init);
+            temp_tuple = make_tuple (top, init);
             if (!temp_tuple) {
-                sBrowserFuncs->setexception (npobj, "out of memory");
+                NPN_SetException (npobj, "out of memory");
                 goto done;
             }
             memcpy (temp_tuple->array, stack, init * sizeof stack[0]);
@@ -1959,13 +1915,13 @@ Run_invokeDefault (NPObject* npobj,
 
         case -OP_ERROR:
             /* XXX poor debuggability */
-            sBrowserFuncs->setexception (npobj, "script error");
+            NPN_SetException (npobj, "script error");
             goto done;
 
         case -OP_DATA:
             // Push data.
             if (!extend (&stack, &alloc, init, 1)) {
-                sBrowserFuncs->setexception (npobj, "out of memory");
+                NPN_SetException (npobj, "out of memory");
                 break;
             }
             if (!copy_npvariant (npobj, &stack[init], &args[0]))
@@ -1978,7 +1934,7 @@ Run_invokeDefault (NPObject* npobj,
         }
 
         if (nargs > init) {
-            sBrowserFuncs->setexception (npobj, "stack underflow");
+            NPN_SetException (npobj, "stack underflow");
             break;
         }
 
@@ -2000,7 +1956,7 @@ Run_invokeDefault (NPObject* npobj,
         // XXX Should flatten Tuples.
 
         if (!extend (&stack, &alloc, init, 1)) {
-            sBrowserFuncs->setexception (npobj, "out of memory");
+            NPN_SetException (npobj, "out of memory");
             break;
         }
         stack[init++] = temp;
@@ -2009,20 +1965,6 @@ Run_invokeDefault (NPObject* npobj,
     free_stack (stack, init);
     return true;
 }
-
-static NPClass Run_npclass = {
-    structVersion   : NP_CLASS_STRUCT_VERSION,
-    deallocate      : Run_deallocate,
-    invalidate      : obj_invalidate,
-    hasMethod       : Run_hasMethod,
-    invoke          : Run_invoke,
-    invokeDefault   : Run_invokeDefault,
-    hasProperty     : obj_id_false,
-    getProperty     : obj_id_var_void,
-    setProperty     : setProperty_ro,
-    removeProperty  : removeProperty_ro,
-    enumerate       : enumerate_empty
-};
 
 #endif  /* NPGMP_SCRIPT */
 
@@ -2033,39 +1975,140 @@ static NPClass Run_npclass = {
 static NPObject*
 TopObject_allocate (NPP instance, NPClass *aClass)
 {
-    TopObject* ret = (TopObject*)
-        sBrowserFuncs->memalloc (sizeof (TopObject));
+    TopObject* ret = (TopObject*) NPN_MemAlloc (sizeof (TopObject));
 #if DEBUG_ALLOC
     fprintf (stderr, "TopObject allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
+
     if (ret) {
         memset (ret, '\0', sizeof *ret);
-        ret->instance                      = instance;
-        ret->npobjGmp._class               = &Gmp_npclass;
+
+        ret->instance                        = instance;
+
+        ret->npclassGmp.structVersion       = NP_CLASS_STRUCT_VERSION;
+        ret->npclassGmp.deallocate          = Gmp_deallocate;
+        ret->npclassGmp.invalidate          = obj_invalidate;
+        ret->npclassGmp.hasMethod           = obj_id_false;
+        ret->npclassGmp.hasProperty         = Gmp_hasProperty;
+        ret->npclassGmp.getProperty         = Gmp_getProperty;
+        ret->npclassGmp.setProperty         = setProperty_ro;
+        ret->npclassGmp.removeProperty      = removeProperty_ro;
+        ret->npclassGmp.enumerate           = Gmp_enumerate;
+
+        ret->npobjGmp._class                 = &ret->npclassGmp;
+
 #if NPGMP_SCRIPT
-        ret->npobjRun._class               = &Run_npclass;
+        ret->npclassRun.structVersion       = NP_CLASS_STRUCT_VERSION;
+        ret->npclassRun.deallocate          = Run_deallocate;
+        ret->npclassRun.invalidate          = obj_invalidate;
+        ret->npclassRun.hasMethod           = Run_hasMethod;
+        ret->npclassRun.invoke              = Run_invoke;
+        ret->npclassRun.invokeDefault       = Run_invokeDefault;
+        ret->npclassRun.hasProperty         = obj_id_false;
+        ret->npclassRun.getProperty         = obj_id_var_void;
+        ret->npclassRun.setProperty         = setProperty_ro;
+        ret->npclassRun.removeProperty      = removeProperty_ro;
+        ret->npclassRun.enumerate           = enumerate_empty;
+
+        ret->npobjRun._class                 = &ret->npclassRun;
 #endif
-        ret->Entry_npclass.structVersion   = NP_CLASS_STRUCT_VERSION;
-        ret->Entry_npclass.allocate        = Entry_allocate;
-        ret->Entry_npclass.deallocate      = Entry_deallocate;
-        ret->Entry_npclass.invalidate      = obj_invalidate;
+
+        ret->npclassEntry.structVersion     = NP_CLASS_STRUCT_VERSION;
+        ret->npclassEntry.allocate          = Entry_allocate;
+        ret->npclassEntry.deallocate        = Entry_deallocate;
+        ret->npclassEntry.invalidate        = obj_invalidate;
 #if NPGMP_RTTI
-        ret->Entry_npclass.hasMethod       = Entry_hasMethod;
-        ret->Entry_npclass.invoke          = Entry_invoke;
+        ret->npclassEntry.hasMethod         = Entry_hasMethod;
+        ret->npclassEntry.invoke            = Entry_invoke;
 #else
-        ret->Entry_npclass.hasMethod       = obj_id_false;
+        ret->npclassEntry.hasMethod         = obj_id_false;
 #endif
-        ret->Entry_npclass.invokeDefault   = Entry_invokeDefault;
-        ret->Entry_npclass.hasProperty     = obj_id_false;
-        ret->Entry_npclass.getProperty     = obj_id_var_void;
-        ret->Entry_npclass.setProperty     = setProperty_ro;
-        ret->Entry_npclass.removeProperty  = removeProperty_ro;
-        ret->Entry_npclass.enumerate       = enumerate_empty;
+        ret->npclassEntry.invokeDefault     = Entry_invokeDefault;
+        ret->npclassEntry.hasProperty       = obj_id_false;
+        ret->npclassEntry.getProperty       = obj_id_var_void;
+        ret->npclassEntry.setProperty       = setProperty_ro;
+        ret->npclassEntry.removeProperty    = removeProperty_ro;
+        ret->npclassEntry.enumerate         = enumerate_empty;
+
+        ret->npclassTuple.structVersion     = NP_CLASS_STRUCT_VERSION;
+        ret->npclassTuple.allocate          = Tuple_allocate;
+        ret->npclassTuple.deallocate        = Tuple_deallocate;
+        ret->npclassTuple.invalidate        = obj_invalidate;
+        ret->npclassTuple.hasMethod         = obj_id_false;
+        ret->npclassTuple.hasProperty       = Tuple_hasProperty;
+        ret->npclassTuple.getProperty       = Tuple_getProperty;
+        ret->npclassTuple.setProperty       = setProperty_ro;
+        ret->npclassTuple.removeProperty    = removeProperty_ro;
+        ret->npclassTuple.enumerate         = Tuple_enumerate;
+
+        ret->npclassInteger.structVersion   = NP_CLASS_STRUCT_VERSION;
+        ret->npclassInteger.allocate        = Integer_allocate;
+        ret->npclassInteger.deallocate      = Integer_deallocate;
+        ret->npclassInteger.invalidate      = obj_invalidate;
+        ret->npclassInteger.hasMethod       = hasMethod_only_toString;
+        ret->npclassInteger.invoke          = Integer_invoke;
+        ret->npclassInteger.hasProperty     = obj_id_false;
+        ret->npclassInteger.getProperty     = obj_id_var_void;
+        ret->npclassInteger.setProperty     = setProperty_ro;
+        ret->npclassInteger.removeProperty  = removeProperty_ro;
+        ret->npclassInteger.enumerate       = enumerate_only_toString;
+
+#if NPGMP_MPQ
+        ret->npclassMpzRef.structVersion    = NP_CLASS_STRUCT_VERSION;
+        ret->npclassMpzRef.allocate         = MpzRef_allocate;
+        ret->npclassMpzRef.deallocate       = MpzRef_deallocate;
+        ret->npclassMpzRef.invalidate       = obj_invalidate;
+        ret->npclassMpzRef.hasMethod        = hasMethod_only_toString;
+        ret->npclassMpzRef.invoke           = MpzRef_invoke;
+        ret->npclassMpzRef.hasProperty      = obj_id_false;
+        ret->npclassMpzRef.getProperty      = obj_id_var_void;
+        ret->npclassMpzRef.setProperty      = setProperty_ro;
+        ret->npclassMpzRef.removeProperty   = removeProperty_ro;
+        ret->npclassMpzRef.enumerate        = enumerate_only_toString;
+
+        ret->npclassRational.structVersion  = NP_CLASS_STRUCT_VERSION;
+        ret->npclassRational.allocate       = Rational_allocate;
+        ret->npclassRational.deallocate     = Rational_deallocate;
+        ret->npclassRational.invalidate     = obj_invalidate;
+        ret->npclassRational.hasMethod      = hasMethod_only_toString;
+        ret->npclassRational.invoke         = Rational_invoke;
+        ret->npclassRational.hasProperty    = obj_id_false;
+        ret->npclassRational.getProperty    = obj_id_var_void;
+        ret->npclassRational.setProperty    = setProperty_ro;
+        ret->npclassRational.removeProperty = removeProperty_ro;
+        ret->npclassRational.enumerate      = enumerate_only_toString;
+#endif  /* NPGMP_MPQ */
+
+#if NPGMP_RAND
+        ret->npclassRand.structVersion      = NP_CLASS_STRUCT_VERSION;
+        ret->npclassRand.allocate           = Rand_allocate;
+        ret->npclassRand.deallocate         = Rand_deallocate;
+        ret->npclassRand.invalidate         = obj_invalidate;
+        ret->npclassRand.hasMethod          = obj_id_false;
+        ret->npclassRand.hasProperty        = obj_id_false;
+        ret->npclassRand.getProperty        = obj_id_var_void;
+        ret->npclassRand.setProperty        = setProperty_ro;
+        ret->npclassRand.removeProperty     = removeProperty_ro;
+        ret->npclassRand.enumerate          = enumerate_empty;
+#endif  /* NPGMP_RAND */
+
 #if NPGMP_MPF
-        ret->default_mpf_prec = 0;
+        ret->npclassFloat.structVersion     = NP_CLASS_STRUCT_VERSION;
+        ret->npclassFloat.allocate          = Float_allocate;
+        ret->npclassFloat.deallocate        = Float_deallocate;
+        ret->npclassFloat.invalidate        = obj_invalidate;
+        ret->npclassFloat.hasMethod         = hasMethod_only_toString;
+        ret->npclassFloat.invoke            = Float_invoke;
+        ret->npclassFloat.hasProperty       = obj_id_false;
+        ret->npclassFloat.getProperty       = obj_id_var_void;
+        ret->npclassFloat.setProperty       = setProperty_ro;
+        ret->npclassFloat.removeProperty    = removeProperty_ro;
+        ret->npclassFloat.enumerate         = enumerate_only_toString;
+
+        ret->default_mpf_prec                = 0;
 #endif
     }
-    return &ret->npobjTop;
+    return &ret->npobj;
 }
 
 static void
@@ -2074,15 +2117,15 @@ TopObject_deallocate (NPObject *npobj)
 #if DEBUG_ALLOC
     fprintf (stderr, "TopObject deallocate %p\n", npobj);
 #endif  /* DEBUG_ALLOC */
-    sBrowserFuncs->memfree (npobj);
+    NPN_MemFree (npobj);
 }
 
 static bool
 TopObject_hasProperty(NPObject *npobj, NPIdentifier key)
 {
-    return key == sBrowserFuncs->getstringidentifier ("gmp")
+    return key == NPN_GetStringIdentifier ("gmp")
 #if NPGMP_SCRIPT
-        || key == sBrowserFuncs->getstringidentifier ("run")
+        || key == NPN_GetStringIdentifier ("run")
 #endif
         ;
 }
@@ -2092,15 +2135,18 @@ TopObject_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
 {
     TopObject* top = (TopObject*) npobj;
 
-    sBrowserFuncs->retainobject (npobj);
-    if (key == sBrowserFuncs->getstringidentifier ("gmp"))
+    NPN_RetainObject (npobj);
+
+    if (key == NPN_GetStringIdentifier ("gmp"))
         OBJECT_TO_NPVARIANT (&top->npobjGmp, *result);
+
 #if NPGMP_SCRIPT
-    else if (key == sBrowserFuncs->getstringidentifier ("run"))
+    else if (key == NPN_GetStringIdentifier ("run"))
         OBJECT_TO_NPVARIANT (&top->npobjRun, *result);
 #endif
+
     else {
-        sBrowserFuncs->releaseobject (npobj);
+        NPN_ReleaseObject (npobj);
         VOID_TO_NPVARIANT (*result);
     }
     return true;
@@ -2115,12 +2161,12 @@ TopObject_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 #endif
         ;
     *count = cnt;
-    *value = sBrowserFuncs->memalloc (cnt * sizeof (NPIdentifier*));
+    *value = NPN_MemAlloc (cnt * sizeof (NPIdentifier*));
     if (!*value)
         return false;
-    (*value)[0] = sBrowserFuncs->getstringidentifier ("gmp");
+    (*value)[0] = NPN_GetStringIdentifier ("gmp");
 #if NPGMP_SCRIPT
-    (*value)[1] = sBrowserFuncs->getstringidentifier ("run");
+    (*value)[1] = NPN_GetStringIdentifier ("run");
 #endif
     return true;
 }
@@ -2147,11 +2193,10 @@ npp_New(NPMIMEType pluginType, NPP instance, uint16_t mode,
         int16_t argc, char* argn[], char* argv[], NPSavedData* saved)
 {
     /* Make this a windowless plug-in.  This makes Chrome happy.  */
-    sBrowserFuncs->setvalue (instance, NPPVpluginWindowBool, (void*) false);
+    NPN_SetValue (instance, NPPVpluginWindowBool, (void*) false);
 
     /* Create the instance's top-level scriptable <embed> object.  */
-    instance->pdata = sBrowserFuncs->createobject (instance,
-                                                   &TopObject_npclass);
+    instance->pdata = NPN_CreateObject (instance, &TopObject_npclass);
     if (!instance->pdata)
         return NPERR_OUT_OF_MEMORY_ERROR;
     return NPERR_NO_ERROR;
@@ -2165,7 +2210,8 @@ npp_Destroy(NPP instance, NPSavedData** save) {
 #endif  /* DEBUG_ALLOC */
     instance->pdata = 0;
     if (top) {
-        sBrowserFuncs->releaseobject (&top->npobjTop);
+        NPN_ReleaseObject (&top->npobj);
+        top->destroying = true;
     }
     return NPERR_NO_ERROR;
 }
@@ -2176,8 +2222,7 @@ npp_GetValue(NPP instance, NPPVariable variable, void *value) {
     switch (variable) {
     case NPPVpluginScriptableNPObject:
         if (top) {
-            *((NPObject**)value) =
-                sBrowserFuncs->retainobject (&top->npobjTop);
+            *((NPObject**)value) = NPN_RetainObject (&top->npobj);
             break;
         }
         // FALL THROUGH
@@ -2201,7 +2246,7 @@ NP_Initialize(NPNetscapeFuncs* bFuncs, NPPluginFuncs* pFuncs)
     pFuncs->destroy = npp_Destroy;
     pFuncs->getvalue = npp_GetValue;
 
-    ID_toString = sBrowserFuncs->getstringidentifier ("toString");
+    ID_toString = NPN_GetStringIdentifier ("toString");
 
     return NPERR_NO_ERROR;
 }
