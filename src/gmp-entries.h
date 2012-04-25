@@ -387,6 +387,40 @@ ENTRY2R1 (gmp_urandomm_ui, "gmp_urandomm_ui", np_gmp_urandomm_ui, ulong, x_gmp_r
 // gmp_printf, gmp_scanf, and friends: something similar would be nice.
 // mp_set_memory_functions, mp_get_memory_functions: not relevant to plugin.
 
+#if NPGMP_SCRIPT && 0  /* XXX this belongs on an object other than lib.gmp.  */
+// vector(arg...) and makeVector(k, fill) shall reject any argument that
+// is a JavaScript container.  This should prevent reference loops.
+// Vector (i.e. Tuple) will implement invokeDefault as the replacement for
+// Run_invokeDefault.
+ENTRY0R1 (fn_vector, "vector", np_vector, vector)
+ENTRY2R1 (fn_makeVector, "makeVector", np_makeVector, vector, size_t, npvar)
+ENTRY3R1 (fn_subvector "subvector", np_subvector, vector, vector, size_t, size_t)
+ENTRY1R1 (fn_copy, "copy", np_copy, vector, vector)
+#if 0
+/* In scripts, ops are called implicitly, without a subsequent call op,
+   and an argument of type stack is passed implicitly.  */
+ENTRY2R1 (op_get, "get", np_get, npobj, npid)
+ENTRY3R1 (op_put, "put", np_put, npvar, npobj, npid, npvar)
+ENTRY2R1 (op_delete, "delete", np_delete, npvar, npobj, npid)
+ENTRY2R1 (op_has, "has", np_has, bool, npobj, npid)
+ENTRY1R1 (op_keys, "keys", np_keys, vector, npobj)
+ENTRY1R1 (op_length, "length", np_length, size_t, vector)
+// stack: vector plus allocated size.
+ENTRY2R0 (op_roll, "roll", np_roll, stack, size_t)
+ENTRY2R1 (op_pick, "pick", np_pick, npvar, stack, size_t)
+ENTRY1R0 (op_drop, "drop", np_drop, stack)
+ENTRY1R1 (op_dump, "dump", np_dump, vector, stack)
+// npfixed: function with a valid length property.
+ENTRY2R0 (op_call, "call", np_call, stack, npfixed)
+ENTRY2R1 (op_apply, "apply", np_apply, vector, npfunc, vector)
+ENTRY1R0 (op_goto, "goto", np_goto, vector)
+// thread: vector supporting get/put/delete of string keys other than length.
+ENTRY0R1 (op_here, "here", np_here, thread)
+ENTRY1R1 (op_yield, "yield", np_yield, npvar, stack)
+// XXX arithmetic ops...
+#endif
+#endif  /* NPGMP_SCRIPT */
+
 #undef ENTRY
 #undef ENTRY0R1
 #undef ENTRY1R0
