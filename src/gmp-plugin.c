@@ -301,34 +301,6 @@ out_stringz (stringz value, NPVariant* result)
         VOID_TO_NPVARIANT (*result);
 }
 
-#define OUT_NEW(value, result)                                  \
-    do {                                                        \
-        value;                                                  \
-        NPN_RetainObject (NPVARIANT_TO_OBJECT (*result));       \
-    } while (0)
-
-#define DEFINE_OBJECT_TYPE(ctor, name, type, field)                     \
-    static bool                                                         \
-    ctor (TopObject* top, NPVariant* result, type* arg)                 \
-    {                                                                   \
-        name* ret = (name*) NPN_CreateObject                            \
-            (top->instance, &top->npclass ## name);                     \
-                                                                        \
-        if (!ret) {                                                     \
-            NPN_SetException (&top->npobj, "out of memory");            \
-            return false;                                               \
-        }                                                               \
-        OBJECT_TO_NPVARIANT (&ret->npobj, *result);                     \
-        *arg = &ret->field;                                             \
-        return true;                                                    \
-    }                                                                   \
-                                                                        \
-    static void                                                         \
-    del_ ## ctor (type arg)                                             \
-    {                                                                   \
-        NPN_ReleaseObject (&CONTAINING (name, field, arg)->npobj);      \
-    }
-
 static void
 out_npobj (NPObject* value, NPVariant* result)
 {
@@ -619,9 +591,18 @@ Integer_invoke (NPObject *npobj, NPIdentifier name,
     return false;
 }
 
-DEFINE_OBJECT_TYPE (new_mpz, Integer, mpz_ptr, mp[0])
-#define in_new_mpz(top, var, count, arg) IN_NEW (top, new_mpz, arg)
-#define out_new_mpz OUT_NEW
+static NPObject*
+x_x_mpz (TopObject* top)
+{
+    NPObject* ret = NPN_CreateObject (top->instance, &top->npclassInteger);
+    if (ret)
+        mpz_init (&((Integer*) ret)->mp[0]);
+    else
+        NPN_SetException (&top->npobj, "out of memory");
+    return ret;
+}
+
+#define x_mpz() x_x_mpz (vTop)
 
 /*
  * GMP-specific types.
@@ -719,22 +700,26 @@ MpzRef_invoke (NPObject *npobj, NPIdentifier name,
     return false;
 }
 
-DEFINE_OBJECT_TYPE (new_mpzref, MpzRef, mpz_ptr*, mpp)
-#define in_new_mpzref(top, var, count, arg) IN_NEW (top, new_mpzref, arg)
-#define out_new_mpzref OUT_NEW
+static void
+init_mpzref (MpzRef* ref, mpz_ptr z, mpq_ptr q)
+{
+    ref->mpp = z;
+    ref->owner = NPN_RetainObject (&CONTAINING (Rational, mp[0], q)->npobj);
+}
 
-static void x_mpq_numref (mpz_ptr* zp, mpq_ptr q) {
-    MpzRef* ref = CONTAINING (MpzRef, mpp, zp);
-    Rational* rat = CONTAINING (Rational, mp[0], q);
-    *zp = &mpq_numref (q)[0];
-    ref->owner = NPN_RetainObject (&rat->npobj);
+static NPObject*
+x_x_mpq_ref (TopObject* top, mpz_ptr z, mpq_ptr q) {
+    NPObject* ret = NPN_CreateObject (top->instance, &top->npclassMpzRef);
+
+    if (ret)
+        init_mpzref ((MpzRef*) ret, z, q);
+    else
+        NPN_SetException (&top->npobj, "out of memory");
+    return ret;
 }
-static void x_mpq_denref (mpz_ptr* zp, mpq_ptr q) {
-    MpzRef* ref = CONTAINING (MpzRef, mpp, zp);
-    Rational* rat = CONTAINING (Rational, mp[0], q);
-    *zp = &mpq_denref (q)[0];
-    ref->owner = NPN_RetainObject (&rat->npobj);
-}
+
+#define x_mpq_numref(q) x_x_mpq_ref (vTop, mpq_numref (q), q)
+#define x_mpq_denref(q) x_x_mpq_ref (vTop, mpq_denref (q), q)
 
 #endif  /* NPGMP_MPQ */
 
@@ -872,9 +857,18 @@ in_uninit_mpq (TopObject* top, const NPVariant* var, int count, mpq_ptr* arg)
 #define del_mpq_ptr(arg)
 #define del_uninit_mpq(arg)
 
-DEFINE_OBJECT_TYPE (new_mpq, Rational, mpq_ptr, mp[0])
-#define in_new_mpq(top, var, count, arg) IN_NEW (top, new_mpq, arg)
-#define out_new_mpq OUT_NEW
+static NPObject*
+x_x_mpq (TopObject* top)
+{
+    NPObject* ret = NPN_CreateObject (top->instance, &top->npclassRational);
+    if (ret)
+        mpq_init (&((Rational*) ret)->mp[0]);
+    else
+        NPN_SetException (&top->npobj, "out of memory");
+    return ret;
+}
+
+#define x_mpq() x_x_mpq (vTop)
 
 #endif  /* NPGMP_MPQ */
 
@@ -1069,9 +1063,18 @@ x_in_defprec_mpf (TopObject* top,
 #define del_uninit_mpf(arg)
 #define del_defprec_mpf(arg)
 
-DEFINE_OBJECT_TYPE (new_mpf, Float, mpf_ptr, mp[0])
-#define in_new_mpf(top, var, count, arg) IN_NEW (top, new_mpf, arg)
-#define out_new_mpf OUT_NEW
+static NPObject*
+x_x_mpf (TopObject* top)
+{
+    NPObject* ret = NPN_CreateObject (top->instance, &top->npclassFloat);
+    if (ret)
+        x_x_mpf_init (top, &((Float*) ret)->mp[0]);
+    else
+        NPN_SetException (&top->npobj, "out of memory");
+    return ret;
+}
+
+#define x_mpf() x_x_mpf (vTop)
 
 #define x_mpf_init(f) x_x_mpf_init (vTop, f)
 
@@ -1220,9 +1223,18 @@ in_uninit_rand (TopObject* top,
 #define del_x_gmp_randstate_ptr(arg)
 #define del_uninit_rand(arg)
 
-DEFINE_OBJECT_TYPE (new_rand, Rand, x_gmp_randstate_ptr, state[0])
-#define in_new_rand(top, var, count, arg) IN_NEW (top, new_rand, arg)
-#define out_new_rand OUT_NEW
+static NPObject*
+x_x_randstate (TopObject* top)
+{
+    NPObject* ret = NPN_CreateObject (top->instance, &top->npclassRand);
+    if (ret)
+        gmp_randinit_default (&((Rand*) ret)->state[0]);
+    else
+        NPN_SetException (&top->npobj, "out of memory");
+    return ret;
+}
+
+#define x_randstate() x_x_randstate (vTop)
 
 static int
 x_randinit_lc_2exp_size (uninit_rand state, mp_bitcnt_t size)
@@ -1356,20 +1368,6 @@ Entry_invokeDefault (NPObject *vEntry,
 #define IN(a, t)                                                        \
     (vArgNumber++,                                                      \
      in_ ## t (vTop, &vArgs[vArgNumber-1], vArgCount + 1 - vArgNumber, &a ## t))
-
-#define IN_NEW(top, func, arg) (vArgNumber--, func (top, vResult, arg))
-
-    mpz_ptr a0new_mpz;
-#if NPGMP_MPQ
-    mpz_ptr* a0new_mpzref;
-    mpq_ptr a0new_mpq;
-#endif
-#if NPGMP_MPF
-    mpf_ptr a0new_mpf;
-#endif
-#if NPGMP_RAND
-    x_gmp_randstate_ptr a0new_rand;
-#endif
 
     int number = ((Entry*) vEntry)->number;
 

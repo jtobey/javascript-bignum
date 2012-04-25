@@ -80,7 +80,7 @@
 #if ENTRY_FIRST
 (__LINE__ + 2)
 #endif
-ENTRY1R1 (mpz_init, "mpz", np_mpz, new_mpz, new_mpz)
+ENTRY0R1 (x_mpz, "mpz", np_mpz, npobj)
 ENTRY1R0 (mpz_init, "mpz_init", np_mpz_init, uninit_mpz)
 #if NPGMP_PORTING
 // mpz_inits: unimplemented.
@@ -246,7 +246,7 @@ ENTRY1R1 (mpz_size, "mpz_size", np_mpz_size, size_t, mpz_ptr)
 
 #if NPGMP_MPQ
 ENTRY1R0 (mpq_canonicalize, "mpq_canonicalize", np_mpq_canonicalize, mpq_ptr)
-ENTRY1R1 (mpq_init, "mpq", np_mpq, new_mpq, new_mpq)
+ENTRY0R1 (x_mpq, "mpq", np_mpq, npobj)
 ENTRY1R0 (mpq_init, "mpq_init", np_mpq_init, uninit_mpq)
 #if NPGMP_PORTING
 // mpq_inits: unimplemented.
@@ -280,8 +280,8 @@ ENTRY3R1 (mpq_cmp_si, "mpq_cmp_si", np_mpq_cmp_si, int, mpq_ptr, long, long)
 ENTRY3R1 (mpq_cmp_ui, "mpq_cmp_ui", np_mpq_cmp_ui, int, mpq_ptr, ulong, ulong)
 ENTRY1R1 (mpq_sgn, "mpq_sgn", np_mpq_sgn, int, mpq_ptr)
 ENTRY2R1 (mpq_equal, "mpq_equal", np_mpq_equal, int, mpq_ptr, mpq_ptr)
-ENTRY2R1 (x_mpq_numref, "mpq_numref", np_mpq_numref, new_mpzref, new_mpzref, mpq_ptr)
-ENTRY2R1 (x_mpq_denref, "mpq_denref", np_mpq_denref, new_mpzref, new_mpzref, mpq_ptr)
+ENTRY1R1 (x_mpq_numref, "mpq_numref", np_mpq_numref, npobj, mpq_ptr)
+ENTRY1R1 (x_mpq_denref, "mpq_denref", np_mpq_denref, npobj, mpq_ptr)
 ENTRY2R0 (mpq_get_num, "mpq_get_num", np_mpq_get_num, mpz_ptr, mpq_ptr)
 ENTRY2R0 (mpq_get_den, "mpq_get_den", np_mpq_get_den, mpz_ptr, mpq_ptr)
 ENTRY2R0 (mpq_set_num, "mpq_set_num", np_mpq_set_num, mpq_ptr, mpz_ptr)
@@ -292,7 +292,7 @@ ENTRY2R0 (mpq_set_den, "mpq_set_den", np_mpq_set_den, mpq_ptr, mpz_ptr)
 #if NPGMP_MPF
 ENTRY1R0 (x_mpf_set_default_prec, "mpf_set_default_prec", np_mpf_set_default_prec, mp_bitcnt_t)
 ENTRY0R1 (x_mpf_get_default_prec, "mpf_get_default_prec", np_mpf_get_default_prec, mp_bitcnt_t)
-ENTRY1R1 (x_mpf_init, "mpf", np_mpf, new_mpf, new_mpf)
+ENTRY0R1 (x_mpf, "mpf", np_mpf, npobj)
 ENTRY1R0 (x_mpf_init, "mpf_init", np_mpf_init, defprec_mpf)
 ENTRY2R0 (mpf_init2, "mpf_init2", np_mpf_init2, uninit_mpf, mp_bitcnt_t)
 #if NPGMP_PORTING
@@ -368,7 +368,7 @@ ENTRY3R0 (mpf_random2, "mpf_random2", np_mpf_random2, mpf_ptr, mp_size_t, mp_exp
 // mpn functions: unimplemented, not very suitable for plugins.
 
 #if NPGMP_RAND
-ENTRY1R1 (gmp_randinit_default, "randstate", np_randstate, new_rand, new_rand)
+ENTRY0R1 (x_randstate, "randstate", np_randstate, npobj)
 ENTRY1R0 (gmp_randinit_default, "gmp_randinit_default", np_gmp_randinit_default, uninit_rand)
 ENTRY1R0 (gmp_randinit_mt, "gmp_randinit_mt", np_gmp_randinit_mt, uninit_rand)
 ENTRY4R0 (gmp_randinit_lc_2exp, "gmp_randinit_lc_2exp", np_gmp_randinit_lc_2exp, uninit_rand, mpz_ptr, ulong, mp_bitcnt_t)
