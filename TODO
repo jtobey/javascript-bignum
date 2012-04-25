@@ -15,13 +15,10 @@ TODO:
   typeof, and lifting as in js-numbers.
 
 * Create integer and rational implementations using the GMP plug-in.
-  Interface design ideas: Flusspferd (http://flusspferd.github.com/)
-  GMP module, node-gmp (https://github.com/postwait/node-gmp),
-  node-bigint (https://github.com/substack/node-bigint).
-
-* On GMP, consider hybrid implementations with runtime optimal
-  threshold discovery, since the plugin may or may not be in-process,
-  and in-process calls can be over 100x faster than out-of-process.
+  Consider hybrid implementations with runtime optimal threshold
+  discovery, since the plugin may be out-of-process, incurring 100x
+  per-call overhead.  Implement lazy evaluation using expression
+  objects that batch operations into scripts.
 
 * Consider avoidance or mitigation of GMP calls to abort(),
   division-by-zero, square-root-of-negative, anything else?
