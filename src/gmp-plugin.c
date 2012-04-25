@@ -1033,20 +1033,20 @@ in_uninit_mpf (TopObject* top, const NPVariant* var, int count, mpf_ptr* arg)
 }
 
 static mp_bitcnt_t
-x_x_mpf_get_default_prec (NPObject* entry)
+x_x_mpf_get_default_prec (TopObject* top)
 {
-    return Entry_getTop (entry)->default_mpf_prec ?: mpf_get_default_prec ();
+    return top->default_mpf_prec ?: mpf_get_default_prec ();
 }
 
-#define x_mpf_get_default_prec() x_x_mpf_get_default_prec (vEntry)
+#define x_mpf_get_default_prec() x_x_mpf_get_default_prec (vTop)
 
 static void
-x_x_mpf_set_default_prec (NPObject* entry, mp_bitcnt_t prec)
+x_x_mpf_set_default_prec (TopObject* top, mp_bitcnt_t prec)
 {
-    Entry_getTop (entry)->default_mpf_prec = (prec ?: 1);
+    top->default_mpf_prec = (prec ?: 1);
 }
 
-#define x_mpf_set_default_prec(prec) x_x_mpf_set_default_prec (vEntry, prec)
+#define x_mpf_set_default_prec(prec) x_x_mpf_set_default_prec (vTop, prec)
 
 static void
 x_x_mpf_init (TopObject* top, mpf_ptr f)
@@ -1105,14 +1105,13 @@ x_mpf_set_prec_raw (mpf_ptr mpp, mp_bitcnt_t prec)
 }
 
 static NPObject*
-f_get_d_2exp (NPObject* entry, mpf_ptr f)
+f_get_d_2exp (TopObject* top, mpf_ptr f)
 {
-    TopObject* top = Entry_getTop (entry);
     Tuple* ret = make_tuple (top, 2);
     long exp;
 
     if (!ret) {
-        NPN_SetException (entry, "out of memory");
+        NPN_SetException (&top->npobj, "out of memory");
         return 0;
     }
     DOUBLE_TO_NPVARIANT (mpf_get_d_2exp (&exp, f), ret->array[0]);
@@ -1120,12 +1119,11 @@ f_get_d_2exp (NPObject* entry, mpf_ptr f)
     return &ret->npobj;
 }
 
-#define x_mpf_get_d_2exp(f) f_get_d_2exp (vEntry, f)
+#define x_mpf_get_d_2exp(f) f_get_d_2exp (vTop, f)
 
 static NPObject*
-f_get_str (NPObject* entry, int base, size_t n_digits, mpf_ptr f)
+f_get_str (TopObject* top, int base, size_t n_digits, mpf_ptr f)
 {
-    TopObject* top = Entry_getTop (entry);
     Tuple* ret = make_tuple (top, 2);
     mp_exp_t exp;
     char* str;
@@ -1133,19 +1131,19 @@ f_get_str (NPObject* entry, int base, size_t n_digits, mpf_ptr f)
     NPUTF8* s;
 
     if (!ret) {
-        NPN_SetException (entry, "out of memory");
+        NPN_SetException (&top->npobj, "out of memory");
         goto error_out;
     }
 
     if (base < -36 || base > 62 || (base >= -1 && base <= 1)) {
-        NPN_SetException (entry, "invalid base");
+        NPN_SetException (&top->npobj, "invalid base");
         goto error_release;
     }
 
     /* XXX could preallocate for n_digits != 0. */
     str = mpf_get_str (NULL, &exp, base, n_digits, f);
     if (!str) {
-        NPN_SetException (entry, "out of memory");
+        NPN_SetException (&top->npobj, "out of memory");
         goto error_release;
     }
 
@@ -1157,7 +1155,7 @@ f_get_str (NPObject* entry, int base, size_t n_digits, mpf_ptr f)
         STRINGN_TO_NPVARIANT (s, len, ret->array[0]);
     }
     else {
-        NPN_SetException (entry, "out of memory");
+        NPN_SetException (&top->npobj, "out of memory");
         goto error_free;
     }
 
@@ -1172,7 +1170,7 @@ f_get_str (NPObject* entry, int base, size_t n_digits, mpf_ptr f)
     return 0;
 }
 
-#define x_mpf_get_str(base, n_digits, f) f_get_str(vEntry, base, n_digits, f)
+#define x_mpf_get_str(base, n_digits, f) f_get_str(vTop, base, n_digits, f)
 
 #endif  /* NPGMP_MPF */
 
