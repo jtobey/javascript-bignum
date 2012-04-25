@@ -1277,7 +1277,7 @@ Entry_deallocate (NPObject *npobj)
 #define STRINGIFY1(x) # x
 
 static const char GmpProperties[] =
-#define ENTRY(nargs, string, id)          "\0" STRINGIFY(__LINE__) "|" string
+#define ENTRY(nargs, nret, string, id)    "\0" STRINGIFY(__LINE__) "|" string
 #include "gmp-entries.h"
 #define CONSTANT(constval, string, type)  "\0|" string
 #include "gmp-constants.h"
@@ -1323,7 +1323,7 @@ number_to_name (int number)
 #if NPGMP_RTTI
 
 enum Entry_number {
-#define ENTRY(nargs, string, id) id = __LINE__,
+#define ENTRY(nargs, nret, string, id) id = __LINE__,
 #include "gmp-entries.h"
 };
 
@@ -1456,55 +1456,126 @@ Entry_invokeDefault (NPObject *vEntry,
 
     switch (number) {
 
-#define ENTRY0(name, string, id, rett)                          \
+#define ENTRY0R1(name, string, id, r0)                          \
         case __LINE__:                                          \
             if (vArgNumber != vArgCount) break;                 \
-            out_ ## rett (name (), vResult);                    \
+            out_ ## r0 (name (), vResult);                      \
             ok = true;                                          \
             break;
 
-#define ENTRY1(name, string, id, rett, t0)                      \
+#define ENTRY1R0(name, string, id, t0)                          \
         case __LINE__:                                          \
             if (!IN (a0, t0)) break;                            \
             if (vArgNumber != vArgCount) goto del0_ ## id;      \
-            out_ ## rett (name (a0 ## t0), vResult);            \
+            name (a0 ## t0);                                    \
             ok = true;                                          \
             del0_ ## id: del_ ## t0 (a0 ## t0);                 \
             break;
 
-#define ENTRY2(name, string, id, rett, t0, t1)                  \
+#define ENTRY1R1(name, string, id, r0, t0)                      \
+        case __LINE__:                                          \
+            if (!IN (a0, t0)) break;                            \
+            if (vArgNumber != vArgCount) goto del0_ ## id;      \
+            out_ ## r0 (name (a0 ## t0), vResult);              \
+            ok = true;                                          \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
+            break;
+
+#define ENTRY1R2(name, string, id, r0, r1, t0)                  \
+        case __LINE__:                                          \
+            if (!IN (a0, t0)) break;                            \
+            if (vArgNumber != vArgCount) goto del0_ ## id;      \
+            out_npobj (name (a0 ## t0), vResult);               \
+            ok = true;                                          \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
+            break;
+
+#define ENTRY2R0(name, string, id, t0, t1)                      \
         case __LINE__:                                          \
             if (!IN (a0, t0)) break;                            \
             if (!IN (a1, t1)) goto del0_ ## id;                 \
             if (vArgNumber != vArgCount) goto del1_ ## id;      \
-            out_ ## rett (name (a0 ## t0, a1 ## t1), vResult);  \
+            name (a0 ## t0, a1 ## t1);                          \
             ok = true;                                          \
             del1_ ## id: del_ ## t1 (a1 ## t1);                 \
             del0_ ## id: del_ ## t0 (a0 ## t0);                 \
             break;
 
-#define ENTRY3(name, string, id, rett, t0, t1, t2)              \
+#define ENTRY2R1(name, string, id, r0, t0, t1)                  \
+        case __LINE__:                                          \
+            if (!IN (a0, t0)) break;                            \
+            if (!IN (a1, t1)) goto del0_ ## id;                 \
+            if (vArgNumber != vArgCount) goto del1_ ## id;      \
+            out_ ## r0 (name (a0 ## t0, a1 ## t1), vResult);    \
+            ok = true;                                          \
+            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
+            break;
+
+#define ENTRY3R0(name, string, id, t0, t1, t2)                  \
         case __LINE__:                                          \
             if (!IN (a0, t0)) break;                            \
             if (!IN (a1, t1)) goto del0_ ## id;                 \
             if (!IN (a2, t2)) goto del1_ ## id;                 \
             if (vArgNumber != vArgCount) goto del2_ ## id;      \
-            out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2),  \
-                          vResult);                             \
+            name (a0 ## t0, a1 ## t1, a2 ## t2);                \
             ok = true;                                          \
             del2_ ## id: del_ ## t2 (a2 ## t2);                 \
             del1_ ## id: del_ ## t1 (a1 ## t1);                 \
             del0_ ## id: del_ ## t0 (a0 ## t0);                 \
             break;
 
-#define ENTRY4(name, string, id, rett, t0, t1, t2, t3)          \
+#define ENTRY3R1(name, string, id, r0, t0, t1, t2)              \
+        case __LINE__:                                          \
+            if (!IN (a0, t0)) break;                            \
+            if (!IN (a1, t1)) goto del0_ ## id;                 \
+            if (!IN (a2, t2)) goto del1_ ## id;                 \
+            if (vArgNumber != vArgCount) goto del2_ ## id;      \
+            out_ ## r0 (name (a0 ## t0, a1 ## t1, a2 ## t2),    \
+                        vResult);                               \
+            ok = true;                                          \
+            del2_ ## id: del_ ## t2 (a2 ## t2);                 \
+            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
+            break;
+
+#define ENTRY3R2(name, string, id, r0, r1, t0, t1, t2)          \
+        case __LINE__:                                          \
+            if (!IN (a0, t0)) break;                            \
+            if (!IN (a1, t1)) goto del0_ ## id;                 \
+            if (!IN (a2, t2)) goto del1_ ## id;                 \
+            if (vArgNumber != vArgCount) goto del2_ ## id;      \
+            out_npobj (name (a0 ## t0, a1 ## t1, a2 ## t2),     \
+                       vResult);                                \
+            ok = true;                                          \
+            del2_ ## id: del_ ## t2 (a2 ## t2);                 \
+            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
+            break;
+
+#define ENTRY4R0(name, string, id, t0, t1, t2, t3)              \
         case __LINE__:                                          \
             if (!IN (a0, t0)) break;                            \
             if (!IN (a1, t1)) goto del0_ ## id;                 \
             if (!IN (a2, t2)) goto del1_ ## id;                 \
             if (!IN (a3, t3)) goto del2_ ## id;                 \
             if (vArgNumber != vArgCount) goto del3_ ## id;      \
-            out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2,   \
+            name (a0 ## t0, a1 ## t1, a2 ## t2, a3 ## t3);      \
+            ok = true;                                          \
+            del3_ ## id: del_ ## t3 (a3 ## t3);                 \
+            del2_ ## id: del_ ## t2 (a2 ## t2);                 \
+            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
+            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
+            break;
+
+#define ENTRY4R1(name, string, id, r0, t0, t1, t2, t3)          \
+        case __LINE__:                                          \
+            if (!IN (a0, t0)) break;                            \
+            if (!IN (a1, t1)) goto del0_ ## id;                 \
+            if (!IN (a2, t2)) goto del1_ ## id;                 \
+            if (!IN (a3, t3)) goto del2_ ## id;                 \
+            if (vArgNumber != vArgCount) goto del3_ ## id;      \
+            out_ ## r0 (name (a0 ## t0, a1 ## t1, a2 ## t2,     \
                                 a3 ## t3), vResult);            \
             ok = true;                                          \
             del3_ ## id: del_ ## t3 (a3 ## t3);                 \
@@ -1513,7 +1584,7 @@ Entry_invokeDefault (NPObject *vEntry,
             del0_ ## id: del_ ## t0 (a0 ## t0);                 \
             break;
 
-#define ENTRY5(name, string, id, rett, t0, t1, t2, t3, t4)      \
+#define ENTRY5R0(name, string, id, t0, t1, t2, t3, t4)          \
         case __LINE__:                                          \
             if (!IN (a0, t0)) break;                            \
             if (!IN (a1, t1)) goto del0_ ## id;                 \
@@ -1521,8 +1592,8 @@ Entry_invokeDefault (NPObject *vEntry,
             if (!IN (a3, t3)) goto del2_ ## id;                 \
             if (!IN (a4, t4)) goto del3_ ## id;                 \
             if (vArgNumber != vArgCount) goto del4_ ## id;      \
-            out_ ## rett (name (a0 ## t0, a1 ## t1, a2 ## t2,   \
-                                a3 ## t3, a4 ## t4), vResult);  \
+            name (a0 ## t0, a1 ## t1, a2 ## t2, a3 ## t3,       \
+                  a4 ## t4);                                    \
             ok = true;                                          \
             del4_ ## id: del_ ## t4 (a4 ## t4);                 \
             del3_ ## id: del_ ## t3 (a3 ## t3);                 \
@@ -1640,7 +1711,7 @@ Gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 {
     const char* p;
     uint32_t cnt = 0
-#define ENTRY(nargs, string, id) +1
+#define ENTRY(nargs, nret, string, id) +1
 #include "gmp-entries.h"
 #define CONSTANT(value, string, type) +1
 #include "gmp-constants.h"
@@ -1808,7 +1879,7 @@ op_type (const NPVariant *value)
             npobj->_class->invokeDefault == &Entry_invokeDefault) {
 
             switch (((Entry*) npobj)->number) {
-#define ENTRY(nargs, string, id) case __LINE__: return nargs;
+#define ENTRY(nargs, nret, string, id) case __LINE__: return nargs;
 #include "gmp-entries.h"
             default: return -OP_ERROR;  /* Should not happen.  */
             }
