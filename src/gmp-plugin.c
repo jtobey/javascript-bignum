@@ -1844,6 +1844,8 @@ id_to_opnum (NPObject *npobj, NPIdentifier key)
     return ret;
 }
 
+#if NPGMP_RTTI
+
 static const char*
 opcode_to_string (enum Opcode opcode, size_t* len)
 {
@@ -1863,6 +1865,7 @@ opcode_to_string (enum Opcode opcode, size_t* len)
     return p;
 }
 
+/* Give ops a toString method.  */
 static bool
 Op_invoke (NPObject *npobj, NPIdentifier name,
            const NPVariant *args, uint32_t argCount, NPVariant *result)
@@ -1882,12 +1885,18 @@ Op_invoke (NPObject *npobj, NPIdentifier name,
     return true;
 }
 
+#endif  /* NPGMP_RTTI */
+
 static NPClass Op_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     deallocate      : obj_noop,
     invalidate      : obj_invalidate,
+#if NPGMP_RTTI
     hasMethod       : hasMethod_only_toString,
     invoke          : Op_invoke,
+#else
+    hasMethod       : obj_id_false,
+#endif
     hasProperty     : obj_id_false,
     getProperty     : obj_id_var_void,
     setProperty     : setProperty_ro,
