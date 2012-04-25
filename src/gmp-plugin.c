@@ -1637,16 +1637,16 @@ static const unsigned char EntryNret[] = {
     0
 };
 
+#define Entry_length(entry) (EntryNargs[(entry)->number - FIRST_ENTRY])
+#define Entry_outLength(entry) (EntryNret[(entry)->number - FIRST_ENTRY])
+
 static bool
 Entry_getProperty(NPObject *npobj, NPIdentifier name, NPVariant* result)
 {
-    const unsigned char* p = 0;
     if (name == NPN_GetStringIdentifier ("length"))
-        p = &EntryNargs[0];
+        INT32_TO_NPVARIANT (Entry_length ((Entry*) npobj), *result);
     else if (name == NPN_GetStringIdentifier ("outLength"))
-        p = &EntryNret[0];
-    if (p)
-        INT32_TO_NPVARIANT (p[((Entry*) npobj)->number - FIRST_ENTRY], *result);
+        INT32_TO_NPVARIANT (Entry_outLength ((Entry*) npobj), *result);
     else
         VOID_TO_NPVARIANT (*result);
     return true;
