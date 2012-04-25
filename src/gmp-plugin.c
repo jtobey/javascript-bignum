@@ -1542,7 +1542,12 @@ Entry_invokeDefault (NPObject *vEntry,
 #if NPGMP_RTTI
 
 enum Entry_number {
-#define ENTRY(nargs, nret, string, id) id = __LINE__,
+
+    FIRST_ENTRY =
+#define ENTRY_GET_FIRST
+#include "gmp-entries.h"
+
+#define ENTRY(nargs, nret, string, id) , id = __LINE__
 #include "gmp-entries.h"
 };
 
@@ -1621,12 +1626,12 @@ Entry_hasProperty(NPObject *npobj, NPIdentifier name)
 }
 
 static const unsigned char EntryNargs[] = {
-#define ENTRY(nargs, nret, string, id) [__LINE__] = nargs,
+#define ENTRY(nargs, nret, string, id) [__LINE__ - FIRST_ENTRY] = nargs,
 #include "gmp-entries.h"
     0
 };
 static const unsigned char EntryNret[] = {
-#define ENTRY(nargs, nret, string, id) [__LINE__] = nret,
+#define ENTRY(nargs, nret, string, id) [__LINE__ - FIRST_ENTRY] = nret,
 #include "gmp-entries.h"
     0
 };
@@ -1640,7 +1645,7 @@ Entry_getProperty(NPObject *npobj, NPIdentifier name, NPVariant* result)
     else if (name == NPN_GetStringIdentifier ("outLength"))
         p = &EntryNret[0];
     if (p)
-        INT32_TO_NPVARIANT (p[((Entry*) npobj)->number], *result);
+        INT32_TO_NPVARIANT (p[((Entry*) npobj)->number - FIRST_ENTRY], *result);
     else
         VOID_TO_NPVARIANT (*result);
     return true;
