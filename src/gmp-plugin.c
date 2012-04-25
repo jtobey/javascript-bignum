@@ -4,7 +4,7 @@
 
    * Document usage.
 
-   * Reliable crash on reload test.html on FF 11.  Run under Valgrind.
+   * Reliable crash on reload test.html on FF 11 OOPP.  Run under Valgrind.
 
    * Introspection: length property of Entry objects.
 
