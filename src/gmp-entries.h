@@ -77,6 +77,9 @@
 
 // http://gmplib.org/manual/Integer-Functions.html
 
+#if ENTRY_FIRST
+(__LINE__ + 2)
+#endif
 ENTRY1R1 (mpz_init, "mpz", np_mpz, new_mpz, new_mpz)
 ENTRY1R0 (mpz_init, "mpz_init", np_mpz_init, uninit_mpz)
 #if NPGMP_PORTING
@@ -397,3 +400,4 @@ ENTRY2R1 (gmp_urandomm_ui, "gmp_urandomm_ui", np_gmp_urandomm_ui, ulong, x_gmp_r
 #undef ENTRY4R0
 #undef ENTRY4R1
 #undef ENTRY5R0
+#undef ENTRY_FIRST
