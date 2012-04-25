@@ -4,11 +4,12 @@
 
    * Document usage.
 
-   * Reliable crash on reload test.html on FF 11 OOPP.  Run under Valgrind.
+   * Reliable crash on reload test.html on FF 11 OOPP.  Try to run
+     plugin_container under Valgrind.
 
-   * Introspection: length property of Entry objects.
+   * See comments at top of gmp-entries.h.
 
-   * mp*_inits and mp*_clears functions if NPGMP_PORTING.
+   * Online help: function arg names and doc strings in gmp-entries.h.
 
    Copyright(C) 2012 John Tobey, see ../LICENCE
 */
