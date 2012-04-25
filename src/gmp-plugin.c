@@ -1857,7 +1857,7 @@ opcode_to_string (enum Opcode opcode, size_t* len)
     p = strstr (OpNames, buf);
     if (!p)
         return 0;  /* should not happen */
-    for (l = 0; p[-1] != '|'; l++)
+    for (l = 0; p[-1] != '|'; p--, l++)
         continue;
     *len = l;
     return p;
@@ -1868,6 +1868,7 @@ Op_invoke (NPObject *npobj, NPIdentifier name,
            const NPVariant *args, uint32_t argCount, NPVariant *result)
 {
     const char* s;
+    char* ret;
     size_t len;
 
     if (name != ID_toString)
@@ -1875,7 +1876,9 @@ Op_invoke (NPObject *npobj, NPIdentifier name,
     s = opcode_to_string (op_to_opcode (npobj), &len);
     if (!s)
         return false;  /* should not happen */
-    STRINGN_TO_NPVARIANT (s, len, *result);
+    ret = (char*) NPN_MemAlloc (len);
+    memcpy (ret, s, len);
+    STRINGN_TO_NPVARIANT (ret, len, *result);
     return true;
 }
 
