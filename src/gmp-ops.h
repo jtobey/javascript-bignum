@@ -1,8 +1,7 @@
 /* gmp-ops.h: header private to gmp-plugin.c.  */
-OP (DATA)
-OP (ERROR)
-OP (ROLL)
-OP (PICK)
-OP (DROP)
-OP (DUMP)
+OP (roll)
+OP (pick)
+OP (drop)
+OP (dump)
+OP (call)
 #undef OP

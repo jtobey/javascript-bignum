@@ -82,6 +82,13 @@ static NPNetscapeFuncs* sBrowserFuncs;
 #define NPN_IntFromIdentifier(id)     sBrowserFuncs->intfromidentifier (id)
 #define NPN_GetIntIdentifier(intid)   sBrowserFuncs->getintidentifier (intid)
 #define NPN_SetValue(npp, var, value) sBrowserFuncs->setvalue (npp, var, value)
+#define NPN_ReleaseVariantValue(var)  sBrowserFuncs->releasevariantvalue (var)
+
+#define NPN_GetProperty(npp, obj, propertyName, result) \
+    sBrowserFuncs->getproperty (npp, obj, propertyName, result)
+
+#define NPN_InvokeDefault(npp, obj, args, argCount, result) \
+    sBrowserFuncs->invokeDefault (npp, obj, args, argCount, result)
 
 static NPIdentifier ID_toString;
 /* XXX Let's do valueOf, too. */
@@ -390,15 +397,6 @@ Tuple_allocate (NPP npp, NPClass *aClass)
 }
 
 static void
-free_npvariant (NPVariant* var)
-{
-    if (NPVARIANT_IS_STRING (*var))
-        NPN_MemFree ((NPUTF8*) NPVARIANT_TO_STRING (*var).UTF8Characters);
-    else if (NPVARIANT_IS_OBJECT (*var))
-        NPN_ReleaseObject (NPVARIANT_TO_OBJECT (*var));
-}
-
-static void
 Tuple_deallocate (NPObject *npobj)
 {
     size_t i;
@@ -407,7 +405,7 @@ Tuple_deallocate (NPObject *npobj)
     fprintf (stderr, "Tuple deallocate %p\n", npobj);
 #endif  /* DEBUG_ALLOC */
     for (i = tuple->nelts; i > 0; )
-        free_npvariant (&tuple->array[--i]);
+        NPN_ReleaseVariantValue (&tuple->array[--i]);
     if (tuple->array)
         NPN_MemFree (tuple->array);
     NPN_MemFree (tuple);
@@ -1540,7 +1538,7 @@ Entry_invokeDefault (NPObject *vEntry,
     return true;
 }
 
-#if NPGMP_RTTI
+#if NPGMP_RTTI || NPGMP_SCRIPT
 
 enum Entry_number {
 
@@ -1551,6 +1549,31 @@ enum Entry_number {
 #define ENTRY(nargs, nret, string, id) , id = __LINE__
 #include "gmp-entries.h"
 };
+
+static const unsigned char EntryNargs[] = {
+#define ENTRY(nargs, nret, string, id) [__LINE__ - FIRST_ENTRY] = nargs,
+#include "gmp-entries.h"
+    0
+};
+static const unsigned char EntryNret[] = {
+#define ENTRY(nargs, nret, string, id) [__LINE__ - FIRST_ENTRY] = nret,
+#include "gmp-entries.h"
+    0
+};
+
+static inline size_t
+Entry_length (NPObject *npobj) {
+    return EntryNargs[((Entry*) npobj)->number - FIRST_ENTRY];
+}
+
+static inline size_t
+Entry_outLength (NPObject *npobj) {
+    return EntryNret[((Entry*) npobj)->number - FIRST_ENTRY];
+}
+
+#endif  /* NPGMP_RTTI || NPGMP_SCRIPT */
+
+#if NPGMP_RTTI
 
 static NPClass*
 ctor_to_class (NPObject *npobj)
@@ -1626,35 +1649,13 @@ Entry_hasProperty(NPObject *npobj, NPIdentifier name)
         || name == NPN_GetStringIdentifier ("outLength");
 }
 
-static const unsigned char EntryNargs[] = {
-#define ENTRY(nargs, nret, string, id) [__LINE__ - FIRST_ENTRY] = nargs,
-#include "gmp-entries.h"
-    0
-};
-static const unsigned char EntryNret[] = {
-#define ENTRY(nargs, nret, string, id) [__LINE__ - FIRST_ENTRY] = nret,
-#include "gmp-entries.h"
-    0
-};
-
-static inline size_t
-Entry_length (Entry* entry) {
-    return EntryNargs[entry->number - FIRST_ENTRY];
-}
-
-static inline size_t
-Entry_outLength (Entry* entry) {
-    return EntryNret[entry->number - FIRST_ENTRY];
-}
-
 static bool
 Entry_getProperty(NPObject *npobj, NPIdentifier name, NPVariant* result)
 {
-    Entry* entry = (Entry*) npobj;
     if (name == NPN_GetStringIdentifier ("length"))
-        INT32_TO_NPVARIANT (Entry_length (entry), *result);
+        INT32_TO_NPVARIANT (Entry_length (npobj), *result);
     else if (name == NPN_GetStringIdentifier ("outLength"))
-        INT32_TO_NPVARIANT (Entry_outLength (entry), *result);
+        INT32_TO_NPVARIANT (Entry_outLength (npobj), *result);
     else
         VOID_TO_NPVARIANT (*result);
     return true;
@@ -1775,65 +1776,121 @@ obj_noop (NPObject *npobj)
 {
 }
 
+enum Opcode {
+#define OP(op) OP_ ## op = __LINE__,
+#include "gmp-ops.h"
+    OP_DATA
+};
+
+#define NUM_OPS OP_DATA
+
+static NPObject Ops[NUM_OPS];
+
+static enum Opcode
+op_to_opcode (const NPObject* npobj)
+{
+    int ret = npobj - &Ops[0];
+    if (ret >= 0 && ret < NUM_OPS)
+        return ret;
+    return OP_DATA;
+}
+
+static enum Opcode
+var_to_opcode (const NPVariant *value)
+{
+    if (NPVARIANT_IS_OBJECT (*value))
+        return op_to_opcode (NPVARIANT_TO_OBJECT (*value));
+    return OP_DATA;
+}
+
+static const char OpNames[] = "|"
+#define OP(op) # op "," STRINGIFY (__LINE__) "|"
+#include "gmp-ops.h"
+    ;
+
+static int
+id_to_opnum (NPObject *npobj, NPIdentifier key)
+{
+    char buf[16];
+    NPUTF8* name;
+    size_t len;
+    const char* p = 0;
+    int ret;
+
+    if (!NPN_IdentifierIsString (key))
+        return -1;
+
+    name = NPN_UTF8FromIdentifier (key);
+    if (!name) {
+        NPN_SetException (npobj, "out of memory");
+        return -2;
+    }
+
+    len = strlen (name);
+    if (len + 3 <= sizeof buf) {
+        buf[0] = '|';
+        strncpy (&buf[1], name, len);
+        buf[len+1] = ',';
+        buf[len+2] = '\0';
+        p = strstr (OpNames, buf);
+    }
+
+    if (p)
+        ret = atoi (strchr (p, ',') + 1);
+    else
+        ret = -1;
+
+    NPN_MemFree (name);
+    return ret;
+}
+
+static const char*
+opcode_to_string (enum Opcode opcode, size_t* len)
+{
+    char buf[16];
+    const char* p;
+    size_t l;
+
+    if (opcode < 0 || opcode >= NUM_OPS)
+        return 0;
+    sprintf (buf, ",%d|", (int) opcode);
+    p = strstr (OpNames, buf);
+    if (!p)
+        return 0;  /* should not happen */
+    for (l = 0; p[-1] != '|'; l++)
+        continue;
+    *len = l;
+    return p;
+}
+
+static bool
+Op_invoke (NPObject *npobj, NPIdentifier name,
+           const NPVariant *args, uint32_t argCount, NPVariant *result)
+{
+    const char* s;
+    size_t len;
+
+    if (name != ID_toString)
+        return false;
+    s = opcode_to_string (op_to_opcode (npobj), &len);
+    if (!s)
+        return false;  /* should not happen */
+    STRINGN_TO_NPVARIANT (s, len, *result);
+    return true;
+}
+
 static NPClass Op_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     deallocate      : obj_noop,
     invalidate      : obj_invalidate,
-    hasMethod       : obj_id_false,
+    hasMethod       : hasMethod_only_toString,
+    invoke          : Op_invoke,
     hasProperty     : obj_id_false,
     getProperty     : obj_id_var_void,
     setProperty     : setProperty_ro,
     removeProperty  : removeProperty_ro,
     enumerate       : enumerate_empty
 };
-
-static NPObject Ops[] = {
-#define OP(op) { _class: &Op_npclass, referenceCount: (uint32_t) -1 },
-#include "gmp-ops.h"
-    {}
-};
-#define NUM_OPS (sizeof Ops / sizeof Ops[0] - 1)
-
-enum Opcode {
-    _OP_START = 0,
-#define OP(op) OP_ ## op,
-#include "gmp-ops.h"
-    _OP_END
-};
-
-static int
-id_to_op (NPObject *npobj, NPIdentifier key)
-{
-    NPUTF8* name;
-    int ret;
-
-    if (!NPN_IdentifierIsString (key))
-        return 0;
-
-    name = NPN_UTF8FromIdentifier (key);
-    if (!name) {
-        NPN_SetException (npobj, "out of memory");
-        return -OP_ERROR;
-    }
-
-    /* XXX Do via gmp-ops.h.  */
-    if      (!strcmp (name, "roll")) ret = -OP_ROLL;
-    else if (!strcmp (name, "pick")) ret = -OP_PICK;
-    else if (!strcmp (name, "drop")) ret = -OP_DROP;
-    else if (!strcmp (name, "dump")) ret = -OP_DUMP;
-    else ret = 0;
-
-    NPN_MemFree (name);
-    return ret;
-}
-
-static int
-op_to_number (NPObject* npobj)
-{
-    if (npobj >= &Ops[0] && npobj < &Ops[NUM_OPS])
-        return -1 - (npobj - &Ops[0]);
-    return 0;
-}
 
 /*
  * Class of the "run" object.
@@ -1854,7 +1911,15 @@ Run_deallocate (NPObject *npobj)
 static bool
 Run_hasMethod(NPObject *npobj, NPIdentifier name)
 {
-    return id_to_op (npobj, name) != 0;
+    return id_to_opnum (npobj, name) >= 0;
+}
+
+static bool
+Run_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
+{
+    *count = 0;
+    return true;  // XXX
+    //*count = NUM_OPS;
 }
 
 static bool
@@ -1863,13 +1928,11 @@ Run_invoke (NPObject *npobj, NPIdentifier name,
 {
     int number;
 
-    number = id_to_op (npobj, name);
-    if (!number)
-        return false;
-    if (number == -OP_ERROR)
-        return true;
+    number = id_to_opnum (npobj, name);
+    if (number < 0)
+        return number < -1;
     /* if (argCount > 0) ...  should forbid arguments? */
-    OBJECT_TO_NPVARIANT (&Ops[-1 - number], *result);
+    OBJECT_TO_NPVARIANT (&Ops[number], *result);
     return true;
 }
 
@@ -1877,7 +1940,7 @@ static void
 free_stack (NPVariant* stack, size_t size)
 {
     for (size_t i = 0; i < size; i++)
-        free_npvariant (&stack[i]);
+        NPN_ReleaseVariantValue (&stack[i]);
     NPN_MemFree (stack);
 }
 
@@ -1906,32 +1969,6 @@ extend (NPVariant** pstack, size_t* palloc, size_t init, size_t count)
     return true;
 }
 
-/* Return an OP_* constant or number of function arguments.  */
-static int
-op_type (const NPVariant *value)
-{
-    int ret;
-
-    if (NPVARIANT_IS_OBJECT (*value)) {
-        NPObject* npobj = NPVARIANT_TO_OBJECT (*value);
-
-        if (/* XXX function pointer comparison */
-            npobj->_class->invokeDefault == &Entry_invokeDefault) {
-
-            switch (((Entry*) npobj)->number) {
-#define ENTRY(nargs, nret, string, id) case __LINE__: return nargs;
-#include "gmp-entries.h"
-            default: return -OP_ERROR;  /* Should not happen.  */
-            }
-        }
-
-        ret = op_to_number (npobj);
-        if (ret)
-            return ret;
-    }
-    return -OP_DATA;
-}
-
 /* Run a script represented as function arguments.  */
 
 static bool
@@ -1941,12 +1978,16 @@ Run_invokeDefault (NPObject* npobj,
     TopObject* top = Run_getTop (npobj);
     size_t alloc = 8;
     size_t init = 0;
-    int nargs;
+    enum Opcode opcode;
+    NPObject* fun;
+    bool isEntry;
+    size_t nargs;
     NPVariant* stack;
     NPVariant temp;
     size_t temp_size;
     size_t index;
     Tuple* temp_tuple;
+    bool ok;
 
     stack = (NPVariant*) NPN_MemAlloc (alloc * sizeof stack[0]);
     if (!stack) {
@@ -1965,32 +2006,31 @@ Run_invokeDefault (NPObject* npobj,
             break;
         }
 
-        // Is it a function?
-        nargs = op_type (&args[0]);
-        switch (nargs) {
+        opcode = var_to_opcode (&args[0]);
+        switch (opcode) {
 
-        case -OP_PICK:
+        case OP_pick:
             if (init < 1 || !in_size_t (top, &stack[init-1], 1, &temp_size) ||
                 temp_size >= init - 1) {
-                /* XXX poor debuggability */
+                /* XXX should report a few script+stack elts. */
                 NPN_SetException (npobj, "script error");
                 goto done;
             }
-            free_npvariant (&stack[--init]);
+            NPN_ReleaseVariantValue (&stack[--init]);
             if (!copy_npvariant (npobj, &stack[init],
                                  &stack[init - temp_size - 1]))
                 goto done;
             init++;
             continue;
 
-        case -OP_ROLL:
+        case OP_roll:
             if (init < 1 || !in_size_t (top, &stack[init-1], 1, &temp_size) ||
                 temp_size >= init - 1) {
-                /* XXX poor debuggability */
+                /* XXX should report a few script+stack elts. */
                 NPN_SetException (npobj, "script error");
                 goto done;
             }
-            free_npvariant (&stack[--init]);
+            NPN_ReleaseVariantValue (&stack[--init]);
             index = init - 1 - temp_size;
             temp = stack[index];
             memmove (&stack[index], &stack[index + 1],
@@ -1998,15 +2038,16 @@ Run_invokeDefault (NPObject* npobj,
             stack[init - 1] = temp;
             continue;
 
-        case -OP_DROP:
+        case OP_drop:
             if (init < 1) {
+                /* XXX should report a few script+stack elts. */
                 NPN_SetException (npobj, "stack underflow");
                 goto done;
             }
-            free_npvariant (&stack[--init]);
+            NPN_ReleaseVariantValue (&stack[--init]);
             continue;
 
-        case -OP_DUMP:
+        case OP_dump:
             temp_tuple = make_tuple (top, init);
             if (!temp_tuple) {
                 NPN_SetException (npobj, "out of memory");
@@ -2017,12 +2058,7 @@ Run_invokeDefault (NPObject* npobj,
             init = 1;
             continue;
 
-        case -OP_ERROR:
-            /* XXX poor debuggability */
-            NPN_SetException (npobj, "script error");
-            goto done;
-
-        case -OP_DATA:
+        case OP_DATA:
             // Push data.
             if (!extend (&stack, &alloc, init, 1)) {
                 NPN_SetException (npobj, "out of memory");
@@ -2033,41 +2069,100 @@ Run_invokeDefault (NPObject* npobj,
             init++;
             continue;
 
-        default:  /* Must be a function.  */
+        case OP_call:
+            break;
+        }
+
+        if (init < 1) {
+            /* XXX should report a few script+stack elts. */
+            NPN_SetException (npobj, "stack underflow");
+            goto done;
+        }
+
+        if (!NPVARIANT_IS_OBJECT (stack[init-1])) {
+            /* XXX should report a few script+stack elts. */
+            NPN_SetException (npobj, "not a function");
+            break;
+        }
+
+        fun = NPVARIANT_TO_OBJECT (stack[init-1]);
+        NPN_ReleaseVariantValue (&stack[--init]);
+        isEntry = (fun->_class == &top->npclassEntry);
+        ok = false;
+
+        if (isEntry) {
+            nargs = Entry_length (fun);
+            ok = true;
+        }
+        else if (NPN_GetProperty (top->instance, fun,
+                                  NPN_GetStringIdentifier ("length"), &temp)) {
+            ok = in_size_t (top, &temp, 1, &nargs);
+            NPN_ReleaseVariantValue (&temp);
+        }
+
+        if (!ok) {
+            /* XXX should report a few script+stack elts. */
+            NPN_SetException (npobj, "can not find function arity");
             break;
         }
 
         if (nargs > init) {
+            /* XXX should report a few script+stack elts. */
             NPN_SetException (npobj, "stack underflow");
             break;
         }
 
-        // Set temp to something invalid to detect exceptions.
-        OBJECT_TO_NPVARIANT (0, temp);
+        VOID_TO_NPVARIANT (temp);
 
-        Entry_invokeDefault (NPVARIANT_TO_OBJECT (args[0]),
-                             &stack[init - nargs], nargs, &temp);
+        if (isEntry)
+            Entry_invokeDefault (fun, &stack[init - nargs], nargs, &temp);
+        else if (!NPN_InvokeDefault (top->instance, fun, &stack[init - nargs],
+                                     nargs, &temp)) {
+            /* XXX should report a few script+stack elts. */
+            NPN_SetException (npobj, "call failed");
+            break;
+        }
 
-        if (NPVARIANT_IS_OBJECT (temp) && !NPVARIANT_TO_OBJECT (temp))
-            break;  /* An exception occurred.  */
+        /* XXX How can I know whether setexception was used?  Modify
+           it in sBrowserFuncs?  */
 
         while (nargs--)
-            free_npvariant (&stack[--init]);
+            NPN_ReleaseVariantValue (&stack[--init]);
 
-        if (NPVARIANT_IS_VOID (temp))
+        if (isEntry)
+            nargs = Entry_outLength (fun);
+        else
+            nargs = 1;
+
+        if (nargs == 0)
             continue;
 
-        // XXX Should flatten Tuples.
-
-        if (!extend (&stack, &alloc, init, 1)) {
+        if (!extend (&stack, &alloc, init, nargs)) {
             NPN_SetException (npobj, "out of memory");
             break;
         }
-        stack[init++] = temp;
+        if (nargs == 1)
+            stack[init++] = temp;
+        else {
+            temp_tuple = (Tuple*) NPVARIANT_TO_OBJECT (temp);
+            memcpy (&stack[init], temp_tuple->array, nargs * sizeof stack[0]);
+            init += nargs;
+            memset (temp_tuple->array, '\0', nargs * sizeof stack[0]);
+            NPN_ReleaseObject (&temp_tuple->npobj);
+        }
     }
     done:
     free_stack (stack, init);
     return true;
+}
+
+static void
+init_script ()
+{
+    for (size_t i = 0; i < NUM_OPS; i++) {
+        Ops[i]._class = &Op_npclass;
+        Ops[i].referenceCount = 0x7fffffff;
+    }
 }
 
 #endif  /* NPGMP_SCRIPT */
@@ -2112,7 +2207,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->npclassRun.getProperty         = obj_id_var_void;
         ret->npclassRun.setProperty         = setProperty_ro;
         ret->npclassRun.removeProperty      = removeProperty_ro;
-        ret->npclassRun.enumerate           = enumerate_empty;
+        ret->npclassRun.enumerate           = Run_enumerate;
 
         ret->npobjRun._class                 = &ret->npclassRun;
 #endif
@@ -2366,6 +2461,10 @@ NP_Initialize(NPNetscapeFuncs* bFuncs, NPPluginFuncs* pFuncs)
     pFuncs->getvalue = npp_GetValue;
 
     ID_toString = NPN_GetStringIdentifier ("toString");
+
+#if NPGMP_SCRIPT
+    init_script ();
+#endif
 
     return NPERR_NO_ERROR;
 }
