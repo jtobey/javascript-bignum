@@ -4,8 +4,13 @@
 
    * Document usage.
 
-   * Reliable crash on reload test.html on FF 11 OOPP.  Try to run
-     plugin_container under Valgrind.
+   * Why does this return undefined:
+        var rs = gmp.randstate();
+        gmp.gmp_randinit_lc_2exp_size(rs, 64);
+        return gmp.gmp_urandomb_ui(rs, 100);
+
+   * Reliable crash on reload test.html on FF 11 OOPP.  Retest and try
+     to run plugin_container under Valgrind.
 
    * See comments at top of gmp-entries.h.
 
@@ -30,8 +35,14 @@ typedef __gmp_randstate_struct* x_gmp_randstate_ptr;
 
 #if __GNUC__
 #define UNUSED __attribute__ ((unused))
+#define THREAD_LOCAL1 __thread
 #else
 #define UNUSED
+#define THREAD_LOCAL1
+#endif
+
+#ifndef THREAD_LOCAL
+#define THREAD_LOCAL THREAD_LOCAL1
 #endif
 
 #define STRINGIFY(x) STRINGIFY1(x)
@@ -105,6 +116,7 @@ typedef struct _TopObject {
     NPObject    npobj;
     NPP         instance;
     bool        destroying;
+    const char* errmsg;
     NPClass     npclassGmp;
     NPObject    npobjGmp;
 #define Gmp_getTop(object) CONTAINING (TopObject, npobjGmp, object)
@@ -134,8 +146,12 @@ typedef struct _TopObject {
 #endif
 
 #if NPGMP_SCRIPT
-    NPClass     npclassRun;
-    NPObject    npobjRun;
+#if 0
+    NPClass     npclassThread;
+#define Thread_getTop(object) GET_TOP (Thread, object)
+#endif
+    NPClass     npclassRun;  // XXX will go away
+    NPObject    npobjRun;    // XXX will go away
 #define Run_getTop(object) CONTAINING (TopObject, npobjRun, object)
 #endif
 
@@ -149,45 +165,88 @@ typedef struct _TopObject {
 typedef unsigned long ulong;
 typedef char const* stringz;
 
+#define PARSE_UNSIGNED(top, type, arg, start, end)                      \
+    do {                                                                \
+        TopObject* t = (top);                                           \
+        type* a = (arg);                                                \
+        const NPUTF8* s = (start);                                      \
+        const NPUTF8* e = (end);                                        \
+                                                                        \
+        if (s == e) {                                                   \
+            t->errmsg = "invalid " #type;                               \
+            return false;                                               \
+        }                                                               \
+        *a = 0;                                                         \
+        while (s < e) {                                                 \
+            if (*s < '0' || *s > '9') {                                 \
+                t->errmsg = "invalid " #type;                           \
+                return false;                                           \
+            }                                                           \
+            /* XXX should check for overflow.  */                       \
+            *a *= 10;                                                   \
+            *a += *s++ - '0';                                           \
+        }                                                               \
+    } while (0)
+
 #define DEFINE_IN_NUMBER(type)                                          \
     static bool                                                         \
-    in_ ## type (TopObject* top, const NPVariant* var, int count,       \
+    in_ ## type (TopObject* top, const NPVariant* var,                  \
                  type* arg) UNUSED;                                     \
     static bool                                                         \
-    in_ ## type (TopObject* top, const NPVariant* var, int count,       \
-                 type* arg)                                             \
+    in_ ## type (TopObject* top, const NPVariant* var, type* arg)       \
     {                                                                   \
-        if (count < 1)                                                  \
-            return false;                                               \
         if (NPVARIANT_IS_INT32 (*var) &&                                \
             NPVARIANT_TO_INT32 (*var) == (type) NPVARIANT_TO_INT32 (*var)) \
             *arg = (type) NPVARIANT_TO_INT32 (*var);                    \
+                                                                        \
         else if (NPVARIANT_IS_DOUBLE (*var) &&                          \
             NPVARIANT_TO_DOUBLE (*var) == (type) NPVARIANT_TO_DOUBLE (*var)) \
             *arg = (type) NPVARIANT_TO_DOUBLE (*var);                   \
-        else                                                            \
+                                                                        \
+        else if (NPVARIANT_IS_STRING (*var)) {                          \
+            int sign = 1;                                               \
+            NPString str = NPVARIANT_TO_STRING (*var);                  \
+            const char* start = str.UTF8Characters;                     \
+            const char* end = start + str.UTF8Length;                   \
+            if (start < end && *start == '-') {                         \
+                sign = -1;                                              \
+                start++;                                                \
+            }                                                           \
+            PARSE_UNSIGNED (top, type, arg, start, end);                \
+            *arg *= sign;                                               \
+        }                                                               \
+        else {                                                          \
+            top->errmsg = "invalid " #type;                             \
             return false;                                               \
+        }                                                               \
         return true;                                                    \
     }
 
 #define DEFINE_IN_UNSIGNED(type)                                        \
     static bool                                                         \
-    in_ ## type (TopObject* top, const NPVariant* var, int count,       \
+    in_ ## type (TopObject* top, const NPVariant* var,                  \
                  type* arg) UNUSED;                                     \
     static bool                                                         \
-    in_ ## type (TopObject* top, const NPVariant* var, int count,       \
-                 type* arg)                                             \
+    in_ ## type (TopObject* top, const NPVariant* var, type* arg)       \
     {                                                                   \
-        if (count < 1)                                                  \
-            return false;                                               \
         if (NPVARIANT_IS_INT32 (*var) && NPVARIANT_TO_INT32 (*var) >= 0 && \
             NPVARIANT_TO_INT32 (*var) == (type) NPVARIANT_TO_INT32 (*var)) \
             *arg = (type) NPVARIANT_TO_INT32 (*var);                    \
+                                                                        \
         else if (NPVARIANT_IS_DOUBLE (*var) &&                          \
             NPVARIANT_TO_DOUBLE (*var) == (type) NPVARIANT_TO_DOUBLE (*var)) \
             *arg = (type) NPVARIANT_TO_DOUBLE (*var);                   \
-        else                                                            \
+                                                                        \
+        else if (NPVARIANT_IS_STRING (*var)) {                          \
+            NPString str = NPVARIANT_TO_STRING (*var);                  \
+            const char* start = str.UTF8Characters;                     \
+            const char* end = start + str.UTF8Length;                   \
+            PARSE_UNSIGNED (top, type, arg, start, end);                \
+        }                                                               \
+        else {                                                          \
+            top->errmsg = "invalid " #type;                             \
             return false;                                               \
+        }                                                               \
         return true;                                                    \
     }
 
@@ -202,16 +261,16 @@ DEFINE_IN_UNSIGNED (size_t)
 #define del_size_t(arg)
 
 static bool
-in_double (TopObject* top, const NPVariant* var, int count, double* arg)
+in_double (TopObject* top, const NPVariant* var, double* arg)
 {
-    if (count < 1)
-        return false;
     if (NPVARIANT_IS_DOUBLE (*var))
         *arg = NPVARIANT_TO_DOUBLE (*var);
     else if (NPVARIANT_IS_INT32 (*var))
         *arg = (double) NPVARIANT_TO_INT32 (*var);
-    else
+    else {
+        top->errmsg = "not a number";
         return false;
+    }
     return true;
 }
 
@@ -220,17 +279,21 @@ in_double (TopObject* top, const NPVariant* var, int count, double* arg)
 /* Chrome does not terminate its NPString with NUL.  Cope.  */
 
 static bool
-in_stringz (TopObject* top, const NPVariant* var, int count, stringz* arg)
+in_stringz (TopObject* top, const NPVariant* var, stringz* arg)
 {
     const NPString* npstr;
     NPUTF8* str;
 
-    if (count < 1 || !NPVARIANT_IS_STRING (*var))
+    if (!NPVARIANT_IS_STRING (*var)) {
+        top->errmsg = "not a string";
         return false;
+    }
     npstr = &NPVARIANT_TO_STRING (*var);
-    str = NPN_MemAlloc (npstr->UTF8Length + 1);
-    if (!str)
-        return false;  // XXX Should throw.
+    str = (NPUTF8*) NPN_MemAlloc (npstr->UTF8Length + 1);
+    if (!str) {
+        top->errmsg = "out of memory";
+        return false;
+    }
     *arg = str;
     strncpy (str, npstr->UTF8Characters, npstr->UTF8Length);
     str[npstr->UTF8Length] = '\0';
@@ -243,45 +306,50 @@ del_stringz (stringz arg)
     NPN_MemFree ((char*) arg);
 }
 
+static void
+del_npstring (NPString arg)
+{
+    NPN_MemFree ((char*) arg.UTF8Characters);
+}
+
 /*
  * Return value conversion.
  */
 
-#define out_void(value, result)                                 \
-    do { value; VOID_TO_NPVARIANT (*result); } while (0)
-
-#define out_noconv(value, result) value
-
-static void
-out_double (double value, NPVariant* result)
+static bool
+out_double (TopObject* top, double value, NPVariant* result)
 {
     DOUBLE_TO_NPVARIANT (value, *result);
+    return true;
 }
 
-#define DEFINE_OUT_NUMBER(type)                                 \
-    static void                                                 \
-    out_ ## type (type value, NPVariant* result) UNUSED;        \
-    static void                                                 \
-    out_ ## type (type value, NPVariant* result)                \
-    {                                                           \
-        if (value == (int32_t) value)                           \
-            INT32_TO_NPVARIANT (value, *result);                \
-        else if (value == (double) value)                       \
-            DOUBLE_TO_NPVARIANT ((double) value, *result);      \
-        else {                                                  \
-            size_t len = 3 * sizeof (type) + 2;                 \
-            NPUTF8* ret = (NPUTF8*) NPN_MemAlloc (len);         \
-            if (ret) {                                          \
-                if (value >= 0)                                 \
-                    len = sprintf (ret, "%lu", (ulong) value);  \
-                else                                            \
-                    len = sprintf (ret, "%ld", (long) value);   \
-                STRINGN_TO_NPVARIANT (ret, len, *result);       \
-            }                                                   \
-            else                                                \
-                /* XXX Should make this throw. */               \
-                VOID_TO_NPVARIANT (*result);                    \
-        }                                                       \
+#define DEFINE_OUT_NUMBER(type)                                         \
+    static bool                                                         \
+    out_ ## type (TopObject* top, type value, NPVariant* result) UNUSED; \
+    static bool                                                         \
+    out_ ## type (TopObject* top, type value, NPVariant* result)        \
+    {                                                                   \
+        if (value == (int32_t) value)                                   \
+            INT32_TO_NPVARIANT (value, *result);                        \
+        else if (value == (double) value)                               \
+            DOUBLE_TO_NPVARIANT ((double) value, *result);              \
+        else {                                                          \
+            size_t len = 3 * sizeof (type) + 2;                         \
+            NPUTF8* ret = (NPUTF8*) NPN_MemAlloc (len);                 \
+            if (ret) {                                                  \
+                if (value >= 0)                                         \
+                    len = sprintf (ret, "%lu", (ulong) value);          \
+                else                                                    \
+                    len = sprintf (ret, "%ld", (long) value);           \
+                STRINGN_TO_NPVARIANT (ret, len, *result);               \
+            }                                                           \
+            else {                                                      \
+                top->errmsg = "out of memory";                          \
+                VOID_TO_NPVARIANT (*result);                            \
+                return false;                                           \
+            }                                                           \
+        }                                                               \
+        return true;                                                    \
     }
 
 DEFINE_OUT_NUMBER(ulong)
@@ -289,34 +357,49 @@ DEFINE_OUT_NUMBER(long)
 DEFINE_OUT_NUMBER(int)
 DEFINE_OUT_NUMBER(size_t)
 
-static void
-out_bool (int value, NPVariant* result)
+static bool
+out_Bool (TopObject* top, int value, NPVariant* result)
 {
     BOOLEAN_TO_NPVARIANT (value, *result);
+    return true;
 }
-
-static void
-out_stringz (stringz value, NPVariant* result)
+ 
+static bool
+out_stringz (TopObject* top, stringz value, NPVariant* result)
 {
     size_t len = strlen (value);
     NPUTF8* ret = (NPUTF8*) NPN_MemAlloc (len + 1);
-    if (ret) {
-        memcpy (ret, value, len + 1);
-        STRINGN_TO_NPVARIANT (ret, len, *result);
+    if (!ret) {
+        top->errmsg = "out of memory";
+        return false;
     }
-    else
-        /* XXX Should make npobj an argument to converters so this can throw. */
-        VOID_TO_NPVARIANT (*result);
+    memcpy (ret, value, len + 1);
+    STRINGN_TO_NPVARIANT (ret, len, *result);
+    return true;
 }
 
-static void
-out_npobj (NPObject* value, NPVariant* result)
+static bool
+out_npstring (TopObject* top, NPString value, NPVariant* result)
+{
+    bool ret = (value.UTF8Characters != 0 || value.UTF8Length == 0);
+    if (ret)
+        STRINGN_TO_NPVARIANT (value.UTF8Characters, value.UTF8Length, *result);
+    else {
+        VOID_TO_NPVARIANT (*result);
+        top->errmsg = "out of memory";
+    }
+    return ret;
+}
+
+static bool
+out_npobj (TopObject* top, NPObject* value, NPVariant* result)
 {
     if (value)
         /* Caller retains. */
         OBJECT_TO_NPVARIANT (value, *result);
     else
         VOID_TO_NPVARIANT (*result);
+    return true;
 }
 
 /*
@@ -372,8 +455,9 @@ obj_invalidate (NPObject *npobj)
 #endif  /* DEBUG_ALLOC */
 }
 
+
 /*
- * Tuple: array-like class for returning multiple values.
+ * Tuple: array-like class for returning multiple values to JavaScript.
  */
 
 typedef struct _Tuple {
@@ -396,11 +480,18 @@ Tuple_allocate (NPP npp, NPClass *aClass)
     return &ret->npobj;
 }
 
+static NPVariant*
+tuple_alloc (uint32_t size)
+{
+    NPVariant* ret;
+    ret = (NPVariant*) NPN_MemAlloc (size * sizeof ret[0]);
+    return ret;
+}
+
 static void
-Tuple_deallocate (NPObject *npobj)
+tuple_free (Tuple* tuple)
 {
     size_t i;
-    Tuple* tuple = (Tuple*) npobj;
 #if DEBUG_ALLOC
     fprintf (stderr, "Tuple deallocate %p\n", npobj);
 #endif  /* DEBUG_ALLOC */
@@ -408,7 +499,21 @@ Tuple_deallocate (NPObject *npobj)
         NPN_ReleaseVariantValue (&tuple->array[--i]);
     if (tuple->array)
         NPN_MemFree (tuple->array);
-    NPN_MemFree (tuple);
+}
+
+static void
+retain_for_js (Tuple* tuple)
+{
+}
+
+static void
+Tuple_deallocate (NPObject *npobj)
+{
+#if DEBUG_ALLOC
+    fprintf (stderr, "Tuple deallocate %p\n", npobj);
+#endif  /* DEBUG_ALLOC */
+    tuple_free ((Tuple*) npobj);
+    NPN_MemFree (npobj);
 }
 
 static int32_t
@@ -434,7 +539,7 @@ copy_npvariant (NPObject* npobj, NPVariant* dest, const NPVariant* src)
 {
     if (NPVARIANT_IS_STRING (*src)) {
         uint32_t len = NPVARIANT_TO_STRING (*src).UTF8Length;
-        NPUTF8* s = NPN_MemAlloc (len);
+        NPUTF8* s = (NPUTF8*) NPN_MemAlloc (len);
         if (!s) {
             NPN_SetException (npobj, "out of memory");
             return false;
@@ -472,7 +577,7 @@ Tuple_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
     uint32_t i;
 
     *count = tuple->nelts;
-    *value = NPN_MemAlloc (*count * sizeof (NPIdentifier*));
+    *value = (NPIdentifier*) NPN_MemAlloc (*count * sizeof (NPIdentifier*));
     for (i = 0; i < tuple->nelts; i++)
         (*value)[i] = NPN_GetIntIdentifier (i);
     return true;
@@ -483,8 +588,7 @@ make_tuple (TopObject* top, uint32_t size)
 {
     Tuple* ret = (Tuple*) NPN_CreateObject (top->instance, &top->npclassTuple);
     if (ret) {
-        ret->array = (NPVariant*) NPN_MemAlloc
-            (size * sizeof ret->array[0]);
+        ret->array = tuple_alloc (size);
         if (ret->array)
             ret->nelts = size;
         else {
@@ -494,6 +598,76 @@ make_tuple (TopObject* top, uint32_t size)
     }
     return ret;
 }
+
+
+/*
+ * GMP-specific types.
+ */
+
+typedef int int_0_or_2_to_62;
+typedef int int_2_to_62;
+typedef int int_abs_2_to_62;
+typedef int obase_mpf;
+
+static bool
+in_int_0_or_2_to_62 (TopObject* top, const NPVariant* var, int* arg)
+{
+    return in_int (top, var, arg) &&
+        (*arg == 0 || (*arg >= 2 && *arg <= 62));
+}
+#define del_int_0_or_2_to_62(arg)
+
+static bool
+in_int_2_to_62 (TopObject* top, const NPVariant* var, int* arg)
+{
+    return in_int (top, var, arg) && *arg >= 2 && *arg <= 62;
+}
+#define del_int_2_to_62(arg)
+
+static bool
+in_obase_mpf (TopObject* top, const NPVariant* var, int* arg)
+{
+    return in_int (top, var, arg) &&
+        ((*arg >= -36 && *arg <= -2) ||
+         (*arg >= 2 && *arg <= 62));
+}
+#define del_obase_mpf(arg)
+
+#if NPGMP_MPF
+
+static bool
+in_int_abs_2_to_62 (TopObject* top, const NPVariant* var, int* arg)
+{
+    if (!in_int (top, var, arg))
+        return false;
+    int i = (*arg > 0 ? *arg : -*arg);
+    return i >= 2 && i <= 62;
+}
+#define del_int_abs_2_to_62(arg)
+
+#endif  /* NPGMP_MPF */
+
+DEFINE_IN_UNSIGNED (mp_bitcnt_t)
+DEFINE_OUT_NUMBER (mp_bitcnt_t)
+#define del_mp_bitcnt_t(arg)
+
+DEFINE_IN_UNSIGNED (mp_size_t)
+DEFINE_OUT_NUMBER (mp_size_t)
+#define del_mp_size_t(arg)
+
+DEFINE_IN_UNSIGNED (mp_exp_t)
+DEFINE_OUT_NUMBER (mp_exp_t)
+#define del_mp_exp_t(arg)
+
+DEFINE_IN_NUMBER (mp_limb_t)
+DEFINE_OUT_NUMBER (mp_limb_t)
+#define del_mp_limb_t(arg)
+
+typedef mpz_ptr uninit_mpz;
+typedef mpq_ptr uninit_mpq;
+typedef mpf_ptr uninit_mpf;
+typedef mpf_ptr defprec_mpf;
+typedef x_gmp_randstate_ptr uninit_rand;
 
 typedef struct _Integer {
     NPObject npobj;
@@ -528,6 +702,7 @@ typedef struct _Rand {
 } Rand;
 #endif  /* NPGMP_RAND */
 
+
 /*
  * Integer objects wrap mpz_t.
  */
@@ -559,12 +734,12 @@ integer_toString (TopObject *top, mpz_ptr mpp, const NPVariant *args,
 {
     int base = 0;
 
-    if (!in_int (top, &args[0], argCount, &base))
+    if (!in_int (top, &args[0], &base))
         base = 10;
 
     if (base >= -36 && base <= 62 && base != 0 && base != -1 && base != 1) {
         size_t len = mpz_sizeinbase (mpp, base) + 2;
-        NPUTF8* s = NPN_MemAlloc (len);
+        NPUTF8* s = (NPUTF8*) NPN_MemAlloc (len);
         if (s) {
             mpz_get_str (s, base, mpp);
             if (s[0] != '-')
@@ -602,59 +777,6 @@ x_x_mpz (TopObject* top)
 }
 
 #define x_mpz() x_x_mpz (vTop)
-
-/*
- * GMP-specific types.
- */
-
-typedef int int_0_or_2_to_62;
-typedef int int_2_to_62;
-typedef int int_abs_2_to_62;
-
-static bool
-in_int_0_or_2_to_62 (TopObject* top, const NPVariant* var, int count, int* arg)
-{
-    return in_int (top, var, count, arg) &&
-        (*arg == 0 || (*arg >= 2 && *arg <= 62));
-}
-#define del_int_0_or_2_to_62(arg)
-
-static bool
-in_int_2_to_62 (TopObject* top, const NPVariant* var, int count, int* arg)
-{
-    return in_int (top, var, count, arg) && *arg >= 2 && *arg <= 62;
-}
-#define del_int_2_to_62(arg)
-
-#if NPGMP_MPF
-static bool
-in_int_abs_2_to_62 (TopObject* top, const NPVariant* var, int count, int* arg)
-{
-    int i = (*arg > 0 ? *arg : -*arg);
-    return in_int (top, var, count, arg) && i >= 2 && i <= 62;
-}
-#define del_int_abs_2_to_62(arg)
-#endif  /* NPGMP_MPF */
-
-DEFINE_IN_UNSIGNED (mp_bitcnt_t)
-DEFINE_OUT_NUMBER (mp_bitcnt_t)
-#define del_mp_bitcnt_t(arg)
-
-DEFINE_IN_UNSIGNED (mp_size_t)
-DEFINE_OUT_NUMBER (mp_size_t)
-#define del_mp_size_t(arg)
-
-DEFINE_IN_UNSIGNED (mp_exp_t)
-DEFINE_OUT_NUMBER (mp_exp_t)
-#define del_mp_exp_t(arg)
-
-DEFINE_OUT_NUMBER (mp_limb_t)
-
-typedef mpz_ptr uninit_mpz;
-typedef mpq_ptr uninit_mpq;
-typedef mpf_ptr uninit_mpf;
-typedef mpf_ptr defprec_mpf;
-typedef x_gmp_randstate_ptr uninit_rand;
 
 /*
  * Class of objects "returned" by the mpq_numref and mpq_denref macros.
@@ -727,9 +849,9 @@ x_x_mpq_ref (TopObject* top, mpz_ptr z, mpq_ptr q) {
  */
 
 static bool
-in_mpz_ptr (TopObject* top, const NPVariant* var, int count, mpz_ptr* arg)
+in_mpz_ptr (TopObject* top, const NPVariant* var, mpz_ptr* arg)
 {
-    if (count < 1 || !NPVARIANT_IS_OBJECT (*var))
+    if (!NPVARIANT_IS_OBJECT (*var))
         return false;
     if (NPVARIANT_TO_OBJECT (*var)->_class == &top->npclassInteger)
         *arg = &((Integer*) NPVARIANT_TO_OBJECT (*var))->mp[0];
@@ -743,9 +865,9 @@ in_mpz_ptr (TopObject* top, const NPVariant* var, int count, mpz_ptr* arg)
 }
 
 static bool
-in_uninit_mpz (TopObject* top, const NPVariant* var, int count, mpz_ptr* arg)
+in_uninit_mpz (TopObject* top, const NPVariant* var, mpz_ptr* arg)
 {
-    bool ret = in_mpz_ptr (top, var, count, arg);
+    bool ret = in_mpz_ptr (top, var, arg);
     if (ret)
         mpz_clear (*arg);
     return ret;
@@ -753,23 +875,6 @@ in_uninit_mpz (TopObject* top, const NPVariant* var, int count, mpz_ptr* arg)
 
 #define del_mpz_ptr(arg)
 #define del_uninit_mpz(arg)
-
-static NPObject*
-z_get_d_2exp (TopObject* top, mpz_ptr z)
-{
-    Tuple* ret = make_tuple (top, 2);
-    long exp;
-
-    if (!ret) {
-        NPN_SetException (&top->npobj, "out of memory");
-        return 0;
-    }
-    DOUBLE_TO_NPVARIANT (mpz_get_d_2exp (&exp, z), ret->array[0]);
-    out_long (exp, &ret->array[1]);
-    return &ret->npobj;
-}
-
-#define x_mpz_get_d_2exp(z) z_get_d_2exp (vTop, z)
 
 /*
  * Rational objects wrap mpq_t.
@@ -804,13 +909,13 @@ rational_toString (TopObject* top, mpq_ptr mpp, const NPVariant *args,
 {
     int base = 0;
 
-    if (!in_int (top, &args[0], argCount, &base))
+    if (argCount < 1 || !in_int (top, &args[0], &base))
         base = 10;
 
     if (base >= -36 && base <= 62 && base != 0 && base != -1 && base != 1) {
         size_t len = mpz_sizeinbase (mpq_numref (mpp), base)
             + mpz_sizeinbase (mpq_denref (mpp), base) + 3;
-        NPUTF8* s = NPN_MemAlloc (len);
+        NPUTF8* s = (NPUTF8*) NPN_MemAlloc (len);
         if (s) {
             mpq_get_str (s, base, mpp);
             STRINGN_TO_NPVARIANT (s, len-5 + strlen (s + len-5), *result);
@@ -835,9 +940,9 @@ Rational_invoke (NPObject *npobj, NPIdentifier name,
 }
 
 static bool
-in_mpq_ptr (TopObject* top, const NPVariant* var, int count, mpq_ptr* arg)
+in_mpq_ptr (TopObject* top, const NPVariant* var, mpq_ptr* arg)
 {
-    if (count < 1 || !NPVARIANT_IS_OBJECT (*var)
+    if (!NPVARIANT_IS_OBJECT (*var)
         || NPVARIANT_TO_OBJECT (*var)->_class != &top->npclassRational)
         return false;
     *arg = &((Rational*) NPVARIANT_TO_OBJECT (*var))->mp[0];
@@ -845,9 +950,9 @@ in_mpq_ptr (TopObject* top, const NPVariant* var, int count, mpq_ptr* arg)
 }
 
 static bool
-in_uninit_mpq (TopObject* top, const NPVariant* var, int count, mpq_ptr* arg)
+in_uninit_mpq (TopObject* top, const NPVariant* var, mpq_ptr* arg)
 {
-    bool ret = in_mpq_ptr (top, var, count, arg);
+    bool ret = in_mpq_ptr (top, var, arg);
     if (ret)
         mpq_clear (*arg);
     return ret;
@@ -922,14 +1027,10 @@ float_toString (TopObject *top, mpf_ptr mpp, const NPVariant *args,
     char* str;
     size_t allocated;
 
-    if (in_int (top, args, argCount, &base)) {
-        args++;
-        argCount--;
-    }
-    else
+    if (argCount < 1 || !in_int (top, args, &base))
         base = 10;
 
-    if (!in_size_t (top, args, argCount, &n_digits))
+    if (argCount < 2 || !in_size_t (top, args + 1, &n_digits))
         n_digits = 0;
 
     if (base >= -36 && base <= 62 && base != 0 && base != -1 && base != 1) {
@@ -943,7 +1044,7 @@ float_toString (TopObject *top, mpf_ptr mpp, const NPVariant *args,
         }
         allocated = strlen (str) + 1;
         if (allocated == 1) {
-            s = NPN_MemAlloc (sizeof "0");
+            s = (NPUTF8*) NPN_MemAlloc (sizeof "0");
             if (s) {
                 strcpy (s, "0");
                 STRINGZ_TO_NPVARIANT (s, *result);
@@ -955,7 +1056,7 @@ float_toString (TopObject *top, mpf_ptr mpp, const NPVariant *args,
             size_t len = allocated + 4 + 3 * sizeof expt;
             size_t pos = 0;
 
-            s = NPN_MemAlloc (len);
+            s = (NPUTF8*) NPN_MemAlloc (len);
             if (s) {
                 if (str[pos] == '-') {
                     s[pos] = str[pos];
@@ -988,9 +1089,9 @@ Float_invoke (NPObject *npobj, NPIdentifier name,
 }
 
 static bool
-in_mpf_ptr (TopObject* top, const NPVariant* var, int count, mpf_ptr* arg)
+in_mpf_ptr (TopObject* top, const NPVariant* var, mpf_ptr* arg)
 {
-    if (count < 1 || !NPVARIANT_IS_OBJECT (*var)
+    if (!NPVARIANT_IS_OBJECT (*var)
         || NPVARIANT_TO_OBJECT (*var)->_class != &top->npclassFloat)
         return false;
     *arg = &((Float*) NPVARIANT_TO_OBJECT (*var))->mp[0];
@@ -1009,9 +1110,9 @@ restore_prec (mpf_ptr mpp)
 }
 
 static bool
-in_uninit_mpf (TopObject* top, const NPVariant* var, int count, mpf_ptr* arg)
+in_uninit_mpf (TopObject* top, const NPVariant* var, mpf_ptr* arg)
 {
-    bool ret = in_mpf_ptr (top, var, count, arg);
+    bool ret = in_mpf_ptr (top, var, arg);
 
     if (ret) {
         restore_prec (*arg);
@@ -1046,17 +1147,16 @@ x_x_mpf_init (TopObject* top, mpf_ptr f)
 }
 
 static bool
-x_in_defprec_mpf (TopObject* top,
-                  const NPVariant* var, int count, mpf_ptr* arg)
+x_in_defprec_mpf (TopObject* top, const NPVariant* var, mpf_ptr* arg)
 {
-    bool ret = in_uninit_mpf (top, var, count, arg);
+    bool ret = in_uninit_mpf (top, var, arg);
     if (ret)
         x_x_mpf_init (top, *arg);
     return ret;
 }
 
-#define in_defprec_mpf(top, var, count, arg)     \
-    x_in_defprec_mpf (top, var, count, arg)
+#define in_defprec_mpf(top, var, arg)     \
+    x_in_defprec_mpf (top, var, arg)
 
 #define del_mpf_ptr(arg)
 #define del_uninit_mpf(arg)
@@ -1101,73 +1201,33 @@ x_mpf_set_prec_raw (mpf_ptr mpp, mp_bitcnt_t prec)
         mpf_set_prec_raw (mpp, prec);
 }
 
-static NPObject*
-f_get_d_2exp (TopObject* top, mpf_ptr f)
+static NPString
+x_mpf_get_str (mp_exp_t* exp, int base, size_t n_digits, mpf_ptr f)
 {
-    Tuple* ret = make_tuple (top, 2);
-    long exp;
-
-    if (!ret) {
-        NPN_SetException (&top->npobj, "out of memory");
-        return 0;
-    }
-    DOUBLE_TO_NPVARIANT (mpf_get_d_2exp (&exp, f), ret->array[0]);
-    out_long (exp, &ret->array[1]);
-    return &ret->npobj;
-}
-
-#define x_mpf_get_d_2exp(f) f_get_d_2exp (vTop, f)
-
-static NPObject*
-f_get_str (TopObject* top, int base, size_t n_digits, mpf_ptr f)
-{
-    Tuple* ret = make_tuple (top, 2);
-    mp_exp_t exp;
     char* str;
     size_t len;
     NPUTF8* s;
+    NPString ret;
 
-    if (!ret) {
-        NPN_SetException (&top->npobj, "out of memory");
-        goto error_out;
-    }
-
-    if (base < -36 || base > 62 || (base >= -1 && base <= 1)) {
-        NPN_SetException (&top->npobj, "invalid base");
-        goto error_release;
-    }
-
-    /* XXX could preallocate for n_digits != 0. */
-    str = mpf_get_str (NULL, &exp, base, n_digits, f);
-    if (!str) {
-        NPN_SetException (&top->npobj, "out of memory");
-        goto error_release;
-    }
-
-    len = strlen (str);
-    s = NPN_MemAlloc (len);
-    if (s || !len) {
-        memcpy (s, str, len);
-        x_gmp_free (str, len + 1);
-        STRINGN_TO_NPVARIANT (s, len, ret->array[0]);
+    /* XXX could preallocate the buffer for n_digits != 0. */
+    str = mpf_get_str (NULL, exp, base, n_digits, f);
+    if (str) {
+        len = strlen (str);
+        s = (NPUTF8*) NPN_MemAlloc (len);
+        if (s || !len)
+            memcpy (s, str, len);
     }
     else {
-        NPN_SetException (&top->npobj, "out of memory");
-        goto error_free;
+        /* Tell out_npstring to raise out-of-memory.  */
+        len = 1;
+        s = 0;
     }
 
-    out_mp_exp_t (exp, &ret->array[1]);
-    return &ret->npobj;
-
-    error_free:
     x_gmp_free (str, len + 1);
-    error_release:
-    NPN_ReleaseObject (&ret->npobj);
-    error_out:
-    return 0;
+    ret.UTF8Length = len;
+    ret.UTF8Characters = s;
+    return ret;
 }
-
-#define x_mpf_get_str(base, n_digits, f) f_get_str(vTop, base, n_digits, f)
 
 #endif  /* NPGMP_MPF */
 
@@ -1199,10 +1259,10 @@ Rand_deallocate (NPObject *npobj)
 }
 
 static bool
-in_x_gmp_randstate_ptr (TopObject* top, const NPVariant* var, int count,
+in_x_gmp_randstate_ptr (TopObject* top, const NPVariant* var,
                         x_gmp_randstate_ptr* arg)
 {
-    if (count < 1 || !NPVARIANT_IS_OBJECT (*var)
+    if (!NPVARIANT_IS_OBJECT (*var)
         || NPVARIANT_TO_OBJECT (*var)->_class != &top->npclassRand)
         return false;
     *arg = &((Rand*) NPVARIANT_TO_OBJECT (*var))->state[0];
@@ -1210,10 +1270,9 @@ in_x_gmp_randstate_ptr (TopObject* top, const NPVariant* var, int count,
 }
 
 static bool
-in_uninit_rand (TopObject* top,
-                const NPVariant* var, int count, x_gmp_randstate_ptr* arg)
+in_uninit_rand (TopObject* top, const NPVariant* var, x_gmp_randstate_ptr* arg)
 {
-    bool ret = in_x_gmp_randstate_ptr (top, var, count, arg);
+    bool ret = in_x_gmp_randstate_ptr (top, var, arg);
     if (ret)
         gmp_randclear (*arg);
     return ret;
@@ -1263,6 +1322,8 @@ Entry_allocate (NPP npp, NPClass *aClass)
 #if DEBUG_ALLOC
     fprintf (stderr, "Entry allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
+    if (ret)
+        NPN_RetainObject (&CONTAINING (TopObject, npclassEntry, aClass)->npobj);
     return &ret->npobj;
 }
 
@@ -1324,222 +1385,6 @@ number_to_name (int number)
     return 0;
 }
 
-/* Calls to most functions go through Entry_invokeDefault. */
-
-static bool
-Entry_invokeDefault (NPObject *vEntry,
-                     const NPVariant *vArgs, uint32_t vArgCount,
-                     NPVariant *vResult)
-{
-    TopObject* vTop = Entry_getTop (vEntry);
-    bool ok = false;
-    int vArgNumber = 0;
-
-#define ARGN(aN) \
-    int aN ## int UNUSED; \
-    long aN ## long UNUSED; \
-    ulong aN ## ulong UNUSED; \
-    double aN ## double UNUSED; \
-    stringz aN ## stringz UNUSED; \
-    mpz_ptr aN ## mpz_ptr UNUSED; \
-    mpq_ptr aN ## mpq_ptr UNUSED; \
-    mpf_ptr aN ## mpf_ptr UNUSED; \
-    x_gmp_randstate_ptr aN ## x_gmp_randstate_ptr UNUSED; \
-    uninit_mpz aN ## uninit_mpz UNUSED; \
-    uninit_mpq aN ## uninit_mpq UNUSED; \
-    uninit_mpf aN ## uninit_mpf UNUSED; \
-    defprec_mpf aN ## defprec_mpf UNUSED; \
-    uninit_rand aN ## uninit_rand UNUSED; \
-    mp_bitcnt_t aN ## mp_bitcnt_t UNUSED; \
-    int_0_or_2_to_62 aN ## int_0_or_2_to_62 UNUSED; \
-    int_2_to_62 aN ## int_2_to_62 UNUSED; \
-    int_abs_2_to_62 aN ## int_abs_2_to_62 UNUSED; \
-    mp_size_t aN ## mp_size_t UNUSED; \
-    mp_exp_t aN ## mp_exp_t UNUSED; \
-    size_t aN ## size_t UNUSED;
-
-    ARGN(a0);
-    ARGN(a1);
-    ARGN(a2);
-    ARGN(a3);
-    ARGN(a4);
-
-#define IN(a, t)                                                        \
-    (vArgNumber++,                                                      \
-     in_ ## t (vTop, &vArgs[vArgNumber-1], vArgCount + 1 - vArgNumber, &a ## t))
-
-    int number = ((Entry*) vEntry)->number;
-
-    switch (number) {
-
-#define ENTRY0R1(name, string, id, r0)                          \
-        case __LINE__:                                          \
-            if (vArgNumber != vArgCount) break;                 \
-            out_ ## r0 (name (), vResult);                      \
-            ok = true;                                          \
-            break;
-
-#define ENTRY1R0(name, string, id, t0)                          \
-        case __LINE__:                                          \
-            if (!IN (a0, t0)) break;                            \
-            if (vArgNumber != vArgCount) goto del0_ ## id;      \
-            name (a0 ## t0);                                    \
-            ok = true;                                          \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
-            break;
-
-#define ENTRY1R1(name, string, id, r0, t0)                      \
-        case __LINE__:                                          \
-            if (!IN (a0, t0)) break;                            \
-            if (vArgNumber != vArgCount) goto del0_ ## id;      \
-            out_ ## r0 (name (a0 ## t0), vResult);              \
-            ok = true;                                          \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
-            break;
-
-#define ENTRY1R2(name, string, id, r0, r1, t0)                  \
-        case __LINE__:                                          \
-            if (!IN (a0, t0)) break;                            \
-            if (vArgNumber != vArgCount) goto del0_ ## id;      \
-            out_npobj (name (a0 ## t0), vResult);               \
-            ok = true;                                          \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
-            break;
-
-#define ENTRY2R0(name, string, id, t0, t1)                      \
-        case __LINE__:                                          \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto del0_ ## id;                 \
-            if (vArgNumber != vArgCount) goto del1_ ## id;      \
-            name (a0 ## t0, a1 ## t1);                          \
-            ok = true;                                          \
-            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
-            break;
-
-#define ENTRY2R1(name, string, id, r0, t0, t1)                  \
-        case __LINE__:                                          \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto del0_ ## id;                 \
-            if (vArgNumber != vArgCount) goto del1_ ## id;      \
-            out_ ## r0 (name (a0 ## t0, a1 ## t1), vResult);    \
-            ok = true;                                          \
-            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
-            break;
-
-#define ENTRY3R0(name, string, id, t0, t1, t2)                  \
-        case __LINE__:                                          \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto del0_ ## id;                 \
-            if (!IN (a2, t2)) goto del1_ ## id;                 \
-            if (vArgNumber != vArgCount) goto del2_ ## id;      \
-            name (a0 ## t0, a1 ## t1, a2 ## t2);                \
-            ok = true;                                          \
-            del2_ ## id: del_ ## t2 (a2 ## t2);                 \
-            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
-            break;
-
-#define ENTRY3R1(name, string, id, r0, t0, t1, t2)              \
-        case __LINE__:                                          \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto del0_ ## id;                 \
-            if (!IN (a2, t2)) goto del1_ ## id;                 \
-            if (vArgNumber != vArgCount) goto del2_ ## id;      \
-            out_ ## r0 (name (a0 ## t0, a1 ## t1, a2 ## t2),    \
-                        vResult);                               \
-            ok = true;                                          \
-            del2_ ## id: del_ ## t2 (a2 ## t2);                 \
-            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
-            break;
-
-#define ENTRY3R2(name, string, id, r0, r1, t0, t1, t2)          \
-        case __LINE__:                                          \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto del0_ ## id;                 \
-            if (!IN (a2, t2)) goto del1_ ## id;                 \
-            if (vArgNumber != vArgCount) goto del2_ ## id;      \
-            out_npobj (name (a0 ## t0, a1 ## t1, a2 ## t2),     \
-                       vResult);                                \
-            ok = true;                                          \
-            del2_ ## id: del_ ## t2 (a2 ## t2);                 \
-            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
-            break;
-
-#define ENTRY4R0(name, string, id, t0, t1, t2, t3)              \
-        case __LINE__:                                          \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto del0_ ## id;                 \
-            if (!IN (a2, t2)) goto del1_ ## id;                 \
-            if (!IN (a3, t3)) goto del2_ ## id;                 \
-            if (vArgNumber != vArgCount) goto del3_ ## id;      \
-            name (a0 ## t0, a1 ## t1, a2 ## t2, a3 ## t3);      \
-            ok = true;                                          \
-            del3_ ## id: del_ ## t3 (a3 ## t3);                 \
-            del2_ ## id: del_ ## t2 (a2 ## t2);                 \
-            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
-            break;
-
-#define ENTRY4R1(name, string, id, r0, t0, t1, t2, t3)          \
-        case __LINE__:                                          \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto del0_ ## id;                 \
-            if (!IN (a2, t2)) goto del1_ ## id;                 \
-            if (!IN (a3, t3)) goto del2_ ## id;                 \
-            if (vArgNumber != vArgCount) goto del3_ ## id;      \
-            out_ ## r0 (name (a0 ## t0, a1 ## t1, a2 ## t2,     \
-                                a3 ## t3), vResult);            \
-            ok = true;                                          \
-            del3_ ## id: del_ ## t3 (a3 ## t3);                 \
-            del2_ ## id: del_ ## t2 (a2 ## t2);                 \
-            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
-            break;
-
-#define ENTRY5R0(name, string, id, t0, t1, t2, t3, t4)          \
-        case __LINE__:                                          \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto del0_ ## id;                 \
-            if (!IN (a2, t2)) goto del1_ ## id;                 \
-            if (!IN (a3, t3)) goto del2_ ## id;                 \
-            if (!IN (a4, t4)) goto del3_ ## id;                 \
-            if (vArgNumber != vArgCount) goto del4_ ## id;      \
-            name (a0 ## t0, a1 ## t1, a2 ## t2, a3 ## t3,       \
-                  a4 ## t4);                                    \
-            ok = true;                                          \
-            del4_ ## id: del_ ## t4 (a4 ## t4);                 \
-            del3_ ## id: del_ ## t3 (a3 ## t3);                 \
-            del2_ ## id: del_ ## t2 (a2 ## t2);                 \
-            del1_ ## id: del_ ## t1 (a1 ## t1);                 \
-            del0_ ## id: del_ ## t0 (a0 ## t0);                 \
-            break;
-
-#include "gmp-entries.h"
-
-    default:
-        NPN_SetException (vEntry, "internal error, bad entry number");
-        ok = true;
-    break;
-    }
-
-    if (!ok) {
-        static const char fmt[] = "%s: wrong type arguments";
-        char message[200];
-        const char* name = number_to_name (number);
-        if (sizeof fmt - 2 + strlen (name) > sizeof message)
-            name = "GMP function";
-        sprintf (message, fmt, name);
-        NPN_SetException (vEntry, message);
-    }
-    return true;
-}
-
-#if NPGMP_RTTI || NPGMP_SCRIPT
-
 enum Entry_number {
 
     FIRST_ENTRY =
@@ -1571,7 +1416,283 @@ Entry_outLength (NPObject *npobj) {
     return EntryNret[((Entry*) npobj)->number - FIRST_ENTRY];
 }
 
-#endif  /* NPGMP_RTTI || NPGMP_SCRIPT */
+/* Calls to most functions go through wrap. */
+
+static bool
+wrap (TopObject *vTop, int vEntryNumber,
+      const NPVariant *vArgs, uint32_t vArgCount, NPVariant *vResults)
+{
+    bool __ok = false, __ret = true;
+    int vArgNumber = -1;
+    int vRetNumber = -1;
+
+    union {
+        bool ABool;
+        int Aint;
+        long Along;
+        ulong Aulong;
+        double Adouble;
+        stringz Astringz;
+        mpz_ptr Ampz_ptr;
+        mpq_ptr Ampq_ptr;
+        mpf_ptr Ampf_ptr;
+        x_gmp_randstate_ptr Ax_gmp_randstate_ptr;
+        uninit_mpz Auninit_mpz;
+        uninit_mpq Auninit_mpq;
+        uninit_mpf Auninit_mpf;
+        defprec_mpf Adefprec_mpf;
+        uninit_rand Auninit_rand;
+        mp_bitcnt_t Amp_bitcnt_t;
+        int Aint_0_or_2_to_62;
+        int Aint_2_to_62;
+        int Aint_abs_2_to_62;
+        int Aobase_mpf;
+        mp_size_t Amp_size_t;
+        mp_exp_t Amp_exp_t;
+        mp_limb_t Amp_limb_t;
+        size_t Asize_t;
+        NPObject* Anpobj;
+        NPString Anpstring;
+    } a0, a1, a2, a3, a4, o0, o1;
+
+#define ARGC(argc)                                      \
+    if ((argc) != vArgCount) {                          \
+        vTop->errmsg = "wrong number of arguments";     \
+        break;                                          \
+    }
+
+#define IN(a, t)                                                        \
+    (vArgNumber++, in_ ## t (vTop, vArgs + vArgNumber, &a.A ## t))
+
+#define OUT(o, t)                                                       \
+    (vRetNumber++, out_ ## t (vTop, o.A ## t, vResults + vRetNumber))
+
+#define DEL(a, t) del_ ## t (a.A ## t)
+
+    switch (vEntryNumber) {
+
+#define ENTRY0R1(fun, string, id, r0)                           \
+        case __LINE__:                                          \
+            ARGC(0);                                            \
+            o0.A ## r0 = fun ();                                \
+            if (!OUT (o0, r0)) break;                           \
+            __ok = true;                                        \
+            break;
+
+#define ENTRY1R0(fun, string, id, t0)                           \
+        case __LINE__:                                          \
+            ARGC(1);                                            \
+            if (!IN (a0, t0)) break;                            \
+            fun (a0.A ## t0);                                   \
+            __ok = true;                                        \
+            dela0_ ## id: DEL (a0, t0);                         \
+            break;
+
+#define ENTRY1R1(fun, string, id, r0, t0)                       \
+        case __LINE__:                                          \
+            ARGC(1);                                            \
+            if (!IN (a0, t0)) break;                            \
+            o0.A ## r0 = fun (a0.A ## t0);                      \
+            if (!OUT (o0, r0)) goto dela0_ ## id;               \
+            __ok = true;                                        \
+            dela0_ ## id: DEL (a0, t0);                         \
+            break;
+
+#define ENTRY1R2(fun, string, id, r0, r1, t0)                   \
+        case __LINE__:                                          \
+            ARGC(1);                                            \
+            if (!IN (a0, t0)) break;                            \
+            o0.A ## r0 = fun (&o1.A ## r1, a0.A ## t0);         \
+            if (!OUT (o0, r0)) goto dela0_ ## id;               \
+            if (!OUT (o1, r1)) goto delo0_ ## id;               \
+            __ok = true;                                        \
+            dela0_ ## id: DEL (a0, t0);                         \
+            break;                                              \
+            delo0_ ## id: DEL (o0, r0);                         \
+            goto dela0_ ## id;
+
+#define ENTRY2R0(fun, string, id, t0, t1)                       \
+        case __LINE__:                                          \
+            ARGC(2);                                            \
+            if (!IN (a0, t0)) break;                            \
+            if (!IN (a1, t1)) goto dela0_ ## id;                \
+            fun (a0.A ## t0, a1.A ## t1);                       \
+            __ok = true;                                        \
+            dela1_ ## id: DEL (a1, t1);                         \
+            dela0_ ## id: DEL (a0, t0);                         \
+            break;
+
+#define ENTRY2R1(fun, string, id, r0, t0, t1)                   \
+        case __LINE__:                                          \
+            ARGC(2);                                            \
+            if (!IN (a0, t0)) break;                            \
+            if (!IN (a1, t1)) goto dela0_ ## id;                \
+            o0.A ## r0 = fun (a0.A ## t0, a1.A ## t1);          \
+            if (!OUT (o0, r0)) goto dela1_ ## id;               \
+            __ok = true;                                        \
+            dela1_ ## id: DEL (a1, t1);                         \
+            dela0_ ## id: DEL (a0, t0);                         \
+            break;
+
+#define ENTRY3R0(fun, string, id, t0, t1, t2)                   \
+        case __LINE__:                                          \
+            ARGC(3);                                            \
+            if (!IN (a0, t0)) break;                            \
+            if (!IN (a1, t1)) goto dela0_ ## id;                \
+            if (!IN (a2, t2)) goto dela1_ ## id;                \
+            fun (a0.A ## t0, a1.A ## t1, a2.A ## t2);           \
+            __ok = true;                                        \
+            dela2_ ## id: DEL (a2, t2);                         \
+            dela1_ ## id: DEL (a1, t1);                         \
+            dela0_ ## id: DEL (a0, t0);                         \
+            break;
+
+#define ENTRY3R1(fun, string, id, r0, t0, t1, t2)               \
+        case __LINE__:                                          \
+            ARGC(3);                                            \
+            if (!IN (a0, t0)) break;                            \
+            if (!IN (a1, t1)) goto dela0_ ## id;                \
+            if (!IN (a2, t2)) goto dela1_ ## id;                \
+            o0.A ## r0 = fun                                    \
+                (a0.A ## t0, a1.A ## t1, a2.A ## t2);           \
+            if (!OUT (o0, r0)) goto dela2_ ## id;               \
+            __ok = true;                                        \
+            dela2_ ## id: DEL (a2, t2);                         \
+            dela1_ ## id: DEL (a1, t1);                         \
+            dela0_ ## id: DEL (a0, t0);                         \
+            break;
+
+#define ENTRY3R2(fun, string, id, r0, r1, t0, t1, t2)           \
+        case __LINE__:                                          \
+            ARGC(3);                                            \
+            if (!IN (a0, t0)) break;                            \
+            if (!IN (a1, t1)) goto dela0_ ## id;                \
+            if (!IN (a2, t2)) goto dela1_ ## id;                \
+            o0.A ## r0 = fun                                    \
+                (&o1.A ## r1,                                   \
+                 a0.A ## t0, a1.A ## t1, a2.A ## t2);           \
+            if (!OUT (o0, r0)) goto dela2_ ## id;               \
+            if (!OUT (o1, r1)) goto delo0_ ## id;               \
+            __ok = true;                                        \
+            dela2_ ## id: DEL (a2, t2);                         \
+            dela1_ ## id: DEL (a1, t1);                         \
+            dela0_ ## id: DEL (a0, t0);                         \
+            break;                                              \
+            delo0_ ## id: DEL (o0, r0);                         \
+            goto dela2_ ## id;
+
+#define ENTRY4R0(fun, string, id, t0, t1, t2, t3)               \
+        case __LINE__:                                          \
+            ARGC(4);                                            \
+            if (!IN (a0, t0)) break;                            \
+            if (!IN (a1, t1)) goto dela0_ ## id;                \
+            if (!IN (a2, t2)) goto dela1_ ## id;                \
+            if (!IN (a3, t3)) goto dela2_ ## id;                \
+            fun (a0.A ## t0, a1.A ## t1, a2.A ## t2,            \
+                 a3.A ## t3);                                   \
+            __ok = true;                                        \
+            dela3_ ## id: DEL (a3, t3);                         \
+            dela2_ ## id: DEL (a2, t2);                         \
+            dela1_ ## id: DEL (a1, t1);                         \
+            dela0_ ## id: DEL (a0, t0);                         \
+            break;
+
+#define ENTRY4R1(fun, string, id, r0, t0, t1, t2, t3)           \
+        case __LINE__:                                          \
+            ARGC(4);                                            \
+            if (!IN (a0, t0)) break;                            \
+            if (!IN (a1, t1)) goto dela0_ ## id;                \
+            if (!IN (a2, t2)) goto dela1_ ## id;                \
+            if (!IN (a3, t3)) goto dela2_ ## id;                \
+            o0.A ## r0 = fun                                    \
+                (a0.A ## t0, a1.A ## t1, a2.A ## t2,            \
+                 a3.A ## t3);                                   \
+            if (!OUT (o0, r0)) goto dela3_ ## id;               \
+            __ok = true;                                        \
+            dela3_ ## id: DEL (a3, t3);                         \
+            dela2_ ## id: DEL (a2, t2);                         \
+            dela1_ ## id: DEL (a1, t1);                         \
+            dela0_ ## id: DEL (a0, t0);                         \
+            break;
+
+#define ENTRY5R0(fun, string, id, t0, t1, t2, t3, t4)           \
+        case __LINE__:                                          \
+            ARGC(5);                                            \
+            if (!IN (a0, t0)) break;                            \
+            if (!IN (a1, t1)) goto dela0_ ## id;                \
+            if (!IN (a2, t2)) goto dela1_ ## id;                \
+            if (!IN (a3, t3)) goto dela2_ ## id;                \
+            if (!IN (a4, t4)) goto dela3_ ## id;                \
+            fun (a0.A ## t0, a1.A ## t1, a2.A ## t2,            \
+                 a3.A ## t3, a4.A ## t4);                       \
+            __ok = true;                                        \
+            dela4_ ## id: DEL (a4, t4);                         \
+            dela3_ ## id: DEL (a3, t3);                         \
+            dela2_ ## id: DEL (a2, t2);                         \
+            dela1_ ## id: DEL (a1, t1);                         \
+            dela0_ ## id: DEL (a0, t0);                         \
+            break;
+
+#include "gmp-entries.h"
+
+    default:
+        NPN_SetException (&vTop->npobj, "internal error, bad entry number");
+        __ret = false;
+    break;
+    }
+
+    if (!__ok) {
+        static const char fmt[] = "%s: %s";
+        char message[200];
+        const char* name = number_to_name (vEntryNumber);
+        const char* msg = vTop->errmsg ?: "unknown error";
+        vTop->errmsg = 0;
+        if (sizeof fmt - 4 + strlen (name) + strlen (msg) > sizeof message) {
+            msg = "wrong type arguments";
+            if (sizeof fmt - 4 + strlen (name) + strlen (msg) > sizeof message)
+                name = "GMP function";
+        }
+        sprintf (message, fmt, name, msg);
+        NPN_SetException (&vTop->npobj, message);
+        __ret = false;
+    }
+    return __ret;
+}
+
+static bool
+Entry_invokeDefault (NPObject *npobj,
+                     const NPVariant *args, uint32_t argCount,
+                     NPVariant *result)
+{
+    TopObject* top = Entry_getTop (npobj);
+    size_t nret = Entry_outLength (npobj);
+    Tuple* tuple = 0;  /* avoid a warning */
+    NPVariant* out;
+
+    if (argCount <= 1)
+        out = result;
+    else {
+        tuple = make_tuple (top, nret);
+        if (!tuple) {
+            NPN_SetException (&top->npobj, "out of memory");
+            return true;
+        }
+        out = tuple->array;
+    }
+
+    if (!wrap (top, ((Entry*) npobj)->number, args, argCount, out))
+        nret = 0;
+
+    if (nret == 0)
+        VOID_TO_NPVARIANT (*result);
+
+    else if (nret > 1) {
+        OBJECT_TO_NPVARIANT (&tuple->npobj, *result);
+        retain_for_js (tuple);
+    }
+
+    return true;
+}
 
 #if NPGMP_RTTI
 
@@ -1707,7 +1828,6 @@ get_entry (NPObject *npobj, int number, NPVariant *result)
         (top->instance, &top->npclassEntry);
 
     if (entry) {
-        NPN_RetainObject (&top->npobj);
         entry->number = number;
         OBJECT_TO_NPVARIANT (&entry->npobj, *result);
     }
@@ -1718,6 +1838,7 @@ get_entry (NPObject *npobj, int number, NPVariant *result)
 static bool
 Gmp_getProperty (NPObject *npobj, NPIdentifier key, NPVariant *result)
 {
+    TopObject* top = Gmp_getTop (npobj);
     NPUTF8* name;
     int number;
 
@@ -1740,7 +1861,7 @@ Gmp_getProperty (NPObject *npobj, NPIdentifier key, NPVariant *result)
 
 #define CONSTANT(value, string, type)           \
     else if (!strcmp (string, name))            \
-        out_ ## type (value, result);
+        out_ ## type (top, value, result);
 #include "gmp-constants.h"
 
     NPN_MemFree (name);
@@ -1757,7 +1878,7 @@ Gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 #define CONSTANT(value, string, type) +1
 #include "gmp-constants.h"
         ;
-    *value = NPN_MemAlloc (cnt * sizeof (NPIdentifier*));
+    *value = (NPIdentifier*) NPN_MemAlloc (cnt * sizeof (NPIdentifier*));
     *count = cnt;
     cnt = 0;
     for (p = &GmpProperties[1]; *p; p += strlen (p) + 1)
@@ -1770,6 +1891,193 @@ Gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 /*
  * Stack-based script support.
  */
+
+#if 0
+/* Optimize for optimizability only.  */
+
+typedef struct _Heap {
+    struct _Heap* newer;
+    struct _Heap* older;
+    size_t height;
+    size_t size;         /* size in NPVariant structures */
+    size_t largest;/* size of largest available block in this and older heaps */
+    size_t avail;        /* total available in this and older heaps */
+    size_t alloc_since_gc;
+    NPVariant* end;      /* array end (start is end - size) */
+    NPVariant* pointer;  /* point of allocation */
+    unsigned char markbits[];
+} Heap;
+
+typedef struct _Thread {
+    NPObject npobj;
+    Heap* heap;
+    size_t new_heap_size;  /* size in NPVariant structures */
+    NPVariant* pc;
+    NPVariant* pc_end;
+    NPVariant* stack;
+    NPVariant* stack_sp;
+    NPVariant* stack_end;
+    void* tls;             /* to be used with tsearch() */
+} Thread;
+
+static THREAD_LOCAL Thread* thread;
+
+static NPVariant*
+vector_alloc (uint32_t size)
+{
+    Heap* heap = thread->heap;
+    NPVariant* ret;
+    size_t avail, largest, alloc, max;
+
+    for (Heap* heap = thread->heap; heap; heap = heap->older) {
+        if (heap->largest < size)
+            break;
+
+        avail = heap->end - heap->pointer;
+
+        if (avail >= size) {
+
+            /* Success.  */
+            ret = heap->pointer;
+            heap->pointer += size;
+
+            largest = heap->largest;
+            if (largest < avail - size) {
+                largest = avail - size;
+                if (heap->older && heap->older->largest > largest)
+                    largest = heap->older->largest;
+            }
+
+            for (; heap; heap = heap->newer) {
+                if (heap->largest <= largest) {
+                    if (heap->end - heap->pointer > largest)
+                        largest = heap->end - heap->pointer;
+                    heap->largest = largest;
+                }
+                heap->avail -= size;
+            }
+
+            thread->alloc_since_gc += size;
+            return ret;
+        }
+    }
+
+    /* XXX Must garbage-collect if appropriate.  */
+
+    min = 1024;
+    max = 1024*1024;
+    alloc = thread->new_heap_size;
+
+    if (alloc < min)
+        alloc = thread->new_heap_size = min;
+    if (alloc < size)
+        alloc = size;
+
+    heap = (Heap*) NPN_MemAlloc (sizeof *heap + ((alloc + 7) / 8));
+    if (!heap)
+        return 0;
+
+    ret = (NPVariant*) NPN_MemAlloc (alloc * sizeof ret[0]);
+
+    if (!ret) {
+        NPN_MemFree (heap);
+        return 0;
+    }
+    memset (ret, '\0', alloc * sizeof ret[0]);
+
+    avail = alloc - size;
+    largest = avail;
+    if (thread->heap && thread->heap->largest > largest)
+        largest = thread->heap->largest;
+
+    heap->newer   = 0;
+    heap->older   = thread->heap;
+    if (heap->older)
+        heap->older->newer = heap;
+    heap->height  = (heap->older ? heap->older->height + 1 : 0);
+    heap->size    = alloc;
+    heap->largest = largest;
+    heap->avail   = avail;
+    heap->end     = ret + alloc;
+    heap->pointer = ret + size;
+
+    size = thread->new_heap_size * 4;
+    if (size > max)
+        size = max;
+    thread->new_heap_size = size;
+
+    return ret;
+}
+
+static NPObject*
+Thread_allocate (NPP npp, NPClass *aClass)
+{
+    Thread* ret = (Thread*) NPN_MemAlloc (sizeof (Thread));
+#if DEBUG_ALLOC
+    fprintf (stderr, "Thread allocate %p\n", ret);
+#endif  /* DEBUG_ALLOC */
+    if (ret) {
+        memset (ret, '\0', sizeof *ret);
+        NPN_RetainObject (&CONTAINING (TopObject, npclassThread, aClass)
+                          ->npobj);
+    }
+    return &ret->npobj;
+}
+
+static void
+Thread_deallocate (NPObject *npobj)
+{
+    Heap* heap;
+#if DEBUG_ALLOC
+    fprintf (stderr, "Thread deallocate %p\n", npobj);
+#endif  /* DEBUG_ALLOC */
+
+    for (heap = ((Thread*) npobj)->heap; heap;) {
+        for (NPVariant* v = heap->end - heap->size; v < heap->pointer; v++)
+            NPN_ReleaseVariantValue (v);
+
+        if (!heap->older) {
+            NPN_MemFree (heap);
+            break;
+        }
+        heap = heap->older;
+        NPN_MemFree (heap->newer);
+    }
+    TopObject* top = Thread_getTop (npobj);
+    NPN_ReleaseObject (&top->npobj);
+    NPN_MemFree (npobj);
+}
+
+static int
+compare_npstrings (const void* a1, const void* a2)
+{
+    const NPString* s1 = (const NPString*) a1;
+    const NPString* s2 = (const NPString*) a2;
+    uint32_t size = s1->UTF8Length;
+    int ret;
+
+    if (size > s2->UTF8Length)
+        size = s2->UTF8Length;
+    ret = memcmp (s1->UTF8Characters, s2->UTF8Characters, size);
+    if (ret != 0)
+        return ret;
+    if (size < s1->UTF8Length)
+        return 1;
+    if (size < s2->UTF8Length)
+        return -1;
+    return 0;
+}
+
+static bool
+Thread_hasProperty(NPObject *npobj, NPIdentifier name)
+{
+}
+
+static bool
+Thread_getProperty(NPObject *npobj, NPIdentifier name, NPVariant* result)
+{
+}
+#endif
 
 static void
 obj_noop (NPObject *npobj)
@@ -2022,7 +2330,7 @@ Run_invokeDefault (NPObject* npobj,
         switch (opcode) {
 
         case OP_pick:
-            if (init < 1 || !in_size_t (top, &stack[init-1], 1, &temp_size) ||
+            if (init < 1 || !in_size_t (top, &stack[init-1], &temp_size) ||
                 temp_size >= init - 1) {
                 /* XXX should report a few script+stack elts. */
                 NPN_SetException (npobj, "script error");
@@ -2036,7 +2344,7 @@ Run_invokeDefault (NPObject* npobj,
             continue;
 
         case OP_roll:
-            if (init < 1 || !in_size_t (top, &stack[init-1], 1, &temp_size) ||
+            if (init < 1 || !in_size_t (top, &stack[init-1], &temp_size) ||
                 temp_size >= init - 1) {
                 /* XXX should report a few script+stack elts. */
                 NPN_SetException (npobj, "script error");
@@ -2108,7 +2416,7 @@ Run_invokeDefault (NPObject* npobj,
         }
         else if (NPN_GetProperty (top->instance, fun,
                                   NPN_GetStringIdentifier ("length"), &temp)) {
-            ok = in_size_t (top, &temp, 1, &nargs);
+            ok = in_size_t (top, &temp, &nargs);
             NPN_ReleaseVariantValue (&temp);
         }
 
@@ -2387,7 +2695,7 @@ TopObject_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 #endif
         ;
     *count = cnt;
-    *value = NPN_MemAlloc (cnt * sizeof (NPIdentifier*));
+    *value = (NPIdentifier*) NPN_MemAlloc (cnt * sizeof (NPIdentifier*));
     if (!*value)
         return false;
     (*value)[0] = NPN_GetStringIdentifier ("gmp");
