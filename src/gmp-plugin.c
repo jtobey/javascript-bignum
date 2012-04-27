@@ -1428,11 +1428,11 @@ Entry_outLength (NPObject *npobj) {
     return EntryNret[((Entry*) npobj)->number - FIRST_ENTRY];
 }
 
-/* Calls to most functions go through wrap. */
+/* Calls to most functions go through enter. */
 
 static bool
-wrap (TopObject *vTop, int vEntryNumber,
-      const NPVariant *vArgs, uint32_t vArgCount, NPVariant *vResults)
+enter (TopObject *vTop, int vEntryNumber,
+       const NPVariant *vArgs, uint32_t vArgCount, NPVariant *vResults)
 {
     bool __ok = false, __ret = true;
     int vArgNumber = -1;
@@ -1692,7 +1692,7 @@ Entry_invokeDefault (NPObject *npobj,
         out = tuple->array;
     }
 
-    if (!wrap (top, ((Entry*) npobj)->number, args, argCount, out))
+    if (!enter (top, ((Entry*) npobj)->number, args, argCount, out))
         nret = 0;
 
     if (nret == 0)
