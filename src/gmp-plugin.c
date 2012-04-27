@@ -189,10 +189,7 @@ typedef char const* stringz;
     } while (0)
 
 #define DEFINE_IN_NUMBER(type)                                          \
-    static bool                                                         \
-    in_ ## type (TopObject* top, const NPVariant* var,                  \
-                 type* arg) UNUSED;                                     \
-    static bool                                                         \
+    static bool UNUSED                                                  \
     in_ ## type (TopObject* top, const NPVariant* var, type* arg)       \
     {                                                                   \
         if (NPVARIANT_IS_INT32 (*var) &&                                \
@@ -223,10 +220,7 @@ typedef char const* stringz;
     }
 
 #define DEFINE_IN_UNSIGNED(type)                                        \
-    static bool                                                         \
-    in_ ## type (TopObject* top, const NPVariant* var,                  \
-                 type* arg) UNUSED;                                     \
-    static bool                                                         \
+    static bool UNUSED                                                  \
     in_ ## type (TopObject* top, const NPVariant* var, type* arg)       \
     {                                                                   \
         if (NPVARIANT_IS_INT32 (*var) && NPVARIANT_TO_INT32 (*var) >= 0 && \
@@ -306,7 +300,7 @@ del_stringz (stringz arg)
     NPN_MemFree ((char*) arg);
 }
 
-static void
+static void UNUSED
 del_npstring (NPString arg)
 {
     NPN_MemFree ((char*) arg.UTF8Characters);
@@ -323,18 +317,16 @@ out_double (TopObject* top, double value, NPVariant* result)
     return true;
 }
 
-#define DEFINE_OUT_NUMBER(type)                                         \
-    static bool                                                         \
-    out_ ## type (TopObject* top, type value, NPVariant* result) UNUSED; \
-    static bool                                                         \
-    out_ ## type (TopObject* top, type value, NPVariant* result)        \
+#define DEFINE_OUT_NUMBER(Type)                                         \
+    static bool UNUSED                                                  \
+    out_ ## Type (TopObject* top, Type value, NPVariant* result)        \
     {                                                                   \
         if (value == (int32_t) value)                                   \
             INT32_TO_NPVARIANT (value, *result);                        \
         else if (value == (double) value)                               \
             DOUBLE_TO_NPVARIANT ((double) value, *result);              \
         else {                                                          \
-            size_t len = 3 * sizeof (type) + 2;                         \
+            size_t len = 3 * sizeof (Type) + 2;                         \
             NPUTF8* ret = (NPUTF8*) NPN_MemAlloc (len);                 \
             if (ret) {                                                  \
                 if (value >= 0)                                         \
@@ -378,7 +370,7 @@ out_stringz (TopObject* top, stringz value, NPVariant* result)
     return true;
 }
 
-static bool
+static bool UNUSED
 out_npstring (TopObject* top, NPString value, NPVariant* result)
 {
     bool ret = (value.UTF8Characters != 0 || value.UTF8Length == 0);
@@ -607,8 +599,9 @@ make_tuple (TopObject* top, uint32_t size)
 typedef int int_0_or_2_to_62;
 typedef int int_2_to_62;
 typedef int int_abs_2_to_62;
-typedef int obase_mpf;
+typedef int output_base;
 
+/* XXX Should these set top->errmsg? */
 static bool
 in_int_0_or_2_to_62 (TopObject* top, const NPVariant* var, int* arg)
 {
@@ -625,13 +618,13 @@ in_int_2_to_62 (TopObject* top, const NPVariant* var, int* arg)
 #define del_int_2_to_62(arg)
 
 static bool
-in_obase_mpf (TopObject* top, const NPVariant* var, int* arg)
+in_output_base (TopObject* top, const NPVariant* var, int* arg)
 {
     return in_int (top, var, arg) &&
         ((*arg >= -36 && *arg <= -2) ||
          (*arg >= 2 && *arg <= 62));
 }
-#define del_obase_mpf(arg)
+#define del_output_base(arg)
 
 #if NPGMP_MPF
 
@@ -734,10 +727,10 @@ integer_toString (TopObject *top, mpz_ptr mpp, const NPVariant *args,
 {
     int base = 0;
 
-    if (!in_int (top, &args[0], &base))
+    if (argCount < 1)
         base = 10;
 
-    if (base >= -36 && base <= 62 && base != 0 && base != -1 && base != 1) {
+    else if (in_output_base (top, &args[0], &base)) {
         size_t len = mpz_sizeinbase (mpp, base) + 2;
         NPUTF8* s = (NPUTF8*) NPN_MemAlloc (len);
         if (s) {
@@ -1446,7 +1439,7 @@ wrap (TopObject *vTop, int vEntryNumber,
         int Aint_0_or_2_to_62;
         int Aint_2_to_62;
         int Aint_abs_2_to_62;
-        int Aobase_mpf;
+        int Aoutput_base;
         mp_size_t Amp_size_t;
         mp_exp_t Amp_exp_t;
         mp_limb_t Amp_limb_t;
@@ -1669,7 +1662,7 @@ Entry_invokeDefault (NPObject *npobj,
     Tuple* tuple = 0;  /* avoid a warning */
     NPVariant* out;
 
-    if (argCount <= 1)
+    if (nret <= 1)
         out = result;
     else {
         tuple = make_tuple (top, nret);

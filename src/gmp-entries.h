@@ -325,7 +325,7 @@ ENTRY1R2 (mpf_get_d_2exp, "mpf_get_d_2exp", np_mpf_get_d_2exp, double, long, mpf
 ENTRY1R1 (mpf_get_si, "mpf_get_si", np_mpf_get_si, long, mpf_ptr)
 ENTRY1R1 (mpf_get_ui, "mpf_get_ui", np_mpf_get_ui, ulong, mpf_ptr)
 // Usage: var a = mpf_get_str(base,n_digits,x), fraction = a[0], exp = a[1];
-ENTRY3R2 (x_mpf_get_str, "mpf_get_str", np_mpf_get_str, npstring, mp_exp_t, obase_mpf, size_t, mpf_ptr)
+ENTRY3R2 (x_mpf_get_str, "mpf_get_str", np_mpf_get_str, npstring, mp_exp_t, output_base, size_t, mpf_ptr)
 ENTRY3R0 (mpf_add, "mpf_add", np_mpf_add, mpf_ptr, mpf_ptr, mpf_ptr)
 ENTRY3R0 (mpf_add_ui, "mpf_add_ui", np_mpf_add_ui, mpf_ptr, mpf_ptr, ulong)
 ENTRY3R0 (mpf_sub, "mpf_sub", np_mpf_sub, mpf_ptr, mpf_ptr, mpf_ptr)
@@ -372,7 +372,6 @@ ENTRY0R1 (x_randstate, "randstate", np_randstate, npobj)
 ENTRY1R0 (gmp_randinit_default, "gmp_randinit_default", np_gmp_randinit_default, uninit_rand)
 ENTRY1R0 (gmp_randinit_mt, "gmp_randinit_mt", np_gmp_randinit_mt, uninit_rand)
 ENTRY4R0 (gmp_randinit_lc_2exp, "gmp_randinit_lc_2exp", np_gmp_randinit_lc_2exp, uninit_rand, mpz_ptr, ulong, mp_bitcnt_t)
-// Usage: rs=gmp_randinit_lc_2exp_size(size); returns undefined if unsuccessful.
 ENTRY2R1 (x_randinit_lc_2exp_size, "gmp_randinit_lc_2exp_size", np_gmp_randinit_lc_2exp_size, int, uninit_rand, mp_bitcnt_t)
 ENTRY2R0 (gmp_randinit_set, "gmp_randinit_set", np_gmp_randinit_set, uninit_rand, x_gmp_randstate_ptr)
 // gmp_randinit: obsolete and variadic.
