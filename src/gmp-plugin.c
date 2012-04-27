@@ -146,10 +146,10 @@ typedef struct _TopObject {
 #endif
 
 #if NPGMP_SCRIPT
-#if 0
+    NPClass     npclassVector;
+#define Vector_getTop(object) GET_TOP (Vector, object)
     NPClass     npclassThread;
 #define Thread_getTop(object) GET_TOP (Thread, object)
-#endif
     NPClass     npclassRun;  // XXX will go away
     NPObject    npobjRun;    // XXX will go away
 #define Run_getTop(object) CONTAINING (TopObject, npobjRun, object)
@@ -456,6 +456,10 @@ typedef struct _Tuple {
     NPObject npobj;
     size_t nelts;
     NPVariant* array;
+#if NPGMP_SCRIPT
+    struct _Tuple** prev;
+    struct _Tuple* next;
+#endif
 } Tuple;
 
 static NPObject*
@@ -468,9 +472,21 @@ Tuple_allocate (NPP npp, NPClass *aClass)
     if (ret) {
         ret->nelts = 0;
         ret->array = 0;
+#if NPGMP_SCRIPT
+        ret->prev = 0;
+        ret->next = 0;
+#endif
     }
     return &ret->npobj;
 }
+
+#if NPGMP_SCRIPT
+
+static NPVariant* tuple_alloc (uint32_t size);
+static void tuple_free (Tuple* tuple);
+static void retain_for_js (Tuple* tuple);
+
+#else  /* !NPGMP_SCRIPT */
 
 static NPVariant*
 tuple_alloc (uint32_t size)
@@ -496,7 +512,10 @@ tuple_free (Tuple* tuple)
 static void
 retain_for_js (Tuple* tuple)
 {
+    /* Nothing to do.  */
 }
+
+#endif  /* !NPGMP_SCRIPT */
 
 static void
 Tuple_deallocate (NPObject *npobj)
@@ -1885,46 +1904,120 @@ Gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
  * Stack-based script support.
  */
 
-#if 0
+#include <search.h>
+
 /* Optimize for optimizability only.  */
 
 typedef struct _Heap {
-    struct _Heap* newer;
-    struct _Heap* older;
+    struct _Heap* above;
+    struct _Heap* below;
     size_t height;
     size_t size;         /* size in NPVariant structures */
-    size_t largest;/* size of largest available block in this and older heaps */
-    size_t avail;        /* total available in this and older heaps */
-    size_t alloc_since_gc;
+    size_t largest; /* size of largest available block in and below this heap */
+    size_t avail;        /* total available in and below this heap */
     NPVariant* end;      /* array end (start is end - size) */
     NPVariant* pointer;  /* point of allocation */
     unsigned char markbits[];
 } Heap;
 
+typedef struct _Gc {
+    Heap** heaps;  /* ordered by address */
+    size_t nheaps;
+    const void* node;
+} Gc;
+
 typedef struct _Thread {
     NPObject npobj;
     Heap* heap;
-    size_t new_heap_size;  /* size in NPVariant structures */
+    size_t alloc_since_gc;
+    size_t last_heap_size;  /* size in NPVariant structures */
+    Tuple* roots;           /* heap areas pointed to by JavaScript */
     NPVariant* pc;
     NPVariant* pc_end;
     NPVariant* stack;
     NPVariant* stack_sp;
     NPVariant* stack_end;
-    void* tls;             /* to be used with tsearch() */
+    void* tls;              /* to be used with tsearch() */
+    Gc* gc;
 } Thread;
 
 static THREAD_LOCAL Thread* thread;
 
+typedef struct _Property {
+    NPUTF8* key;
+    NPVariant* value;
+} Property;
+
+static int
+compare_properties (const void* a1, const void* a2)
+{
+    const NPUTF8* s1 = ((Property*) a1)->key;
+    const NPUTF8* s2 = ((Property*) a2)->key;
+    return strcmp (s1, s2);
+}
+
+static void
+mark (Gc* gcobj, NPVariant* start, NPVariant* end)
+{
+    /* XXX do something */
+}
+
+static void
+mark_root (const void *nodep, VISIT value, int level)
+{
+    if (value == leaf) {
+        NPVariant* var = ((const Property*) nodep)->value;
+        mark (thread->gc, var, var + 1);
+    }
+}
+
+static void
+gc (void)
+{
+    Heap* heap;
+    size_t nheaps = thread->heap->height + 1;
+    Heap* heaps[nheaps];
+    Gc gcobj = { heaps: heaps, nheaps: nheaps };
+
+    for (heap = thread->heap; heap; heap = heap->below) {
+        memset (heap->markbits, '\0', ((heap->size + 7) / 8));
+        heaps[heap->height] = heap;
+    }
+
+    for (Tuple* tuple = thread->roots; tuple; tuple = tuple->next)
+        mark (&gcobj, tuple->array, tuple->array + tuple->nelts);
+
+    mark (&gcobj, thread->pc, thread->pc_end);
+    mark (&gcobj, thread->stack, thread->stack_sp);
+    twalk (thread->roots, mark_root);
+
+    /* XXX sweep/compact */
+}
+
 static NPVariant*
 vector_alloc (uint32_t size)
 {
-    Heap* heap = thread->heap;
+    Heap* heap;
+    Heap** abovep;
     NPVariant* ret;
-    size_t avail, largest, alloc, max;
+    size_t avail, largest, alloc, min, max;
 
-    for (Heap* heap = thread->heap; heap; heap = heap->older) {
-        if (heap->largest < size)
+    heap = thread->heap;
+    while (1) {
+
+        if (!heap || heap->largest < size) {
+            heap = thread->heap;
+            if (heap &&
+                thread->alloc_since_gc * 2 >  thread->last_heap_size && 
+                heap->avail                >= size                   &&
+                thread->last_heap_size     >= size)
+            {
+                gc ();
+                thread->alloc_since_gc = 0;
+                continue;
+            }
             break;
+        }
 
         avail = heap->end - heap->pointer;
 
@@ -1937,11 +2030,11 @@ vector_alloc (uint32_t size)
             largest = heap->largest;
             if (largest < avail - size) {
                 largest = avail - size;
-                if (heap->older && heap->older->largest > largest)
-                    largest = heap->older->largest;
+                if (heap->below && heap->below->largest > largest)
+                    largest = heap->below->largest;
             }
 
-            for (; heap; heap = heap->newer) {
+            for (; heap; heap = heap->above) {
                 if (heap->largest <= largest) {
                     if (heap->end - heap->pointer > largest)
                         largest = heap->end - heap->pointer;
@@ -1953,17 +2046,18 @@ vector_alloc (uint32_t size)
             thread->alloc_since_gc += size;
             return ret;
         }
-    }
 
-    /* XXX Must garbage-collect if appropriate.  */
+        heap = heap->below;
+    }
 
     min = 1024;
     max = 1024*1024;
-    alloc = thread->new_heap_size;
-
-    if (alloc < min)
-        alloc = thread->new_heap_size = min;
-    if (alloc < size)
+    alloc = min;
+    if (alloc < thread->last_heap_size * 4)
+        alloc = thread->last_heap_size * 4;
+    if (alloc > max)
+        alloc = max;
+    if (alloc < size)  /* XXX should this affect thread->last_heap_size? */
         alloc = size;
 
     heap = (Heap*) NPN_MemAlloc (sizeof *heap + ((alloc + 7) / 8));
@@ -1978,28 +2072,68 @@ vector_alloc (uint32_t size)
     }
     memset (ret, '\0', alloc * sizeof ret[0]);
 
+    thread->last_heap_size = alloc;
     avail = alloc - size;
-    largest = avail;
-    if (thread->heap && thread->heap->largest > largest)
-        largest = thread->heap->largest;
 
-    heap->newer   = 0;
-    heap->older   = thread->heap;
-    if (heap->older)
-        heap->older->newer = heap;
-    heap->height  = (heap->older ? heap->older->height + 1 : 0);
     heap->size    = alloc;
-    heap->largest = largest;
-    heap->avail   = avail;
     heap->end     = ret + alloc;
     heap->pointer = ret + size;
+    heap->above   = 0;
 
-    size = thread->new_heap_size * 4;
-    if (size > max)
-        size = max;
-    thread->new_heap_size = size;
+    /* Move heap to its place in the list ordered by address.  */
+    abovep = &thread->heap;
+    while (*abovep && (*abovep)->end > heap->end) {
+        heap->above = *abovep;
+        (*abovep)->height++;
+        (*abovep)->avail += avail;
+        if ((*abovep)->largest < avail)
+            (*abovep)->largest = avail;
+        abovep = &(*abovep)->below;
+    }
+    heap->below = *abovep;
+    *abovep = heap;
+
+    heap->largest = avail;
+    if (heap->below) {
+        heap->below->above = heap;
+        heap->height = heap->below->height + 1;
+        if (heap->below->largest > avail)
+            heap->largest = heap->below->largest;
+        heap->avail = avail + heap->below->avail;
+    }
+    else {
+        heap->height = 0;
+        heap->avail = avail;
+    }
+
+    thread->alloc_since_gc += size;
 
     return ret;
+}
+
+static NPVariant*
+tuple_alloc (uint32_t size)
+{
+    return vector_alloc (size);
+}
+
+static void
+tuple_free (Tuple* tuple)
+{
+    if (tuple->prev)
+        *tuple->prev = tuple->next;
+    if (tuple->next)
+        tuple->next->prev = tuple->prev;
+}
+
+static void
+retain_for_js (Tuple* tuple)
+{
+    tuple->next = thread->roots;
+    if (tuple->next)
+        tuple->next->prev = &tuple->next;
+    tuple->prev = &thread->roots;
+    thread->roots = tuple;
 }
 
 static NPObject*
@@ -2029,48 +2163,61 @@ Thread_deallocate (NPObject *npobj)
         for (NPVariant* v = heap->end - heap->size; v < heap->pointer; v++)
             NPN_ReleaseVariantValue (v);
 
-        if (!heap->older) {
+        if (!heap->below) {
             NPN_MemFree (heap);
             break;
         }
-        heap = heap->older;
-        NPN_MemFree (heap->newer);
+        heap = heap->below;
+        NPN_MemFree (heap->above);
     }
     TopObject* top = Thread_getTop (npobj);
     NPN_ReleaseObject (&top->npobj);
     NPN_MemFree (npobj);
 }
 
-static int
-compare_npstrings (const void* a1, const void* a2)
+static bool
+Thread_hasProperty(NPObject *npobj, NPIdentifier key)
 {
-    const NPString* s1 = (const NPString*) a1;
-    const NPString* s2 = (const NPString*) a2;
-    uint32_t size = s1->UTF8Length;
-    int ret;
+    NPUTF8* name;
 
-    if (size > s2->UTF8Length)
-        size = s2->UTF8Length;
-    ret = memcmp (s1->UTF8Characters, s2->UTF8Characters, size);
-    if (ret != 0)
-        return ret;
-    if (size < s1->UTF8Length)
-        return 1;
-    if (size < s2->UTF8Length)
-        return -1;
-    return 0;
+    if (!NPN_IdentifierIsString (key))
+        return false;
+    name = NPN_UTF8FromIdentifier (key);
+    return !!tfind (&name, &((Thread*) npobj)->tls, compare_properties);
 }
 
 static bool
-Thread_hasProperty(NPObject *npobj, NPIdentifier name)
+Thread_getProperty(NPObject *npobj, NPIdentifier key, NPVariant* result)
 {
+    if (NPN_IdentifierIsString (key)) {
+        NPUTF8* name = NPN_UTF8FromIdentifier (key);
+        Property* found = (Property*) tfind (&name, &((Thread*) npobj)->tls,
+                                             compare_properties);
+        if (found)
+            return copy_npvariant (npobj, result, found->value);
+    }
+    VOID_TO_NPVARIANT (*result);
+    return true;
 }
 
 static bool
-Thread_getProperty(NPObject *npobj, NPIdentifier name, NPVariant* result)
+Thread_setProperty(NPObject *npobj, NPIdentifier key, const NPVariant* value)
 {
+    return false;  // XXX use tsearch
 }
-#endif
+
+static bool
+Thread_removeProperty(NPObject *npobj, NPIdentifier key)
+{
+    return false;  // XXX use tdelete
+}
+
+static bool
+Thread_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
+{
+    *count = 0;  // XXX use twalk
+    return true;
+}
 
 static void
 obj_noop (NPObject *npobj)
@@ -2522,7 +2669,18 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->npclassRun.removeProperty      = removeProperty_ro;
         ret->npclassRun.enumerate           = Run_enumerate;
 
-        ret->npobjRun._class                 = &ret->npclassRun;
+        ret->npobjRun._class                = &ret->npclassRun;
+
+        ret->npclassThread.structVersion    = NP_CLASS_STRUCT_VERSION;
+        ret->npclassThread.allocate         = Thread_allocate;
+        ret->npclassThread.deallocate       = Thread_deallocate;
+        ret->npclassThread.invalidate       = obj_invalidate;
+        ret->npclassThread.hasMethod        = obj_id_false;
+        ret->npclassThread.hasProperty      = Thread_hasProperty;
+        ret->npclassThread.getProperty      = Thread_getProperty;
+        ret->npclassThread.setProperty      = Thread_setProperty;
+        ret->npclassThread.removeProperty   = Thread_removeProperty;
+        ret->npclassThread.enumerate        = Thread_enumerate;
 #endif
 
         ret->npclassEntry.structVersion     = NP_CLASS_STRUCT_VERSION;
@@ -2726,6 +2884,16 @@ npp_New(NPMIMEType pluginType, NPP instance, uint16_t mode,
     instance->pdata = NPN_CreateObject (instance, &TopObject_npclass);
     if (!instance->pdata)
         return NPERR_OUT_OF_MEMORY_ERROR;
+
+#if NPGMP_SCRIPT
+    thread = (Thread*) NPN_CreateObject
+        (instance, &((TopObject*) instance->pdata)->npclassThread);
+    if (!thread) {
+        NPN_ReleaseObject ((NPObject*) instance->pdata);
+        return NPERR_OUT_OF_MEMORY_ERROR;
+    }
+#endif
+
     return NPERR_NO_ERROR;
 }
 
