@@ -46,33 +46,71 @@
    DONE: every remaining function and macro in the GMP v5.0.4 manual.
 */
 
-#ifndef ENTRY
-# define ENTRY(__nargs, __nret, __string, __id)
+#ifndef ENTRY1R1
+# ifdef ENTRY1
+#  define ENTRY0R1(__name, __string, __id, __r0) \
+    ENTRY0 (1, __string, __id)
+#  define ENTRY1R0(__name, __string, __id, __t0) \
+    ENTRY1 (0, __string, __id, __t0)
+#  define ENTRY1R1(__name, __string, __id, __r0, __t0) \
+    ENTRY1 (1, __string, __id, __t0)
+#  define ENTRY1R2(__name, __string, __id, __r0, __r1, __t0) \
+    ENTRY1 (2, __string, __id, __t0)
+#  define ENTRY2R0(__name, __string, __id, __t0, __t1) \
+    ENTRY2 (0, __string, __id, __t0, __t1)
+#  define ENTRY2R1(__name, __string, __id, __r0, __t0, __t1) \
+    ENTRY2 (1, __string, __id, __t0, __t1)
+#  define ENTRY3R0(__name, __string, __id, __t0, __t1, __t2) \
+    ENTRY3 (0, __string, __id, __t0, __t1, __t2)
+#  define ENTRY3R1(__name, __string, __id, __r0, __t0, __t1, __t2) \
+    ENTRY3 (1, __string, __id, __t0, __t1, __t2)
+#  define ENTRY3R2(__name, __string, __id, __r0, __r1, __t0, __t1, __t2) \
+    ENTRY3 (2, __string, __id, __t0, __t1, __t2)
+#  define ENTRY4R0(__name, __string, __id, __t0, __t1, __t2, __t3) \
+    ENTRY4 (0, __string, __id, __t0, __t1, __t2, __t3)
+#  define ENTRY4R1(__name, __string, __id, __r0, __t0, __t1, __t2, __t3) \
+    ENTRY4 (1, __string, __id, __t0, __t1, __t2, __t3)
+#  define ENTRY5R0(__name, __string, __id, __t0, __t1, __t2, __t3, __t4) \
+    ENTRY5 (0, __string, __id, __t0, __t1, __t2, __t3, __t4)
+# else
+#  define ENTRY0R1(__name, __string, __id, __r0) \
+    ENTRYR1 (0, __string, __id, __r0)
+#  define ENTRY1R0(__name, __string, __id, __t0) \
+    ENTRYR0 (1, __string, __id)
+#  define ENTRY1R1(__name, __string, __id, __r0, __t0) \
+    ENTRYR1 (1, __string, __id, __r0)
+#  define ENTRY1R2(__name, __string, __id, __r0, __r1, __t0) \
+    ENTRYR2 (1, __string, __id, __r0, __r1)
+#  define ENTRY2R0(__name, __string, __id, __t0, __t1) \
+    ENTRYR0 (2, __string, __id)
+#  define ENTRY2R1(__name, __string, __id, __r0, __t0, __t1) \
+    ENTRYR1 (2, __string, __id, __r0)
+#  define ENTRY3R0(__name, __string, __id, __t0, __t1, __t2) \
+    ENTRYR0 (3, __string, __id)
+#  define ENTRY3R1(__name, __string, __id, __r0, __t0, __t1, __t2) \
+    ENTRYR1 (3, __string, __id, __r0)
+#  define ENTRY3R2(__name, __string, __id, __r0, __r1, __t0, __t1, __t2) \
+    ENTRYR2 (3, __string, __id, __r0, __r1)
+#  define ENTRY4R0(__name, __string, __id, __t0, __t1, __t2, __t3) \
+    ENTRYR0 (4, __string, __id)
+#  define ENTRY4R1(__name, __string, __id, __r0, __t0, __t1, __t2, __t3) \
+    ENTRYR1 (4, __string, __id, __r0)
+#  define ENTRY5R0(__name, __string, __id, __t0, __t1, __t2, __t3, __t4) \
+    ENTRYR0 (5, __string, __id)
+# endif
 #endif
 
-#ifndef ENTRY1R1
-# define ENTRY0R1(__name, __string, __id, __r0) ENTRY (0, 1, __string, __id)
-# define ENTRY1R0(__name, __string, __id, __t0) ENTRY (1, 0, __string, __id)
-# define ENTRY1R1(__name, __string, __id, __r0, __t0) \
-    ENTRY (1, 1, __string, __id)
-# define ENTRY1R2(__name, __string, __id, __r0, __r1, __t0) \
-    ENTRY (1, 2, __string, __id)
-# define ENTRY2R0(__name, __string, __id, __t0, __t1) \
-    ENTRY (2, 0, __string, __id)
-# define ENTRY2R1(__name, __string, __id, __r0, __t0, __t1) \
-    ENTRY (2, 1, __string, __id)
-# define ENTRY3R0(__name, __string, __id, __t0, __t1, __t2) \
-    ENTRY (3, 0, __string, __id)
-# define ENTRY3R1(__name, __string, __id, __r0, __t0, __t1, __t2) \
-    ENTRY (3, 1, __string, __id)
-# define ENTRY3R2(__name, __string, __id, __r0, __r1, __t0, __t1, __t2) \
-    ENTRY (3, 2, __string, __id)
-# define ENTRY4R0(__name, __string, __id, __t0, __t1, __t2, __t3) \
-    ENTRY (4, 0, __string, __id)
-# define ENTRY4R1(__name, __string, __id, __r0, __t0, __t1, __t2, __t3) \
-    ENTRY (4, 1, __string, __id)
-# define ENTRY5R0(__name, __string, __id, __t0, __t1, __t2, __t3, __t4) \
-    ENTRY (5, 0, __string, __id)
+#ifndef ENTRYR1
+# define ENTRYR0(__nargs, __string, __id) \
+    ENTRY (__nargs, 0, __string, __id)
+# define ENTRYR1(__nargs, __string, __id, __r0) \
+    ENTRY (__nargs, 1, __string, __id)
+# define ENTRYR2(__nargs, __string, __id, __r0, __r1) \
+    ENTRY (__nargs, 2, __string, __id)
+#endif
+
+#ifndef ENTRY
+# define ENTRY(__nargs, __nret, __string, __id)
 #endif
 
 // http://gmplib.org/manual/Integer-Functions.html
@@ -86,9 +124,8 @@ ENTRY1R0 (mpz_init, "mpz_init", np_mpz_init, uninit_mpz)
 // mpz_inits: unimplemented.
 #endif
 ENTRY2R0 (mpz_init2, "mpz_init2", np_mpz_init2, uninit_mpz, mp_bitcnt_t)
-#if NPGMP_PORTING
-// mpz_clear: called automatically.  Dummy version:
 ENTRY1R0 (mpz_init, "mpz_clear", np_mpz_clear, uninit_mpz)
+#if NPGMP_PORTING
 // mpz_clears: unimplemented.
 #endif
 ENTRY2R0 (mpz_realloc2, "mpz_realloc2", np_mpz_realloc2, mpz_ptr, mp_bitcnt_t)
@@ -250,8 +287,9 @@ ENTRY0R1 (x_mpq, "mpq", np_mpq, npobj)
 ENTRY1R0 (mpq_init, "mpq_init", np_mpq_init, uninit_mpq)
 #if NPGMP_PORTING
 // mpq_inits: unimplemented.
-// mpq_clear: called automatically.  Dummy version:
+#endif
 ENTRY1R0 (mpq_init, "mpq_clear", np_mpq_clear, uninit_mpq)
+#if NPGMP_PORTING
 // mpq_clears: unimplemented.
 #endif
 ENTRY2R0 (mpq_set, "mpq_set", np_mpq_set, mpq_ptr, mpq_ptr)
@@ -297,8 +335,9 @@ ENTRY1R0 (x_mpf_init, "mpf_init", np_mpf_init, defprec_mpf)
 ENTRY2R0 (mpf_init2, "mpf_init2", np_mpf_init2, uninit_mpf, mp_bitcnt_t)
 #if NPGMP_PORTING
 // mpf_inits: unimplemented.
-// mpf_clear: called automatically.  Dummy version:
+#endif
 ENTRY1R0 (x_mpf_clear, "mpf_clear", np_mpf_clear, uninit_mpf)
+#if NPGMP_PORTING
 // mpf_clears: unimplemented.
 #endif
 ENTRY1R1 (mpf_get_prec, "mpf_get_prec", np_mpf_get_prec, mp_bitcnt_t, mpf_ptr)
@@ -375,7 +414,6 @@ ENTRY4R0 (gmp_randinit_lc_2exp, "gmp_randinit_lc_2exp", np_gmp_randinit_lc_2exp,
 ENTRY2R1 (x_randinit_lc_2exp_size, "gmp_randinit_lc_2exp_size", np_gmp_randinit_lc_2exp_size, int, uninit_rand, mp_bitcnt_t)
 ENTRY2R0 (gmp_randinit_set, "gmp_randinit_set", np_gmp_randinit_set, uninit_rand, x_gmp_randstate_ptr)
 // gmp_randinit: obsolete and variadic.
-// gmp_randclear: called automatically.  Dummy version:
 ENTRY1R0 (gmp_randinit_default, "gmp_randclear", np_gmp_randclear, uninit_rand)
 ENTRY2R0 (gmp_randseed, "gmp_randseed", np_gmp_randseed, x_gmp_randstate_ptr, mpz_ptr)
 ENTRY2R0 (gmp_randseed_ui, "gmp_randseed_ui", np_gmp_randseed_ui, x_gmp_randstate_ptr, ulong)
@@ -421,6 +459,15 @@ ENTRY1R1 (op_yield, "yield", np_yield, npvar, stack)
 #endif  /* NPGMP_SCRIPT */
 
 #undef ENTRY
+#undef ENTRY0
+#undef ENTRY1
+#undef ENTRY2
+#undef ENTRY3
+#undef ENTRY4
+#undef ENTRY5
+#undef ENTRYR0
+#undef ENTRYR1
+#undef ENTRYR2
 #undef ENTRY0R1
 #undef ENTRY1R0
 #undef ENTRY1R1
