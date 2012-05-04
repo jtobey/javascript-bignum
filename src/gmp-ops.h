@@ -2,6 +2,5 @@
 OP (roll)
 OP (pick)
 OP (drop)
-OP (dump)
-OP (call)
+OP (quote)
 #undef OP

@@ -4,11 +4,6 @@
 
    * Document usage.
 
-   * Why does this return undefined:
-        var rs = gmp.randstate();
-        gmp.gmp_randinit_lc_2exp_size(rs, 64);
-        return gmp.gmp_urandomb_ui(rs, 100);
-
    * Reliable crash on reload test.html on FF 11 OOPP.  Retest and try
      to run plugin_container under Valgrind.
 
@@ -32,13 +27,19 @@ typedef __gmp_randstate_struct* x_gmp_randstate_ptr;
 #include <stdio.h>
 #include <stddef.h>
 #include <math.h>
+#include <assert.h>
+#include <stdarg.h>
 
 #if __GNUC__
 #define UNUSED __attribute__ ((unused))
 #define THREAD_LOCAL1 __thread
+#define UNLIKELY(x) __builtin_expect ((x) != 0, 0)
+#define LIKELY(x)   __builtin_expect ((x) != 0, 1)
 #else
 #define UNUSED
 #define THREAD_LOCAL1
+#define UNLIKELY(x) (x)
+#define LIKELY(x)   (x)
 #endif
 
 #ifndef THREAD_LOCAL
@@ -95,13 +96,26 @@ static NPNetscapeFuncs* sBrowserFuncs;
 #define NPN_SetValue(npp, var, value) sBrowserFuncs->setvalue (npp, var, value)
 #define NPN_ReleaseVariantValue(var)  sBrowserFuncs->releasevariantvalue (var)
 
-#define NPN_GetProperty(npp, obj, propertyName, result) \
-    sBrowserFuncs->getproperty (npp, obj, propertyName, result)
-
+#define NPN_HasMethod(npp, obj, name) \
+    sBrowserFuncs->hasmethod (npp, obj, name)
+#define NPN_Invoke(npp, obj, name, args, argCount, result) \
+    sBrowserFuncs->invoke (npp, obj, name, args, argCount, result)
 #define NPN_InvokeDefault(npp, obj, args, argCount, result) \
     sBrowserFuncs->invokeDefault (npp, obj, args, argCount, result)
+#define NPN_HasProperty(npp, obj, name) \
+    sBrowserFuncs->hasproperty (npp, obj, name)
+#define NPN_GetProperty(npp, obj, propertyName, result) \
+    sBrowserFuncs->getproperty (npp, obj, propertyName, result)
+#define NPN_SetProperty(npp, obj, propertyName, value) \
+    sBrowserFuncs->setproperty (npp, obj, propertyName, value)
+#define NPN_RemoveProperty(npp, obj, propertyName) \
+    sBrowserFuncs->removeproperty (npp, obj, propertyName)
+#define NPN_Enumerate(npp, obj, identifier, count) \
+    sBrowserFuncs->enumerate (npp, obj, identifier, count)
+#define NPN_Construct(npp, obj, args, argCount, result) \
+    sBrowserFuncs->construct (npp, obj, args, argCount, result)
 
-static NPIdentifier ID_toString;
+static NPIdentifier ID_toString, ID_length;
 /* XXX Let's do valueOf, too. */
 
 
@@ -109,61 +123,262 @@ static NPIdentifier ID_toString;
  * Top-level per-instance structure.
  */
 
-#define GET_TOP(__class, __object)                                      \
-    CONTAINING (TopObject, npclass ## __class, (__object)->_class)
+#define GET_TOP(__class, __object)                      \
+    CONTAINING (TopObject, __class, (__object)->_class)
+
+#define GET_TYPE(__top, __object)                               \
+    ((const char*) (__object)->_class - (const char*) (__top))
+
+#define IS_INSTANCE_OBJECT(__top, __object)             \
+    (GET_TYPE (__top, __object) >= 0 &&                 \
+     GET_TYPE (__top, __object) < sizeof (TopObject))
+
+typedef struct _Class {
+    NPClass     npclass;
+    size_t      topOffset;
+} Class;
 
 typedef struct _TopObject {
     NPObject    npobj;
     NPP         instance;
     bool        destroying;
     const char* errmsg;
-    NPClass     npclassGmp;
-    NPObject    npobjGmp;
-#define Gmp_getTop(object) CONTAINING (TopObject, npobjGmp, object)
-    NPClass     npclassEntry;
+    NPObject*   npobjGmp;
+
+    Class       Gmp;
+#define Gmp_getTop(object) GET_TOP (Gmp, object)
+#define TYPE_Gmp (offsetof (TopObject, Gmp))
+
+    Class       Entry;
 #define Entry_getTop(object) GET_TOP (Entry, object)
-    NPClass     npclassTuple;
+#define TYPE_Entry (offsetof (TopObject, Entry))
+
+    Class       Tuple;
 #define Tuple_getTop(object) GET_TOP (Tuple, object)
-    NPClass     npclassInteger;
+#define TYPE_Tuple (offsetof (TopObject, Tuple))
+
+    Class       Integer;
 #define Integer_getTop(object) GET_TOP (Integer, object)
+#define TYPE_Integer (offsetof (TopObject, Integer))
 
 #if NPGMP_MPQ
-    NPClass     npclassMpzRef;
+    Class       MpzRef;
 #define MpzRef_getTop(object) GET_TOP (MpzRef, object)
-    NPClass     npclassRational;
+#define TYPE_MpzRef (offsetof (TopObject, MpzRef))
+    Class       Rational;
 #define Rational_getTop(object) GET_TOP (Rational, object)
+#define TYPE_Rational (offsetof (TopObject, Rational))
 #endif
 
 #if NPGMP_RAND
-    NPClass     npclassRand;
+    Class       Rand;
 #define Rand_getTop(object) GET_TOP (Rand, object)
+#define TYPE_Rand (offsetof (TopObject, Rand))
 #endif
 
 #if NPGMP_MPF
-    NPClass     npclassFloat;
+    Class       Float;
 #define Float_getTop(object) GET_TOP (Float, object)
+#define TYPE_Float (offsetof (TopObject, Float))
     mp_bitcnt_t default_mpf_prec;  /* Emulate mpf_set_default_prec. */
 #endif
 
 #if NPGMP_SCRIPT
-    NPClass     npclassVector;
-#define Vector_getTop(object) GET_TOP (Vector, object)
-    NPClass     npclassThread;
+    Class       Thread;
 #define Thread_getTop(object) GET_TOP (Thread, object)
-    NPClass     npclassRun;  // XXX will go away
-    NPObject    npobjRun;    // XXX will go away
-#define Run_getTop(object) CONTAINING (TopObject, npobjRun, object)
+#define TYPE_Thread (offsetof (TopObject, Thread))
+    Class       Stack;
+#define Stack_getTop(object) GET_TOP (Stack, object)
+#define TYPE_Stack (offsetof (TopObject, Stack))
+    Class       Root;
+#define Root_getTop(object) GET_TOP (Root, object)
+#define TYPE_Root (offsetof (TopObject, Root))
+    NPObject*   npobjOp;
+    Class       Op;
+#define Op_getTop(object) GET_TOP (Op, object)
+#define TYPE_Op (offsetof (TopObject, Op))
 #endif
 
 } TopObject;
 
+static TopObject* get_top (NPObject* npobj);
+
+
+/*
+ * Semantics of NPN_SetException are not well defined.  Wrap it.
+ */
+
+static bool
+set_exception (NPObject* npobj, const NPUTF8* message, NPVariant* result,
+               bool ret)
+{
+    if (result)
+        VOID_TO_NPVARIANT (*result);
+    if (npobj)
+        NPN_SetException (npobj, message);
+    return ret;
+}
+#undef NPN_SetException  /* Prevent further use. */
+
+static const char OOM[] = "out of memory";
+
+static void
+free_errmsg (const char* errmsg)
+{
+    if (errmsg && errmsg != OOM)
+        NPN_MemFree ((char*) errmsg);
+}
+
+static void
+vraisef (NPObject* npobj, const char* format, va_list ap)
+{
+    TopObject* top = get_top (npobj);
+    if (top) {
+        free_errmsg (top->errmsg);
+        int needed = vsnprintf (0, 0, format, ap) + 1;
+        char* buffer = (char*) NPN_MemAlloc (needed);
+        if (buffer) {
+            vsnprintf (buffer, needed, format, ap);
+            top->errmsg = buffer;
+        }
+        else
+            top->errmsg = OOM;
+    }
+    else {
+        fprintf (stderr, "Uncaught: ");
+        vfprintf (stderr, format, ap);
+    }
+}
+
+static void
+raisef (NPObject* npobj, const char* format, ...)
+{
+    va_list ap;
+
+    va_start (ap, format);
+    vraisef (npobj, format, ap);
+    va_end (ap);
+}
+
+static void
+raise_oom (NPObject* npobj)
+{
+    TopObject* top = get_top (npobj);
+    if (top && !top->errmsg)
+        top->errmsg = OOM;
+    else
+        fputs (OOM, stderr);
+}
+
+static bool
+consume_ex (TopObject* top, NPObject* npobj, NPVariant* result, bool ret)
+{
+    ret = set_exception (npobj ?: (NPObject*) top, top->errmsg, result, ret);
+    free_errmsg (top->errmsg);
+    top->errmsg = 0;
+    return ret;
+}
+
+/* check_ex: Throw an exception to JavaScript if top->errmsg has been
+   set (by raisef or raise_oom) since the last call to check_ex().
+   Return a boolean value to be returned from the current NPClass
+   function.  NPOBJ defaults to TOP.  RESULT should be the current
+   function's result argument, or null if not applicable.  RET should
+   be true, except in cases where the current NPClass function would
+   normally return false, such as hasMethod where the method does not
+   exist.  */
+static inline bool
+check_ex (TopObject* top, NPObject* npobj, NPVariant* result, bool ret)
+{
+    if (top->errmsg)
+        return consume_ex (top, npobj, result, ret);
+    return ret;
+}
+
+static bool
+vthrowf (NPObject* npobj, NPVariant* result, bool ret,
+         const char* format, va_list ap)
+{
+    vraisef (npobj, format, ap);
+    return consume_ex (get_top (npobj), npobj, result, ret);
+}
+
+static bool
+throwf (NPObject* npobj, NPVariant* result, bool ret, const char* format, ...)
+{
+    va_list ap;
+
+    va_start (ap, format);
+    ret = vthrowf (npobj, result, ret, format, ap);
+    va_end (ap);
+    return ret;
+}
+
+static bool
+oom (NPObject* npobj, NPVariant* result, bool ret)
+{
+    raise_oom (npobj);
+    return consume_ex (get_top (npobj), npobj, result, ret);
+}
+
 
 /*
  * Argument conversion.
+ *
+ * bool in_TYPE (TopObject* TOP, const NPVariant* VAR, TYPE* ARG)
+ * Converts *VAR to TYPE storing the result in *ARG.  Assumes *VAR
+ * will outlive ARG, so avoids copying and reference counting if
+ * possible.  Returns true on success, else sets error and returns
+ * false.
+ *
+ * void del_TYPE (TYPE ARG)
+ * Frees any resources allocated by a previous call to in_TYPE.
+ *
+ * bool out_TYPE (TopObject* TOP, TYPE VALUE, NPVariant* RESULT)
+ * Converts VALUE to NPVariant storing the result in *RESULT.  Returns
+ * true on success, else sets error and returns false.
+ *
+ * bool outdel_TYPE (TopObject* TOP, TYPE VALUE, NPVariant* RESULT)
+ * Equivalent to (out_TYPE (TOP, VALUE, RESULT) ? (del_TYPE (VALUE),
+ * true) : false) but outdel_stringz avoids copying.
  */
 
+/* Single-token aliases required for preprocessor magic.  */
 typedef unsigned long ulong;
 typedef char const* stringz;
+
+/* double <=> NPVariantType_{Double|Int32} */
+
+static bool UNUSED
+in_double (TopObject* top, const NPVariant* var, double* arg)
+{
+    if (NPVARIANT_IS_DOUBLE (*var))
+        *arg = NPVARIANT_TO_DOUBLE (*var);
+    else if (NPVARIANT_IS_INT32 (*var))
+        *arg = (double) NPVARIANT_TO_INT32 (*var);
+    else {
+        raisef ((NPObject*) top, "not a number");
+        return false;
+    }
+    return true;
+}
+
+static inline void UNUSED del_double (double arg) {}
+
+static bool UNUSED
+out_double (TopObject* top, double value, NPVariant* result)
+{
+    DOUBLE_TO_NPVARIANT (value, *result);
+    return true;
+}
+
+static inline bool UNUSED
+outdel_double (TopObject* top, double value, NPVariant* result)
+{
+    return out_double (top, value, result);
+}
+
+/* C integer types <=> NPVariantType_{Double|Int32|String} */
 
 #define PARSE_UNSIGNED(top, type, arg, start, end)                      \
     do {                                                                \
@@ -173,22 +388,22 @@ typedef char const* stringz;
         const NPUTF8* e = (end);                                        \
                                                                         \
         if (s == e) {                                                   \
-            t->errmsg = "invalid " #type;                               \
+            raisef ((NPObject*) t, "invalid %s", #type);                \
             return false;                                               \
         }                                                               \
         *a = 0;                                                         \
         while (s < e) {                                                 \
-            if (*s < '0' || *s > '9') {                                 \
-                t->errmsg = "invalid " #type;                           \
+            if (*s < '0' || *s > '9' ||                                 \
+                *a * 2 < *a || *a * 4 < *a * 2 || *a * 8 < *a * 4 ||    \
+                *a * 10 + (*s - '0') < *a * 8) {                        \
+                raisef ((NPObject*) t, "invalid %s", #type);            \
                 return false;                                           \
             }                                                           \
-            /* XXX should check for overflow.  */                       \
-            *a *= 10;                                                   \
-            *a += *s++ - '0';                                           \
+            *a = *a * 10 + (*s - '0');                                  \
         }                                                               \
     } while (0)
 
-#define DEFINE_IN_NUMBER(type)                                          \
+#define DEFINE_IN_SIGNED(type)                                          \
     static bool UNUSED                                                  \
     in_ ## type (TopObject* top, const NPVariant* var, type* arg)       \
     {                                                                   \
@@ -213,7 +428,7 @@ typedef char const* stringz;
             *arg *= sign;                                               \
         }                                                               \
         else {                                                          \
-            top->errmsg = "invalid " #type;                             \
+            raisef ((NPObject*) top, "invalid %s", #type);              \
             return false;                                               \
         }                                                               \
         return true;                                                    \
@@ -238,86 +453,18 @@ typedef char const* stringz;
             PARSE_UNSIGNED (top, type, arg, start, end);                \
         }                                                               \
         else {                                                          \
-            top->errmsg = "invalid " #type;                             \
+            raisef ((NPObject*) top, "invalid %s", #type);              \
             return false;                                               \
         }                                                               \
         return true;                                                    \
     }
 
-DEFINE_IN_NUMBER (int)
-DEFINE_IN_NUMBER (long)
-DEFINE_IN_UNSIGNED (ulong)
-DEFINE_IN_UNSIGNED (size_t)
-
-#define del_int(arg)
-#define del_long(arg)
-#define del_ulong(arg)
-#define del_size_t(arg)
-
-static bool
-in_double (TopObject* top, const NPVariant* var, double* arg)
-{
-    if (NPVARIANT_IS_DOUBLE (*var))
-        *arg = NPVARIANT_TO_DOUBLE (*var);
-    else if (NPVARIANT_IS_INT32 (*var))
-        *arg = (double) NPVARIANT_TO_INT32 (*var);
-    else {
-        top->errmsg = "not a number";
-        return false;
-    }
-    return true;
-}
-
-#define del_double(arg)
-
-/* Chrome does not terminate its NPString with NUL.  Cope.  */
-
-static bool
-in_stringz (TopObject* top, const NPVariant* var, stringz* arg)
-{
-    const NPString* npstr;
-    NPUTF8* str;
-
-    if (!NPVARIANT_IS_STRING (*var)) {
-        top->errmsg = "not a string";
-        return false;
-    }
-    npstr = &NPVARIANT_TO_STRING (*var);
-    str = (NPUTF8*) NPN_MemAlloc (npstr->UTF8Length + 1);
-    if (!str) {
-        top->errmsg = "out of memory";
-        return false;
-    }
-    *arg = str;
-    strncpy (str, npstr->UTF8Characters, npstr->UTF8Length);
-    str[npstr->UTF8Length] = '\0';
-    return true;
-}
-
-static void
-del_stringz (stringz arg)
-{
-    NPN_MemFree ((char*) arg);
-}
-
-static void UNUSED
-del_npstring (NPString arg)
-{
-    NPN_MemFree ((char*) arg.UTF8Characters);
-}
-
-/*
- * Return value conversion.
- */
-
-static bool
-out_double (TopObject* top, double value, NPVariant* result)
-{
-    DOUBLE_TO_NPVARIANT (value, *result);
-    return true;
-}
-
 #define DEFINE_OUT_NUMBER(Type)                                         \
+    static inline void UNUSED                                           \
+    del_ ## Type (Type arg)                                             \
+    {                                                                   \
+    }                                                                   \
+                                                                        \
     static bool UNUSED                                                  \
     out_ ## Type (TopObject* top, Type value, NPVariant* result)        \
     {                                                                   \
@@ -336,39 +483,123 @@ out_double (TopObject* top, double value, NPVariant* result)
                 STRINGN_TO_NPVARIANT (ret, len, *result);               \
             }                                                           \
             else {                                                      \
-                top->errmsg = "out of memory";                          \
+                raise_oom ((NPObject*) top);                            \
                 VOID_TO_NPVARIANT (*result);                            \
                 return false;                                           \
             }                                                           \
         }                                                               \
         return true;                                                    \
+    }                                                                   \
+    static inline bool UNUSED                                           \
+    outdel_ ## Type (TopObject* top, Type value, NPVariant* result)     \
+    {                                                                   \
+        return out_ ## Type (top, value, result);                       \
     }
 
-DEFINE_OUT_NUMBER(ulong)
-DEFINE_OUT_NUMBER(long)
-DEFINE_OUT_NUMBER(int)
-DEFINE_OUT_NUMBER(size_t)
+#define DEFINE_SIGNED(Type)   DEFINE_IN_SIGNED (Type)   DEFINE_OUT_NUMBER (Type)
+#define DEFINE_UNSIGNED(Type) DEFINE_IN_UNSIGNED (Type) DEFINE_OUT_NUMBER (Type)
 
-static bool
-out_Bool (TopObject* top, int value, NPVariant* result)
+DEFINE_SIGNED (int)
+DEFINE_SIGNED (long)
+DEFINE_UNSIGNED (ulong)
+DEFINE_UNSIGNED (size_t)
+
+/* bool <=> NPVariantType_Bool */
+
+static bool UNUSED
+in_Bool (TopObject* top, const NPVariant* var, bool* arg)
+{
+    if (!NPVARIANT_IS_BOOLEAN (*var)) {
+        raisef ((NPObject*) top, "not a boolean");
+        return false;
+    }
+    *arg = NPVARIANT_TO_BOOLEAN (*var);
+    return true;
+}
+
+static inline void UNUSED del_Bool (bool arg) {}
+
+static bool UNUSED
+out_Bool (TopObject* top, bool value, NPVariant* result)
 {
     BOOLEAN_TO_NPVARIANT (value, *result);
     return true;
 }
+
+static inline bool UNUSED
+outdel_Bool (TopObject* top, bool value, NPVariant* result)
+{
+    return out_Bool (top, value, result);
+}
+
+/* 0-terminated string <=> NPVariantType_String */
+
+/* Chrome does not terminate its NPString with NUL.  Hence the need
+   for del_* and outdel_*.  */
+
+static bool UNUSED
+in_stringz (TopObject* top, const NPVariant* var, stringz* arg)
+{
+    const NPString* npstr;
+    NPUTF8* str;
+
+    if (!NPVARIANT_IS_STRING (*var)) {
+        raisef ((NPObject*) top, "not a string");
+        return false;
+    }
+    npstr = &NPVARIANT_TO_STRING (*var);
+    str = (NPUTF8*) NPN_MemAlloc (npstr->UTF8Length + 1);
+    if (!str) {
+        raise_oom ((NPObject*) top);
+        return false;
+    }
+    *arg = str;
+    strncpy (str, npstr->UTF8Characters, npstr->UTF8Length);
+    str[npstr->UTF8Length] = '\0';
+    return true;
+}
+
+static inline void UNUSED
+del_stringz (stringz arg)
+{
+    NPN_MemFree ((char*) arg);
+}
  
-static bool
+static bool UNUSED
 out_stringz (TopObject* top, stringz value, NPVariant* result)
 {
     size_t len = strlen (value);
     NPUTF8* ret = (NPUTF8*) NPN_MemAlloc (len + 1);
     if (!ret) {
-        top->errmsg = "out of memory";
+        raise_oom ((NPObject*) top);
         return false;
     }
     memcpy (ret, value, len + 1);
     STRINGN_TO_NPVARIANT (ret, len, *result);
     return true;
 }
+
+static inline bool UNUSED
+outdel_stringz (TopObject* top, stringz value, NPVariant* result)
+{
+    STRINGZ_TO_NPVARIANT (value, *result);
+    return true;
+}
+
+/* NPString <=> NPVariantType_String */
+
+static bool UNUSED
+in_npstring (TopObject* top, const NPVariant* var, NPString* arg)
+{
+    if (!NPVARIANT_IS_STRING (*var)) {
+        raisef ((NPObject*) top, "not a string");
+        return false;
+    }
+    *arg = NPVARIANT_TO_STRING (*var);
+    return true;
+}
+
+static inline void UNUSED del_npstring (NPString arg) {}
 
 static bool UNUSED
 out_npstring (TopObject* top, NPString value, NPVariant* result)
@@ -378,12 +609,33 @@ out_npstring (TopObject* top, NPString value, NPVariant* result)
         STRINGN_TO_NPVARIANT (value.UTF8Characters, value.UTF8Length, *result);
     else {
         VOID_TO_NPVARIANT (*result);
-        top->errmsg = "out of memory";
+        raise_oom ((NPObject*) top);
     }
     return ret;
 }
 
-static bool
+static inline bool UNUSED
+outdel_npstring (TopObject* top, NPString value, NPVariant* result)
+{
+    return out_npstring (top, value, result);
+}
+
+/* NPObject* <=> NPVariantType_Object */
+
+static bool UNUSED
+in_npobj (TopObject* top, const NPVariant* var, NPObject** arg)
+{
+    if (!NPVARIANT_IS_OBJECT (*var)) {
+        raisef ((NPObject*) top, "not an object");
+        return false;
+    }
+    *arg = NPVARIANT_TO_OBJECT (*var);
+    return true;
+}
+
+static inline void UNUSED del_npobj (NPObject* arg) {}
+
+static bool UNUSED
 out_npobj (TopObject* top, NPObject* value, NPVariant* result)
 {
     if (value)
@@ -394,38 +646,48 @@ out_npobj (TopObject* top, NPObject* value, NPVariant* result)
     return true;
 }
 
+static inline bool UNUSED
+outdel_npobj (TopObject* top, NPObject* value, NPVariant* result)
+{
+    return out_npobj (top, value, result);
+}
+
+
 /*
  * Generic NPClass methods.
  */
 
-static bool
+static void UNUSED
+obj_noop (NPObject *npobj)
+{
+}
+
+static bool UNUSED
 obj_id_false(NPObject *npobj, NPIdentifier name)
 {
     return false;
 }
 
-static bool
+static bool UNUSED
 obj_id_var_void(NPObject *npobj, NPIdentifier name, NPVariant *result)
 {
     VOID_TO_NPVARIANT (*result);
     return true;
 }
 
-static bool
+static bool UNUSED
 setProperty_ro(NPObject *npobj, NPIdentifier name, const NPVariant *value)
 {
-    NPN_SetException (npobj, "read-only object");
-    return true;
+    return set_exception (npobj, "read-only object", 0, true);
 }
 
-static bool
+static bool UNUSED
 removeProperty_ro(NPObject *npobj, NPIdentifier name)
 {
-    NPN_SetException (npobj, "read-only object");
-    return true;
+    return set_exception (npobj, "read-only object", 0, true);
 }
 
-static bool
+static bool UNUSED
 enumerate_empty(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 {
     *value = 0;
@@ -433,13 +695,13 @@ enumerate_empty(NPObject *npobj, NPIdentifier **value, uint32_t *count)
     return true;
 }
 
-static bool
+static bool UNUSED
 hasMethod_only_toString(NPObject *npobj, NPIdentifier name)
 {
     return name == ID_toString;
 }
 
-static void
+static void UNUSED
 obj_invalidate (NPObject *npobj)
 {
 #if DEBUG_ALLOC
@@ -454,12 +716,8 @@ obj_invalidate (NPObject *npobj)
 
 typedef struct _Tuple {
     NPObject npobj;
-    size_t nelts;
-    NPVariant* array;
-#if NPGMP_SCRIPT
-    struct _Tuple** prev;
-    struct _Tuple* next;
-#endif
+    NPVariant* start;
+    NPVariant* end;
 } Tuple;
 
 static NPObject*
@@ -470,23 +728,18 @@ Tuple_allocate (NPP npp, NPClass *aClass)
     fprintf (stderr, "Tuple allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
     if (ret) {
-        ret->nelts = 0;
-        ret->array = 0;
-#if NPGMP_SCRIPT
-        ret->prev = 0;
-        ret->next = 0;
-#endif
+        NPN_RetainObject ((NPObject*) CONTAINING (TopObject, Tuple, aClass));
+        ret->start = 0;
+        ret->end = 0;
     }
     return &ret->npobj;
 }
 
-#if NPGMP_SCRIPT
-
 static NPVariant* tuple_alloc (uint32_t size);
 static void tuple_free (Tuple* tuple);
-static void retain_for_js (Tuple* tuple);
+static bool retain_for_js (TopObject* top, NPObject* npobj);
 
-#else  /* !NPGMP_SCRIPT */
+#if !NPGMP_SCRIPT  /* Script allocation is in a special heap.  */
 
 static NPVariant*
 tuple_alloc (uint32_t size)
@@ -499,20 +752,16 @@ tuple_alloc (uint32_t size)
 static void
 tuple_free (Tuple* tuple)
 {
-    size_t i;
-#if DEBUG_ALLOC
-    fprintf (stderr, "Tuple deallocate %p\n", npobj);
-#endif  /* DEBUG_ALLOC */
-    for (i = tuple->nelts; i > 0; )
-        NPN_ReleaseVariantValue (&tuple->array[--i]);
-    if (tuple->array)
-        NPN_MemFree (tuple->array);
+    for (NPVariant* v = tuple->start; v < tuple->end; v++)
+        NPN_ReleaseVariantValue (v);
+    if (tuple->start)
+        NPN_MemFree (tuple->start);
 }
 
-static void
-retain_for_js (Tuple* tuple)
+static bool
+retain_for_js (TopObject* top, NPObject* npobj)
 {
-    /* Nothing to do.  */
+    return true;
 }
 
 #endif  /* !NPGMP_SCRIPT */
@@ -523,28 +772,38 @@ Tuple_deallocate (NPObject *npobj)
 #if DEBUG_ALLOC
     fprintf (stderr, "Tuple deallocate %p\n", npobj);
 #endif  /* DEBUG_ALLOC */
+    TopObject* top = Tuple_getTop (npobj);
+    NPN_ReleaseObject ((NPObject*) top);
     tuple_free ((Tuple*) npobj);
     NPN_MemFree (npobj);
 }
 
-static int32_t
-tuple_property_number (NPIdentifier key)
+static size_t
+Tuple_length (Tuple* tuple)
+{
+    return tuple->end - tuple->start;
+}
+
+#define NOT_INDEX ((uint32_t) -1)
+
+static uint32_t
+id_to_index (NPIdentifier key)
 {
     if (NPN_IdentifierIsString (key)) {
-        if (key == NPN_GetStringIdentifier ("length"))
-            return -1;
-        return -2;
+        // XXX could try converting string to uint32_t.
+        return NOT_INDEX;
     }
-    return NPN_IntFromIdentifier (key);
+    return (uint32_t) NPN_IntFromIdentifier (key);
 }
 
 static bool
 Tuple_hasProperty(NPObject *npobj, NPIdentifier key)
 {
-    int32_t n = tuple_property_number (key);
-    return n == -1 || n < ((Tuple*) npobj)->nelts;
+    return key == ID_length ||
+        id_to_index (key) < Tuple_length ((Tuple*) npobj);
 }
 
+/* Return true if copy SRC to DEST, else set errmsg.  */
 static bool
 copy_npvariant (NPObject* npobj, NPVariant* dest, const NPVariant* src)
 {
@@ -552,7 +811,7 @@ copy_npvariant (NPObject* npobj, NPVariant* dest, const NPVariant* src)
         uint32_t len = NPVARIANT_TO_STRING (*src).UTF8Length;
         NPUTF8* s = (NPUTF8*) NPN_MemAlloc (len);
         if (!s) {
-            NPN_SetException (npobj, "out of memory");
+            raise_oom (npobj);
             return false;
         }
         memcpy (s, NPVARIANT_TO_STRING (*src).UTF8Characters, len);
@@ -567,41 +826,43 @@ copy_npvariant (NPObject* npobj, NPVariant* dest, const NPVariant* src)
 }
 
 static bool
-Tuple_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
+tuple_getProperty (NPObject *npobj, NPIdentifier key, NPVariant *result)
 {
     Tuple* tuple = (Tuple*) npobj;
-    int32_t number = tuple_property_number (key);
+    size_t len = Tuple_length (tuple);
 
-    if (number == -1)  /* length */
-        INT32_TO_NPVARIANT (tuple->nelts, *result);
-    else if (number < 0 || number >= tuple->nelts)
-        VOID_TO_NPVARIANT (*result);
-    else
-        copy_npvariant (npobj, result, &tuple->array[number]);
+    if (key == ID_length)
+        DOUBLE_TO_NPVARIANT (len, *result);
+    else {
+        uint32_t i = id_to_index (key);
+        if (i == NOT_INDEX)
+            return false;  /* KEY could name a subclass property.  */
+        if (i < len)
+            (void) copy_npvariant (npobj, result, &tuple->start[i]);
+        else
+            VOID_TO_NPVARIANT (*result);
+    }
     return true;
 }
 
 static bool
-Tuple_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
+Tuple_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
 {
-    Tuple* tuple = (Tuple*) npobj;
-    uint32_t i;
-
-    *count = tuple->nelts;
-    *value = (NPIdentifier*) NPN_MemAlloc (*count * sizeof (NPIdentifier*));
-    for (i = 0; i < tuple->nelts; i++)
-        (*value)[i] = NPN_GetIntIdentifier (i);
-    return true;
+    if (!tuple_getProperty (npobj, key, result))
+        VOID_TO_NPVARIANT (*result);
+    return check_ex (Tuple_getTop (npobj), npobj, result, true);
 }
 
 static Tuple*
 make_tuple (TopObject* top, uint32_t size)
 {
-    Tuple* ret = (Tuple*) NPN_CreateObject (top->instance, &top->npclassTuple);
+    Tuple* ret = (Tuple*) NPN_CreateObject (top->instance, &top->Tuple.npclass);
     if (ret) {
-        ret->array = tuple_alloc (size);
-        if (ret->array)
-            ret->nelts = size;
+        ret->start = tuple_alloc (size);
+        if (ret->start) {
+            memset (ret->start, '\0', size * sizeof ret->start[0]);
+            ret->end = ret->start + size;
+        }
         else {
             NPN_MemFree (ret);
             ret = 0;
@@ -620,28 +881,39 @@ typedef int int_2_to_62;
 typedef int int_abs_2_to_62;
 typedef int output_base;
 
-/* XXX Should these set top->errmsg? */
 static bool
 in_int_0_or_2_to_62 (TopObject* top, const NPVariant* var, int* arg)
 {
-    return in_int (top, var, arg) &&
-        (*arg == 0 || (*arg >= 2 && *arg <= 62));
+    if (!in_int (top, var, arg))
+        return false;
+    if (*arg == 0 || (*arg >= 2 && *arg <= 62))
+        return true;
+    raisef ((NPObject*) top, "not a valid base");
+    return false;
 }
 #define del_int_0_or_2_to_62(arg)
 
 static bool
 in_int_2_to_62 (TopObject* top, const NPVariant* var, int* arg)
 {
-    return in_int (top, var, arg) && *arg >= 2 && *arg <= 62;
+    if (!in_int (top, var, arg))
+        return false;
+    if (*arg >= 2 && *arg <= 62)
+        return true;
+    raisef ((NPObject*) top, "not a valid base");
+    return false;
 }
 #define del_int_2_to_62(arg)
 
 static bool
 in_output_base (TopObject* top, const NPVariant* var, int* arg)
 {
-    return in_int (top, var, arg) &&
-        ((*arg >= -36 && *arg <= -2) ||
-         (*arg >= 2 && *arg <= 62));
+    if (!in_int (top, var, arg))
+        return false;
+    if ((*arg >= -36 && *arg <= -2) || (*arg >= 2 && *arg <= 62))
+        return true;
+    raisef ((NPObject*) top, "not a valid base");
+    return false;
 }
 #define del_output_base(arg)
 
@@ -653,27 +925,19 @@ in_int_abs_2_to_62 (TopObject* top, const NPVariant* var, int* arg)
     if (!in_int (top, var, arg))
         return false;
     int i = (*arg > 0 ? *arg : -*arg);
-    return i >= 2 && i <= 62;
+    if (i >= 2 && i <= 62)
+        return true;
+    raisef ((NPObject*) top, "not a valid base");
+    return false;
 }
 #define del_int_abs_2_to_62(arg)
 
 #endif  /* NPGMP_MPF */
 
-DEFINE_IN_UNSIGNED (mp_bitcnt_t)
-DEFINE_OUT_NUMBER (mp_bitcnt_t)
-#define del_mp_bitcnt_t(arg)
-
-DEFINE_IN_UNSIGNED (mp_size_t)
-DEFINE_OUT_NUMBER (mp_size_t)
-#define del_mp_size_t(arg)
-
-DEFINE_IN_UNSIGNED (mp_exp_t)
-DEFINE_OUT_NUMBER (mp_exp_t)
-#define del_mp_exp_t(arg)
-
-DEFINE_IN_NUMBER (mp_limb_t)
-DEFINE_OUT_NUMBER (mp_limb_t)
-#define del_mp_limb_t(arg)
+DEFINE_UNSIGNED (mp_bitcnt_t)
+DEFINE_UNSIGNED (mp_size_t)
+DEFINE_SIGNED (mp_exp_t)
+DEFINE_UNSIGNED (mp_limb_t)
 
 typedef mpz_ptr uninit_mpz;
 typedef mpq_ptr uninit_mpq;
@@ -726,7 +990,11 @@ Integer_allocate (NPP npp, NPClass *aClass)
 #if DEBUG_ALLOC
     fprintf (stderr, "Integer allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
-    return &ret->npobj;
+    if (ret) {
+        NPN_RetainObject ((NPObject*) CONTAINING (TopObject, Integer, aClass));
+        mpz_init (ret->mp);
+    }
+    return (NPObject*) ret;
 }
 
 static void
@@ -735,8 +1003,9 @@ Integer_deallocate (NPObject *npobj)
 #if DEBUG_ALLOC
     fprintf (stderr, "Integer deallocate %p\n", npobj);
 #endif  /* DEBUG_ALLOC */
-    if (npobj)
-        mpz_clear (((Integer*) npobj)->mp);
+    TopObject* top = Integer_getTop (npobj);
+    NPN_ReleaseObject ((NPObject*) top);
+    mpz_clear (((Integer*) npobj)->mp);
     NPN_MemFree (npobj);
 }
 
@@ -759,10 +1028,11 @@ integer_toString (TopObject *top, mpz_ptr mpp, const NPVariant *args,
             STRINGN_TO_NPVARIANT (s, s[len-2] ? len-1 : len-2, *result);
         }
         else
-            NPN_SetException (&top->npobj, "out of memory");
+            return oom ((NPObject*) top, result, true);
     }
     else
-        NPN_SetException (&top->npobj, "invalid argument");
+        return set_exception ((NPObject*) top, "invalid argument", result,
+                              true);
     return true;
 }
 
@@ -780,11 +1050,9 @@ Integer_invoke (NPObject *npobj, NPIdentifier name,
 static NPObject*
 x_x_mpz (TopObject* top)
 {
-    NPObject* ret = NPN_CreateObject (top->instance, &top->npclassInteger);
-    if (ret)
-        mpz_init (&((Integer*) ret)->mp[0]);
-    else
-        NPN_SetException (&top->npobj, "out of memory");
+    NPObject* ret = NPN_CreateObject (top->instance, &top->Integer.npclass);
+    if (!ret)
+        raise_oom ((NPObject*) top);
     return ret;
 }
 
@@ -803,8 +1071,10 @@ MpzRef_allocate (NPP npp, NPClass *aClass)
 #if DEBUG_ALLOC
     fprintf (stderr, "MpzRef allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
-    if (ret)
+    if (ret) {
         ret->owner = 0;
+        NPN_RetainObject ((NPObject*) CONTAINING (TopObject, MpzRef, aClass));
+    }
     return &ret->npobj;
 }
 
@@ -815,6 +1085,8 @@ MpzRef_deallocate (NPObject *npobj)
 #if DEBUG_ALLOC
     fprintf (stderr, "MpzRef deallocate %p; %p\n", npobj, ref->owner);
 #endif  /* DEBUG_ALLOC */
+    TopObject* top = MpzRef_getTop (npobj);
+    NPN_ReleaseObject ((NPObject*) top);
     if (ref->owner)
         /* Decrement the Rational's reference count.  See comments in
            Mpz_deallocate.  */
@@ -842,12 +1114,12 @@ init_mpzref (MpzRef* ref, mpz_ptr z, mpq_ptr q)
 
 static NPObject*
 x_x_mpq_ref (TopObject* top, mpz_ptr z, mpq_ptr q) {
-    NPObject* ret = NPN_CreateObject (top->instance, &top->npclassMpzRef);
+    NPObject* ret = NPN_CreateObject (top->instance, &top->MpzRef.npclass);
 
     if (ret)
         init_mpzref ((MpzRef*) ret, z, q);
     else
-        NPN_SetException (&top->npobj, "out of memory");
+        raise_oom ((NPObject*) top);
     return ret;
 }
 
@@ -865,10 +1137,10 @@ in_mpz_ptr (TopObject* top, const NPVariant* var, mpz_ptr* arg)
 {
     if (!NPVARIANT_IS_OBJECT (*var))
         return false;
-    if (NPVARIANT_TO_OBJECT (*var)->_class == &top->npclassInteger)
+    if (NPVARIANT_TO_OBJECT (*var)->_class == (NPClass*) &top->Integer)
         *arg = &((Integer*) NPVARIANT_TO_OBJECT (*var))->mp[0];
 #if NPGMP_MPQ
-    else if (NPVARIANT_TO_OBJECT (*var)->_class == &top->npclassMpzRef)
+    else if (NPVARIANT_TO_OBJECT (*var)->_class == (NPClass*) &top->MpzRef)
         *arg = ((MpzRef*) NPVARIANT_TO_OBJECT (*var))->mpp;
 #endif
     else
@@ -901,6 +1173,8 @@ Rational_allocate (NPP npp, NPClass *aClass)
 #if DEBUG_ALLOC
     fprintf (stderr, "Rational allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
+    if (ret)
+        NPN_RetainObject ((NPObject*) CONTAINING (TopObject, Rational, aClass));
     return &ret->npobj;
 }
 
@@ -912,6 +1186,8 @@ Rational_deallocate (NPObject *npobj)
 #endif  /* DEBUG_ALLOC */
     if (npobj)
         mpq_clear (((Rational*) npobj)->mp);
+    TopObject* top = Rational_getTop (npobj);
+    NPN_ReleaseObject ((NPObject*) top);
     NPN_MemFree (npobj);
 }
 
@@ -933,10 +1209,11 @@ rational_toString (TopObject* top, mpq_ptr mpp, const NPVariant *args,
             STRINGN_TO_NPVARIANT (s, len-5 + strlen (s + len-5), *result);
         }
         else
-            NPN_SetException (&top->npobj, "out of memory");
+            return oom ((NPObject*) top, result, true);
     }
     else
-        NPN_SetException (&top->npobj, "invalid argument");
+        return set_exception ((NPObject*) top, "invalid argument", result,
+                              true);
     return true;
 }
 
@@ -955,7 +1232,7 @@ static bool
 in_mpq_ptr (TopObject* top, const NPVariant* var, mpq_ptr* arg)
 {
     if (!NPVARIANT_IS_OBJECT (*var)
-        || NPVARIANT_TO_OBJECT (*var)->_class != &top->npclassRational)
+        || NPVARIANT_TO_OBJECT (*var)->_class != (NPClass*) &top->Rational)
         return false;
     *arg = &((Rational*) NPVARIANT_TO_OBJECT (*var))->mp[0];
     return true;
@@ -976,11 +1253,11 @@ in_uninit_mpq (TopObject* top, const NPVariant* var, mpq_ptr* arg)
 static NPObject*
 x_x_mpq (TopObject* top)
 {
-    NPObject* ret = NPN_CreateObject (top->instance, &top->npclassRational);
+    NPObject* ret = NPN_CreateObject (top->instance, &top->Rational.npclass);
     if (ret)
         mpq_init (&((Rational*) ret)->mp[0]);
     else
-        NPN_SetException (&top->npobj, "out of memory");
+        raise_oom ((NPObject*) top);
     return ret;
 }
 
@@ -1001,6 +1278,8 @@ Float_allocate (NPP npp, NPClass *aClass)
 #if DEBUG_ALLOC
     fprintf (stderr, "Float allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
+    if (ret)
+        NPN_RetainObject ((NPObject*) CONTAINING (TopObject, Float, aClass));
     return &ret->npobj;
 }
 
@@ -1012,6 +1291,8 @@ Float_deallocate (NPObject *npobj)
 #endif  /* DEBUG_ALLOC */
     if (npobj)
         mpf_clear (((Float*) npobj)->mp);
+    TopObject* top = Float_getTop (npobj);
+    NPN_ReleaseObject ((NPObject*) top);
     NPN_MemFree (npobj);
 }
 
@@ -1038,6 +1319,7 @@ float_toString (TopObject *top, mpf_ptr mpp, const NPVariant *args,
     mp_exp_t expt;
     char* str;
     size_t allocated;
+    bool ret = true;
 
     if (argCount < 1 || !in_int (top, args, &base))
         base = 10;
@@ -1050,10 +1332,9 @@ float_toString (TopObject *top, mpf_ptr mpp, const NPVariant *args,
 
         /* XXX could preallocate for n_digits != 0. */
         str = mpf_get_str (NULL, &expt, base, n_digits, mpp);
-        if (!str) {
-            NPN_SetException (&top->npobj, "out of memory");
-            return true;
-        }
+        if (!str)
+            return oom ((NPObject*) top, result, true);
+
         allocated = strlen (str) + 1;
         if (allocated == 1) {
             s = (NPUTF8*) NPN_MemAlloc (sizeof "0");
@@ -1062,7 +1343,7 @@ float_toString (TopObject *top, mpf_ptr mpp, const NPVariant *args,
                 STRINGZ_TO_NPVARIANT (s, *result);
             }
             else
-                NPN_SetException (&top->npobj, "out of memory");
+                ret = oom ((NPObject*) top, result, true);
         }
         else {
             size_t len = allocated + 4 + 3 * sizeof expt;
@@ -1079,14 +1360,14 @@ float_toString (TopObject *top, mpf_ptr mpp, const NPVariant *args,
                 STRINGZ_TO_NPVARIANT (s, *result);
             }
             else
-                NPN_SetException (&top->npobj, "out of memory");
+                ret = oom ((NPObject*) top, result, true);
         }
 
         x_gmp_free (str, allocated);
     }
     else
-        NPN_SetException (&top->npobj, "invalid base");
-    return true;
+        return set_exception ((NPObject*) top, "invalid base", result, true);
+    return ret;
 }
 
 static bool
@@ -1104,7 +1385,7 @@ static bool
 in_mpf_ptr (TopObject* top, const NPVariant* var, mpf_ptr* arg)
 {
     if (!NPVARIANT_IS_OBJECT (*var)
-        || NPVARIANT_TO_OBJECT (*var)->_class != &top->npclassFloat)
+        || NPVARIANT_TO_OBJECT (*var)->_class != (NPClass*) &top->Float)
         return false;
     *arg = &((Float*) NPVARIANT_TO_OBJECT (*var))->mp[0];
     return true;
@@ -1159,16 +1440,13 @@ x_x_mpf_init (TopObject* top, mpf_ptr f)
 }
 
 static bool
-x_in_defprec_mpf (TopObject* top, const NPVariant* var, mpf_ptr* arg)
+in_defprec_mpf (TopObject* top, const NPVariant* var, mpf_ptr* arg)
 {
     bool ret = in_uninit_mpf (top, var, arg);
     if (ret)
         x_x_mpf_init (top, *arg);
     return ret;
 }
-
-#define in_defprec_mpf(top, var, arg)     \
-    x_in_defprec_mpf (top, var, arg)
 
 #define del_mpf_ptr(arg)
 #define del_uninit_mpf(arg)
@@ -1177,11 +1455,11 @@ x_in_defprec_mpf (TopObject* top, const NPVariant* var, mpf_ptr* arg)
 static NPObject*
 x_x_mpf (TopObject* top)
 {
-    NPObject* ret = NPN_CreateObject (top->instance, &top->npclassFloat);
+    NPObject* ret = NPN_CreateObject (top->instance, &top->Float.npclass);
     if (ret)
         x_x_mpf_init (top, &((Float*) ret)->mp[0]);
     else
-        NPN_SetException (&top->npobj, "out of memory");
+        raise_oom ((NPObject*) top);
     return ret;
 }
 
@@ -1256,6 +1534,8 @@ Rand_allocate (NPP npp, NPClass *aClass)
 #if DEBUG_ALLOC
     fprintf (stderr, "Rand allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
+    if (ret)
+        NPN_RetainObject ((NPObject*) CONTAINING (TopObject, Rand, aClass));
     return &ret->npobj;
 }
 
@@ -1267,6 +1547,8 @@ Rand_deallocate (NPObject *npobj)
 #endif  /* DEBUG_ALLOC */
     if (npobj)
         gmp_randclear (((Rand*) npobj)->state);
+    TopObject* top = Rand_getTop (npobj);
+    NPN_ReleaseObject ((NPObject*) top);
     NPN_MemFree (npobj);
 }
 
@@ -1275,7 +1557,7 @@ in_x_gmp_randstate_ptr (TopObject* top, const NPVariant* var,
                         x_gmp_randstate_ptr* arg)
 {
     if (!NPVARIANT_IS_OBJECT (*var)
-        || NPVARIANT_TO_OBJECT (*var)->_class != &top->npclassRand)
+        || NPVARIANT_TO_OBJECT (*var)->_class != (NPClass*) &top->Rand)
         return false;
     *arg = &((Rand*) NPVARIANT_TO_OBJECT (*var))->state[0];
     return true;
@@ -1296,11 +1578,11 @@ in_uninit_rand (TopObject* top, const NPVariant* var, x_gmp_randstate_ptr* arg)
 static NPObject*
 x_x_randstate (TopObject* top)
 {
-    NPObject* ret = NPN_CreateObject (top->instance, &top->npclassRand);
+    NPObject* ret = NPN_CreateObject (top->instance, &top->Rand.npclass);
     if (ret)
         gmp_randinit_default (&((Rand*) ret)->state[0]);
     else
-        NPN_SetException (&top->npobj, "out of memory");
+        raise_oom ((NPObject*) top);
     return ret;
 }
 
@@ -1335,7 +1617,7 @@ Entry_allocate (NPP npp, NPClass *aClass)
     fprintf (stderr, "Entry allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
     if (ret)
-        NPN_RetainObject (&CONTAINING (TopObject, npclassEntry, aClass)->npobj);
+        NPN_RetainObject ((NPObject*) CONTAINING (TopObject, Entry, aClass));
     return &ret->npobj;
 }
 
@@ -1346,7 +1628,7 @@ Entry_deallocate (NPObject *npobj)
     fprintf (stderr, "Entry deallocate %p\n", npobj);
 #endif  /* DEBUG_ALLOC */
     TopObject* top = Entry_getTop (npobj);
-    NPN_ReleaseObject (&top->npobj);
+    NPN_ReleaseObject ((NPObject*) top);
     NPN_MemFree (npobj);
 }
 
@@ -1376,6 +1658,8 @@ name_to_number (NPUTF8* name)
     return -1;
 }
 
+#if NPGMP_RTTI
+
 static const char*
 number_to_name (int number)
 {
@@ -1396,6 +1680,8 @@ number_to_name (int number)
     }
     return 0;
 }
+
+#endif  /* NPGMP_RTTI */
 
 enum Entry_number {
 
@@ -1428,247 +1714,309 @@ Entry_outLength (NPObject *npobj) {
     return EntryNret[((Entry*) npobj)->number - FIRST_ENTRY];
 }
 
-/* Calls to most functions go through enter. */
+typedef union {
+    bool ABool;
+    int Aint;
+    long Along;
+    ulong Aulong;
+    double Adouble;
+    stringz Astringz;
+    mpz_ptr Ampz_ptr;
+    mpq_ptr Ampq_ptr;
+    mpf_ptr Ampf_ptr;
+    x_gmp_randstate_ptr Ax_gmp_randstate_ptr;
+    uninit_mpz Auninit_mpz;
+    uninit_mpq Auninit_mpq;
+    uninit_mpf Auninit_mpf;
+    defprec_mpf Adefprec_mpf;
+    uninit_rand Auninit_rand;
+    mp_bitcnt_t Amp_bitcnt_t;
+    int Aint_0_or_2_to_62;
+    int Aint_2_to_62;
+    int Aint_abs_2_to_62;
+    int Aoutput_base;
+    mp_size_t Amp_size_t;
+    mp_exp_t Amp_exp_t;
+    mp_limb_t Amp_limb_t;
+    size_t Asize_t;
+    NPObject* Anpobj;
+    NPString Anpstring;
+} EntryArg;
 
-static bool
-enter (TopObject *vTop, int vEntryNumber,
-       const NPVariant *vArgs, uint32_t vArgCount, NPVariant *vResults)
+/* Convert arguments from NPVariant to C types.  */
+static inline bool
+in (TopObject *vTop, int vEntryNumber,
+    const NPVariant *vArgs, EntryArg* vEntryArgs)
 {
-    bool __ok = false, __ret = true;
     int vArgNumber = -1;
-    int vRetNumber = -1;
 
-    union {
-        bool ABool;
-        int Aint;
-        long Along;
-        ulong Aulong;
-        double Adouble;
-        stringz Astringz;
-        mpz_ptr Ampz_ptr;
-        mpq_ptr Ampq_ptr;
-        mpf_ptr Ampf_ptr;
-        x_gmp_randstate_ptr Ax_gmp_randstate_ptr;
-        uninit_mpz Auninit_mpz;
-        uninit_mpq Auninit_mpq;
-        uninit_mpf Auninit_mpf;
-        defprec_mpf Adefprec_mpf;
-        uninit_rand Auninit_rand;
-        mp_bitcnt_t Amp_bitcnt_t;
-        int Aint_0_or_2_to_62;
-        int Aint_2_to_62;
-        int Aint_abs_2_to_62;
-        int Aoutput_base;
-        mp_size_t Amp_size_t;
-        mp_exp_t Amp_exp_t;
-        mp_limb_t Amp_limb_t;
-        size_t Asize_t;
-        NPObject* Anpobj;
-        NPString Anpstring;
-    } a0, a1, a2, a3, a4, o0, o1;
-
-#define ARGC(argc)                                      \
-    if ((argc) != vArgCount) {                          \
-        vTop->errmsg = "wrong number of arguments";     \
-        break;                                          \
-    }
-
+#undef IN
 #define IN(a, t)                                                        \
-    (vArgNumber++, in_ ## t (vTop, vArgs + vArgNumber, &a.A ## t))
+    (vArgNumber++,                                                      \
+     LIKELY (in_ ## t (vTop, vArgs + vArgNumber, &vEntryArgs[a].A ## t)))
 
-#define OUT(o, t)                                                       \
-    (vRetNumber++, out_ ## t (vTop, o.A ## t, vResults + vRetNumber))
+#undef DEL
+#define DEL(a, t) del_ ## t (vEntryArgs[a].A ## t)
 
-#define DEL(a, t) del_ ## t (a.A ## t)
+    switch (vEntryNumber) {
 
+#define ENTRY0(fun, string, id)                                 \
+        case __LINE__:                                          \
+            return true;
+
+#define ENTRY1(fun, string, id, t0)                             \
+        case __LINE__:                                          \
+            if (!IN (0, t0)) goto del0_ ## id;                  \
+            return true; del0_ ## id:                           \
+            return false;
+
+#define ENTRY2(fun, string, id, t0, t1)                         \
+        case __LINE__:                                          \
+            if (!IN (0, t0)) goto del0_ ## id;                  \
+            if (!IN (1, t1)) goto del1_ ## id;                  \
+            return true; del1_ ## id:                           \
+            DEL (0, t0); del0_ ## id:                           \
+            return false;
+
+#define ENTRY3(fun, string, id, t0, t1, t2)                     \
+        case __LINE__:                                          \
+            if (!IN (0, t0)) goto del0_ ## id;                  \
+            if (!IN (1, t1)) goto del1_ ## id;                  \
+            if (!IN (2, t2)) goto del2_ ## id;                  \
+            return true; del2_ ## id:                           \
+            DEL (1, t1); del1_ ## id:                           \
+            DEL (0, t0); del0_ ## id:                           \
+            return false;
+
+#define ENTRY4(fun, string, id, t0, t1, t2, t3)                 \
+        case __LINE__:                                          \
+            if (!IN (0, t0)) goto del0_ ## id;                  \
+            if (!IN (1, t1)) goto del1_ ## id;                  \
+            if (!IN (2, t2)) goto del2_ ## id;                  \
+            if (!IN (3, t3)) goto del3_ ## id;                  \
+            return true; del3_ ## id:                           \
+            DEL (2, t2); del2_ ## id:                           \
+            DEL (1, t1); del1_ ## id:                           \
+            DEL (0, t0); del0_ ## id:                           \
+            return false;
+
+#define ENTRY5(fun, string, id, t0, t1, t2, t3, t4)             \
+        case __LINE__:                                          \
+            if (!IN (0, t0)) goto del0_ ## id;                  \
+            if (!IN (1, t1)) goto del1_ ## id;                  \
+            if (!IN (2, t2)) goto del2_ ## id;                  \
+            if (!IN (3, t3)) goto del3_ ## id;                  \
+            if (!IN (4, t4)) goto del4_ ## id;                  \
+            return true; del4_ ## id:                           \
+            DEL (3, t3); del3_ ## id:                           \
+            DEL (2, t2); del2_ ## id:                           \
+            DEL (1, t1); del1_ ## id:                           \
+            DEL (0, t0); del0_ ## id:                           \
+            return false;
+
+#include "gmp-entries.h"
+
+    default:
+        return false;
+    }
+}
+
+/* Call a C function.  */
+static inline void
+call (TopObject* vTop, int vEntryNumber, const EntryArg *i, EntryArg *o)
+{
     switch (vEntryNumber) {
 
 #define ENTRY0R1(fun, string, id, r0)                           \
         case __LINE__:                                          \
-            ARGC(0);                                            \
-            o0.A ## r0 = fun ();                                \
-            if (!OUT (o0, r0)) break;                           \
-            __ok = true;                                        \
+            o[0].A ## r0 = fun ();                              \
             break;
 
 #define ENTRY1R0(fun, string, id, t0)                           \
         case __LINE__:                                          \
-            ARGC(1);                                            \
-            if (!IN (a0, t0)) break;                            \
-            fun (a0.A ## t0);                                   \
-            __ok = true;                                        \
-            dela0_ ## id: DEL (a0, t0);                         \
+            fun (i[0].A ## t0);                                 \
             break;
 
 #define ENTRY1R1(fun, string, id, r0, t0)                       \
         case __LINE__:                                          \
-            ARGC(1);                                            \
-            if (!IN (a0, t0)) break;                            \
-            o0.A ## r0 = fun (a0.A ## t0);                      \
-            if (!OUT (o0, r0)) goto dela0_ ## id;               \
-            __ok = true;                                        \
-            dela0_ ## id: DEL (a0, t0);                         \
+            o[0].A ## r0 = fun (i[0].A ## t0);                  \
             break;
 
 #define ENTRY1R2(fun, string, id, r0, r1, t0)                   \
         case __LINE__:                                          \
-            ARGC(1);                                            \
-            if (!IN (a0, t0)) break;                            \
-            o0.A ## r0 = fun (&o1.A ## r1, a0.A ## t0);         \
-            if (!OUT (o0, r0)) goto dela0_ ## id;               \
-            if (!OUT (o1, r1)) goto delo0_ ## id;               \
-            __ok = true;                                        \
-            dela0_ ## id: DEL (a0, t0);                         \
-            break;                                              \
-            delo0_ ## id: DEL (o0, r0);                         \
-            goto dela0_ ## id;
+            o[0].A ## r0 = fun (&o[1].A ## r1, i[0].A ## t0);   \
+            break;
 
 #define ENTRY2R0(fun, string, id, t0, t1)                       \
         case __LINE__:                                          \
-            ARGC(2);                                            \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto dela0_ ## id;                \
-            fun (a0.A ## t0, a1.A ## t1);                       \
-            __ok = true;                                        \
-            dela1_ ## id: DEL (a1, t1);                         \
-            dela0_ ## id: DEL (a0, t0);                         \
+            fun (i[0].A ## t0, i[1].A ## t1);                   \
             break;
 
 #define ENTRY2R1(fun, string, id, r0, t0, t1)                   \
         case __LINE__:                                          \
-            ARGC(2);                                            \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto dela0_ ## id;                \
-            o0.A ## r0 = fun (a0.A ## t0, a1.A ## t1);          \
-            if (!OUT (o0, r0)) goto dela1_ ## id;               \
-            __ok = true;                                        \
-            dela1_ ## id: DEL (a1, t1);                         \
-            dela0_ ## id: DEL (a0, t0);                         \
+            o[0].A ## r0 = fun (i[0].A ## t0, i[1].A ## t1);    \
             break;
 
 #define ENTRY3R0(fun, string, id, t0, t1, t2)                   \
         case __LINE__:                                          \
-            ARGC(3);                                            \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto dela0_ ## id;                \
-            if (!IN (a2, t2)) goto dela1_ ## id;                \
-            fun (a0.A ## t0, a1.A ## t1, a2.A ## t2);           \
-            __ok = true;                                        \
-            dela2_ ## id: DEL (a2, t2);                         \
-            dela1_ ## id: DEL (a1, t1);                         \
-            dela0_ ## id: DEL (a0, t0);                         \
+            fun (i[0].A ## t0, i[1].A ## t1, i[2].A ## t2);     \
             break;
 
 #define ENTRY3R1(fun, string, id, r0, t0, t1, t2)               \
         case __LINE__:                                          \
-            ARGC(3);                                            \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto dela0_ ## id;                \
-            if (!IN (a2, t2)) goto dela1_ ## id;                \
-            o0.A ## r0 = fun                                    \
-                (a0.A ## t0, a1.A ## t1, a2.A ## t2);           \
-            if (!OUT (o0, r0)) goto dela2_ ## id;               \
-            __ok = true;                                        \
-            dela2_ ## id: DEL (a2, t2);                         \
-            dela1_ ## id: DEL (a1, t1);                         \
-            dela0_ ## id: DEL (a0, t0);                         \
+            o[0].A ## r0 = fun (i[0].A ## t0, i[1].A ## t1,     \
+                                i[2].A ## t2);                  \
             break;
 
 #define ENTRY3R2(fun, string, id, r0, r1, t0, t1, t2)           \
         case __LINE__:                                          \
-            ARGC(3);                                            \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto dela0_ ## id;                \
-            if (!IN (a2, t2)) goto dela1_ ## id;                \
-            o0.A ## r0 = fun                                    \
-                (&o1.A ## r1,                                   \
-                 a0.A ## t0, a1.A ## t1, a2.A ## t2);           \
-            if (!OUT (o0, r0)) goto dela2_ ## id;               \
-            if (!OUT (o1, r1)) goto delo0_ ## id;               \
-            __ok = true;                                        \
-            dela2_ ## id: DEL (a2, t2);                         \
-            dela1_ ## id: DEL (a1, t1);                         \
-            dela0_ ## id: DEL (a0, t0);                         \
-            break;                                              \
-            delo0_ ## id: DEL (o0, r0);                         \
-            goto dela2_ ## id;
+            o[0].A ## r0 = fun (&o[1].A ## r1, i[0].A ## t0,    \
+                                i[1].A ## t1, i[2].A ## t2);    \
+            break;
 
 #define ENTRY4R0(fun, string, id, t0, t1, t2, t3)               \
         case __LINE__:                                          \
-            ARGC(4);                                            \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto dela0_ ## id;                \
-            if (!IN (a2, t2)) goto dela1_ ## id;                \
-            if (!IN (a3, t3)) goto dela2_ ## id;                \
-            fun (a0.A ## t0, a1.A ## t1, a2.A ## t2,            \
-                 a3.A ## t3);                                   \
-            __ok = true;                                        \
-            dela3_ ## id: DEL (a3, t3);                         \
-            dela2_ ## id: DEL (a2, t2);                         \
-            dela1_ ## id: DEL (a1, t1);                         \
-            dela0_ ## id: DEL (a0, t0);                         \
+            fun (i[0].A ## t0, i[1].A ## t1, i[2].A ## t2,      \
+                 i[3].A ## t3);                                 \
             break;
 
 #define ENTRY4R1(fun, string, id, r0, t0, t1, t2, t3)           \
         case __LINE__:                                          \
-            ARGC(4);                                            \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto dela0_ ## id;                \
-            if (!IN (a2, t2)) goto dela1_ ## id;                \
-            if (!IN (a3, t3)) goto dela2_ ## id;                \
-            o0.A ## r0 = fun                                    \
-                (a0.A ## t0, a1.A ## t1, a2.A ## t2,            \
-                 a3.A ## t3);                                   \
-            if (!OUT (o0, r0)) goto dela3_ ## id;               \
-            __ok = true;                                        \
-            dela3_ ## id: DEL (a3, t3);                         \
-            dela2_ ## id: DEL (a2, t2);                         \
-            dela1_ ## id: DEL (a1, t1);                         \
-            dela0_ ## id: DEL (a0, t0);                         \
+            o[0].A ## r0 = fun (i[0].A ## t0, i[1].A ## t1,     \
+                                i[2].A ## t2, i[3].A ## t3);    \
             break;
 
 #define ENTRY5R0(fun, string, id, t0, t1, t2, t3, t4)           \
         case __LINE__:                                          \
-            ARGC(5);                                            \
-            if (!IN (a0, t0)) break;                            \
-            if (!IN (a1, t1)) goto dela0_ ## id;                \
-            if (!IN (a2, t2)) goto dela1_ ## id;                \
-            if (!IN (a3, t3)) goto dela2_ ## id;                \
-            if (!IN (a4, t4)) goto dela3_ ## id;                \
-            fun (a0.A ## t0, a1.A ## t1, a2.A ## t2,            \
-                 a3.A ## t3, a4.A ## t4);                       \
-            __ok = true;                                        \
-            dela4_ ## id: DEL (a4, t4);                         \
-            dela3_ ## id: DEL (a3, t3);                         \
-            dela2_ ## id: DEL (a2, t2);                         \
-            dela1_ ## id: DEL (a1, t1);                         \
-            dela0_ ## id: DEL (a0, t0);                         \
+            fun (i[0].A ## t0, i[1].A ## t1, i[2].A ## t2,      \
+                 i[3].A ## t3, i[4].A ## t4);                   \
+            break;
+
+#include "gmp-entries.h"
+    }
+}
+
+/* Free C function arguments.  */
+static inline void
+del (int vEntryNumber, EntryArg* vEntryArgs)
+{
+#undef DEL
+#define DEL(a, t) del_ ## t (vEntryArgs[a].A ## t)
+
+    switch (vEntryNumber) {
+
+#define ENTRY0(fun, string, id)                                 \
+        case __LINE__:                                          \
+            return;
+
+#define ENTRY1(fun, string, id, t0)                             \
+        case __LINE__:                                          \
+            DEL (0, t0);                                        \
+            return;
+
+#define ENTRY2(fun, string, id, t0, t1)                         \
+        case __LINE__:                                          \
+            DEL (1, t1);                                        \
+            DEL (0, t0);                                        \
+            return;
+
+#define ENTRY3(fun, string, id, t0, t1, t2)                     \
+        case __LINE__:                                          \
+            DEL (2, t2);                                        \
+            DEL (1, t1);                                        \
+            DEL (0, t0);                                        \
+            return;
+
+#define ENTRY4(fun, string, id, t0, t1, t2, t3)                 \
+        case __LINE__:                                          \
+            DEL (3, t3);                                        \
+            DEL (2, t2);                                        \
+            DEL (1, t1);                                        \
+            DEL (0, t0);                                        \
+            return;
+
+#define ENTRY5(fun, string, id, t0, t1, t2, t3, t4)             \
+        case __LINE__:                                          \
+            DEL (4, t4);                                        \
+            DEL (3, t3);                                        \
+            DEL (2, t2);                                        \
+            DEL (1, t1);                                        \
+            DEL (0, t0);                                        \
+            return;
+
+#include "gmp-entries.h"
+    }
+}
+
+/* Convert C function results to NPVariant and deallocate the C values.  */
+static inline bool
+out (TopObject *vTop, int vEntryNumber, EntryArg* vEntryResults,
+     NPVariant *vResults)
+{
+    int vRetNumber = -1;
+    bool ret = true;
+
+#undef OUT
+#define OUT(a, t)                                                       \
+    (vRetNumber++,                                                      \
+     outdel_ ## t (vTop, vEntryResults[a].A ## t, vResults + vRetNumber) \
+     || (del_ ## t (vEntryResults[a].A ## t), false))
+
+#undef DEL
+#define DEL(a, t) del_ ## t (vEntryResults[a].A ## t)
+
+    switch (vEntryNumber) {
+
+#define ENTRYR0(fun, string, id)                                \
+        case __LINE__:                                          \
+            if (ret) return true;                               \
+            break;
+
+#define ENTRYR1(fun, string, id, r0)                             \
+        case __LINE__:                                           \
+            if (ret) ret = OUT (0, r0); else DEL (0, r0);        \
+            if (ret) return true;                                \
+            break;
+
+#define ENTRYR2(fun, string, id, r0, r1)                         \
+        case __LINE__:                                           \
+            if (ret) ret = OUT (0, r0); else DEL (0, r0);        \
+            if (ret) ret = OUT (1, r1); else DEL (1, r1);        \
+            if (ret) return true;                                \
             break;
 
 #include "gmp-entries.h"
 
     default:
-        NPN_SetException (&vTop->npobj, "internal error, bad entry number");
-        __ret = false;
-    break;
+        return false;
     }
+    while (vRetNumber--)
+        NPN_ReleaseVariantValue (vResults + vRetNumber);
+    return false;
+}
 
-    if (!__ok) {
-        static const char fmt[] = "%s: %s";
-        char message[200];
-        const char* name = number_to_name (vEntryNumber);
-        const char* msg = vTop->errmsg ?: "unknown error";
-        vTop->errmsg = 0;
-        if (sizeof fmt - 4 + strlen (name) + strlen (msg) > sizeof message) {
-            msg = "wrong type arguments";
-            if (sizeof fmt - 4 + strlen (name) + strlen (msg) > sizeof message)
-                name = "GMP function";
+static bool
+enter (TopObject* top, int entryNumber,
+       const NPVariant *args, NPVariant *results)
+{
+    switch (entryNumber) {
+
+        /* XXX Could distinguish pre-call from post-call errors.  */
+#define ENTRY(nargs, nret, string, id)                  \
+        case __LINE__: {                                \
+            EntryArg i[nargs], o[nret];                 \
+            if (!in (top, __LINE__, args, i))           \
+                return false;                           \
+            call (top, __LINE__, i, o);                 \
+            del (__LINE__, i);                          \
+            return out (top, __LINE__, o, results);     \
         }
-        sprintf (message, fmt, name, msg);
-        NPN_SetException (&vTop->npobj, message);
-        __ret = false;
+            
+#include "gmp-entries.h"
+
+    default:
+        return false;
     }
-    return __ret;
 }
 
 static bool
@@ -1677,47 +2025,58 @@ Entry_invokeDefault (NPObject *npobj,
                      NPVariant *result)
 {
     TopObject* top = Entry_getTop (npobj);
+    size_t nargs = Entry_length (npobj);
     size_t nret = Entry_outLength (npobj);
     Tuple* tuple = 0;  /* avoid a warning */
     NPVariant* out;
+
+    if (argCount != nargs)
+        return throwf ((NPObject*) top, result, true,
+                       "wrong argument count: %d, expected %d",
+                       argCount, nargs);
 
     if (nret <= 1)
         out = result;
     else {
         tuple = make_tuple (top, nret);
-        if (!tuple) {
-            NPN_SetException (&top->npobj, "out of memory");
-            return true;
-        }
-        out = tuple->array;
+        if (!tuple)
+            return oom (npobj, result, true);
+        out = tuple->start;
     }
 
-    if (!enter (top, ((Entry*) npobj)->number, args, argCount, out))
+    if (!enter (top, ((Entry*) npobj)->number, args, out)) {
+        if (nret > 1)
+            NPN_ReleaseObject ((NPObject*) tuple);
         nret = 0;
+    }
 
     if (nret == 0)
         VOID_TO_NPVARIANT (*result);
 
     else if (nret > 1) {
-        OBJECT_TO_NPVARIANT (&tuple->npobj, *result);
-        retain_for_js (tuple);
+        if (retain_for_js (top, (NPObject*) tuple))
+            OBJECT_TO_NPVARIANT ((NPObject*) tuple, *result);
+        else {
+            NPN_ReleaseObject ((NPObject*) tuple);
+            raise_oom ((NPObject*) top);
+        }
     }
 
-    return true;
+    return check_ex (top, npobj, result, true);
 }
 
 #if NPGMP_RTTI
 
-static NPClass*
+static Class*
 ctor_to_class (NPObject *npobj)
 {
     TopObject* top = Entry_getTop (npobj);
     int number = ((Entry*) npobj)->number;
     switch (number) {
-    case np_mpz: return &top->npclassInteger;
-    case np_mpq: return &top->npclassRational;
-    case np_mpf: return &top->npclassFloat;
-    case np_randstate: return &top->npclassRand;
+    case np_mpz:       return &top->Integer;
+    case np_mpq:       return &top->Rational;
+    case np_mpf:       return &top->Float;
+    case np_randstate: return &top->Rand;
     default: return 0;
     }
 }
@@ -1737,21 +2096,21 @@ Entry_invoke (NPObject *npobj, NPIdentifier name,
     // XXX should implement isInstance as a property, not a method,
     // so it can be detached and used stand-alone.
     if (name == NPN_GetStringIdentifier ("isInstance")) {
-        NPClass* c = ctor_to_class (npobj);
+        NPClass* c = (NPClass*) ctor_to_class (npobj);
 
         if (c) {
             bool ret;
 
-            if (argCount != 1) {
-                NPN_SetException (npobj, "Usage: isInstance(OBJECT)");
-                return true;
-            }
+            if (argCount != 1)
+                return set_exception (npobj, "Usage: isInstance(OBJECT)",
+                                      result, true);
+
             ret = NPVARIANT_IS_OBJECT (args[0]) &&
                 (NPVARIANT_TO_OBJECT (args[0])->_class == c
 #if NPGMP_MPQ
-                 || (c == &top->npclassInteger &&
+                 || (c == (NPClass*) &top->Integer &&
                      NPVARIANT_TO_OBJECT (args[0])->_class ==
-                     &top->npclassMpzRef)
+                     (NPClass*) &top->MpzRef)
 #endif
                  );
             BOOLEAN_TO_NPVARIANT (ret, *result);
@@ -1764,10 +2123,9 @@ Entry_invoke (NPObject *npobj, NPIdentifier name,
         size_t len = sizeof format + strlen (name) - 2;
         char* ret = (char*) NPN_MemAlloc (len);
 
-        if (!ret) {
-            NPN_SetException (npobj, "out of memory");
-            return true;
-        }
+        if (!ret)
+            return oom (npobj, result, true);
+
         sprintf (ret, format, name);
         STRINGN_TO_NPVARIANT (ret, len, *result);
         return true;
@@ -1800,6 +2158,16 @@ Entry_getProperty(NPObject *npobj, NPIdentifier name, NPVariant* result)
  * Class of the "gmp" object.
  */
 
+static NPObject*
+Gmp_allocate (NPP npp, NPClass* aClass)
+{
+    NPObject* ret = (NPObject*) NPN_MemAlloc (sizeof (NPObject));
+    if (ret)
+        NPN_RetainObject ((NPObject*) CONTAINING (TopObject, Gmp, aClass));
+        //NPN_RetainObject ((NPObject*) npp->pdata);
+    return ret;
+}
+
 static void
 Gmp_deallocate (NPObject *npobj)
 {
@@ -1807,9 +2175,11 @@ Gmp_deallocate (NPObject *npobj)
 #if DEBUG_ALLOC
     fprintf (stderr, "Gmp deallocate %p; %u\n", npobj, (unsigned int) top->npobj.referenceCount);
 #endif  /* DEBUG_ALLOC */
+    top->npobjGmp = 0;
+    NPN_MemFree (npobj);
     /* Decrement the top object's reference count.  See comments in
        Mpz_deallocate.  */
-    NPN_ReleaseObject (&top->npobj);
+    NPN_ReleaseObject ((NPObject*) top);
 }
 
 static bool
@@ -1822,10 +2192,9 @@ Gmp_hasProperty (NPObject *npobj, NPIdentifier key)
         return false;
 
     name = NPN_UTF8FromIdentifier (key);
-    if (!name) {
-        NPN_SetException (npobj, "out of memory");
-        return false;
-    }
+    if (!name)
+        return oom (npobj, 0, false);
+
     ret = name_to_number (name);
     NPN_MemFree (name);
     return ret >= 0;
@@ -1837,14 +2206,14 @@ get_entry (NPObject *npobj, int number, NPVariant *result)
     TopObject* top = Gmp_getTop (npobj);
 
     Entry* entry = (Entry*) NPN_CreateObject
-        (top->instance, &top->npclassEntry);
+        (top->instance, &top->Entry.npclass);
 
     if (entry) {
         entry->number = number;
         OBJECT_TO_NPVARIANT (&entry->npobj, *result);
     }
     else
-        NPN_SetException (npobj, "out of memory");
+        raise_oom (npobj);
 }
 
 static bool
@@ -1860,10 +2229,9 @@ Gmp_getProperty (NPObject *npobj, NPIdentifier key, NPVariant *result)
     }
 
     name = NPN_UTF8FromIdentifier (key);
-    if (!name) {
-        NPN_SetException (npobj, "out of memory");
-        return true;
-    }
+    if (!name)
+        return oom (npobj, result, true);
+
     number = name_to_number (name);
 
     if (number < 0)
@@ -1890,7 +2258,7 @@ Gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 #define CONSTANT(value, string, type) +1
 #include "gmp-constants.h"
         ;
-    *value = (NPIdentifier*) NPN_MemAlloc (cnt * sizeof (NPIdentifier*));
+    *value = (NPIdentifier*) NPN_MemAlloc (cnt * sizeof (NPIdentifier));
     *count = cnt;
     cnt = 0;
     for (p = &GmpProperties[1]; *p; p += strlen (p) + 1)
@@ -1923,306 +2291,7 @@ typedef struct _Heap {
 typedef struct _Gc {
     Heap** heaps;  /* ordered by address */
     size_t nheaps;
-    const void* node;
 } Gc;
-
-typedef struct _Thread {
-    NPObject npobj;
-    Heap* heap;
-    size_t alloc_since_gc;
-    size_t last_heap_size;  /* size in NPVariant structures */
-    Tuple* roots;           /* heap areas pointed to by JavaScript */
-    NPVariant* pc;
-    NPVariant* pc_end;
-    NPVariant* stack;
-    NPVariant* stack_sp;
-    NPVariant* stack_end;
-    void* tls;              /* to be used with tsearch() */
-    Gc* gc;
-} Thread;
-
-static THREAD_LOCAL Thread* thread;
-
-typedef struct _Property {
-    NPUTF8* key;
-    NPVariant* value;
-} Property;
-
-static int
-compare_properties (const void* a1, const void* a2)
-{
-    const NPUTF8* s1 = ((Property*) a1)->key;
-    const NPUTF8* s2 = ((Property*) a2)->key;
-    return strcmp (s1, s2);
-}
-
-static void
-mark (Gc* gcobj, NPVariant* start, NPVariant* end)
-{
-    /* XXX do something */
-}
-
-static void
-mark_root (const void *nodep, VISIT value, int level)
-{
-    if (value == leaf) {
-        NPVariant* var = ((const Property*) nodep)->value;
-        mark (thread->gc, var, var + 1);
-    }
-}
-
-static void
-gc (void)
-{
-    Heap* heap;
-    size_t nheaps = thread->heap->height + 1;
-    Heap* heaps[nheaps];
-    Gc gcobj = { heaps: heaps, nheaps: nheaps };
-
-    for (heap = thread->heap; heap; heap = heap->below) {
-        memset (heap->markbits, '\0', ((heap->size + 7) / 8));
-        heaps[heap->height] = heap;
-    }
-
-    for (Tuple* tuple = thread->roots; tuple; tuple = tuple->next)
-        mark (&gcobj, tuple->array, tuple->array + tuple->nelts);
-
-    mark (&gcobj, thread->pc, thread->pc_end);
-    mark (&gcobj, thread->stack, thread->stack_sp);
-    twalk (thread->roots, mark_root);
-
-    /* XXX sweep/compact */
-}
-
-static NPVariant*
-vector_alloc (uint32_t size)
-{
-    Heap* heap;
-    Heap** abovep;
-    NPVariant* ret;
-    size_t avail, largest, alloc, min, max;
-
-    heap = thread->heap;
-    while (1) {
-
-        if (!heap || heap->largest < size) {
-            heap = thread->heap;
-            if (heap &&
-                thread->alloc_since_gc * 2 >  thread->last_heap_size && 
-                heap->avail                >= size                   &&
-                thread->last_heap_size     >= size)
-            {
-                gc ();
-                thread->alloc_since_gc = 0;
-                continue;
-            }
-            break;
-        }
-
-        avail = heap->end - heap->pointer;
-
-        if (avail >= size) {
-
-            /* Success.  */
-            ret = heap->pointer;
-            heap->pointer += size;
-
-            largest = heap->largest;
-            if (largest < avail - size) {
-                largest = avail - size;
-                if (heap->below && heap->below->largest > largest)
-                    largest = heap->below->largest;
-            }
-
-            for (; heap; heap = heap->above) {
-                if (heap->largest <= largest) {
-                    if (heap->end - heap->pointer > largest)
-                        largest = heap->end - heap->pointer;
-                    heap->largest = largest;
-                }
-                heap->avail -= size;
-            }
-
-            thread->alloc_since_gc += size;
-            return ret;
-        }
-
-        heap = heap->below;
-    }
-
-    min = 1024;
-    max = 1024*1024;
-    alloc = min;
-    if (alloc < thread->last_heap_size * 4)
-        alloc = thread->last_heap_size * 4;
-    if (alloc > max)
-        alloc = max;
-    if (alloc < size)  /* XXX should this affect thread->last_heap_size? */
-        alloc = size;
-
-    heap = (Heap*) NPN_MemAlloc (sizeof *heap + ((alloc + 7) / 8));
-    if (!heap)
-        return 0;
-
-    ret = (NPVariant*) NPN_MemAlloc (alloc * sizeof ret[0]);
-
-    if (!ret) {
-        NPN_MemFree (heap);
-        return 0;
-    }
-    memset (ret, '\0', alloc * sizeof ret[0]);
-
-    thread->last_heap_size = alloc;
-    avail = alloc - size;
-
-    heap->size    = alloc;
-    heap->end     = ret + alloc;
-    heap->pointer = ret + size;
-    heap->above   = 0;
-
-    /* Move heap to its place in the list ordered by address.  */
-    abovep = &thread->heap;
-    while (*abovep && (*abovep)->end > heap->end) {
-        heap->above = *abovep;
-        (*abovep)->height++;
-        (*abovep)->avail += avail;
-        if ((*abovep)->largest < avail)
-            (*abovep)->largest = avail;
-        abovep = &(*abovep)->below;
-    }
-    heap->below = *abovep;
-    *abovep = heap;
-
-    heap->largest = avail;
-    if (heap->below) {
-        heap->below->above = heap;
-        heap->height = heap->below->height + 1;
-        if (heap->below->largest > avail)
-            heap->largest = heap->below->largest;
-        heap->avail = avail + heap->below->avail;
-    }
-    else {
-        heap->height = 0;
-        heap->avail = avail;
-    }
-
-    thread->alloc_since_gc += size;
-
-    return ret;
-}
-
-static NPVariant*
-tuple_alloc (uint32_t size)
-{
-    return vector_alloc (size);
-}
-
-static void
-tuple_free (Tuple* tuple)
-{
-    if (tuple->prev)
-        *tuple->prev = tuple->next;
-    if (tuple->next)
-        tuple->next->prev = tuple->prev;
-}
-
-static void
-retain_for_js (Tuple* tuple)
-{
-    tuple->next = thread->roots;
-    if (tuple->next)
-        tuple->next->prev = &tuple->next;
-    tuple->prev = &thread->roots;
-    thread->roots = tuple;
-}
-
-static NPObject*
-Thread_allocate (NPP npp, NPClass *aClass)
-{
-    Thread* ret = (Thread*) NPN_MemAlloc (sizeof (Thread));
-#if DEBUG_ALLOC
-    fprintf (stderr, "Thread allocate %p\n", ret);
-#endif  /* DEBUG_ALLOC */
-    if (ret) {
-        memset (ret, '\0', sizeof *ret);
-        NPN_RetainObject (&CONTAINING (TopObject, npclassThread, aClass)
-                          ->npobj);
-    }
-    return &ret->npobj;
-}
-
-static void
-Thread_deallocate (NPObject *npobj)
-{
-    Heap* heap;
-#if DEBUG_ALLOC
-    fprintf (stderr, "Thread deallocate %p\n", npobj);
-#endif  /* DEBUG_ALLOC */
-
-    for (heap = ((Thread*) npobj)->heap; heap;) {
-        for (NPVariant* v = heap->end - heap->size; v < heap->pointer; v++)
-            NPN_ReleaseVariantValue (v);
-
-        if (!heap->below) {
-            NPN_MemFree (heap);
-            break;
-        }
-        heap = heap->below;
-        NPN_MemFree (heap->above);
-    }
-    TopObject* top = Thread_getTop (npobj);
-    NPN_ReleaseObject (&top->npobj);
-    NPN_MemFree (npobj);
-}
-
-static bool
-Thread_hasProperty(NPObject *npobj, NPIdentifier key)
-{
-    NPUTF8* name;
-
-    if (!NPN_IdentifierIsString (key))
-        return false;
-    name = NPN_UTF8FromIdentifier (key);
-    return !!tfind (&name, &((Thread*) npobj)->tls, compare_properties);
-}
-
-static bool
-Thread_getProperty(NPObject *npobj, NPIdentifier key, NPVariant* result)
-{
-    if (NPN_IdentifierIsString (key)) {
-        NPUTF8* name = NPN_UTF8FromIdentifier (key);
-        Property* found = (Property*) tfind (&name, &((Thread*) npobj)->tls,
-                                             compare_properties);
-        if (found)
-            return copy_npvariant (npobj, result, found->value);
-    }
-    VOID_TO_NPVARIANT (*result);
-    return true;
-}
-
-static bool
-Thread_setProperty(NPObject *npobj, NPIdentifier key, const NPVariant* value)
-{
-    return false;  // XXX use tsearch
-}
-
-static bool
-Thread_removeProperty(NPObject *npobj, NPIdentifier key)
-{
-    return false;  // XXX use tdelete
-}
-
-static bool
-Thread_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
-{
-    *count = 0;  // XXX use twalk
-    return true;
-}
-
-static void
-obj_noop (NPObject *npobj)
-{
-}
 
 enum Opcode {
 #define OP(op) OP_ ## op = __LINE__,
@@ -2243,11 +2312,16 @@ op_to_opcode (const NPObject* npobj)
     return OP_DATA;
 }
 
+static NPClass Opcode_npclass;
+
 static enum Opcode
 var_to_opcode (const NPVariant *value)
 {
-    if (NPVARIANT_IS_OBJECT (*value))
-        return op_to_opcode (NPVARIANT_TO_OBJECT (*value));
+    if (NPVARIANT_IS_OBJECT (*value)) {
+        NPObject* obj = NPVARIANT_TO_OBJECT (*value);
+        if (obj->_class == &Opcode_npclass)
+            return op_to_opcode (obj);
+    }
     return OP_DATA;
 }
 
@@ -2270,7 +2344,7 @@ id_to_opnum (NPObject *npobj, NPIdentifier key)
 
     name = NPN_UTF8FromIdentifier (key);
     if (!name) {
-        NPN_SetException (npobj, "out of memory");
+        raise_oom (npobj);
         return -2;
     }
 
@@ -2315,8 +2389,8 @@ opcode_to_string (enum Opcode opcode, size_t* len)
 
 /* Give ops a toString method.  */
 static bool
-Op_invoke (NPObject *npobj, NPIdentifier name,
-           const NPVariant *args, uint32_t argCount, NPVariant *result)
+Opcode_invoke (NPObject *npobj, NPIdentifier name,
+               const NPVariant *args, uint32_t argCount, NPVariant *result)
 {
     const char* s;
     char* ret;
@@ -2335,13 +2409,13 @@ Op_invoke (NPObject *npobj, NPIdentifier name,
 
 #endif  /* NPGMP_RTTI */
 
-static NPClass Op_npclass = {
+static NPClass Opcode_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     deallocate      : obj_noop,
     invalidate      : obj_invalidate,
 #if NPGMP_RTTI
     hasMethod       : hasMethod_only_toString,
-    invoke          : Op_invoke,
+    invoke          : Opcode_invoke,
 #else
     hasMethod       : obj_id_false,
 #endif
@@ -2352,30 +2426,865 @@ static NPClass Op_npclass = {
     enumerate       : enumerate_empty
 };
 
-/*
- * Class of the "run" object.
- */
+/* XXX Should frames be reference-counted or garbage-collected?  */
+typedef struct _Frame {
+    struct _Frame* next;
+    Tuple* code;
+    NPVariant* pc;
+    /*void* locals;*/
+} Frame;
+
+typedef struct _Stack {
+    Tuple tuple;
+    size_t length;  /* includes substacks.
+                       XXX probably should include *only* substacks
+                       and be called something like segment_height. */
+    ulong segment;  /* number of segments below this one */
+    struct _Stack** table;
+} Stack;
+
+/* XXX Consider moving to C++.  */
+
+#define SEGMENT_THRESHOLD 32
+
+static inline size_t
+Stack_length (const Stack* stack)
+{
+    return stack->length;
+}
+
+static inline void
+Stack_set_length (Stack* stack, size_t length)
+{
+    stack->length = length;
+}
+
+static inline NPVariant*
+Segment_start (const Stack* stack) { return stack->tuple.start; }
+static inline NPVariant*
+Segment_end (const Stack* stack) { return stack->tuple.end; }
+
+static inline void
+Segment_set_start (Stack* stack, NPVariant* start)
+{
+    stack->tuple.start = start;
+}
+
+static inline void
+Segment_set_end (Stack* stack, NPVariant* end)
+{
+    stack->tuple.end = end;
+}
+
+static inline bool
+Segment_shared_p (const Stack* seg)
+{
+    return seg->tuple.npobj.referenceCount > 1;
+}
+
+static inline size_t
+Segment_length (const Stack* stack)
+{
+    return Segment_end (stack) - Segment_start (stack);
+}
+
+static inline bool
+Segment_contains (const Stack* stack, size_t index)
+{
+    /* Careful!  This relies on unsigned modular arithmetic.  */
+    return (size_t) (stack->length - 1 - index) < Segment_length (stack);
+}
+
+static inline size_t
+Segment_height (const Stack* stack)
+{
+    return stack->length - Segment_length (stack);
+}
+
+static inline void
+Segment_set_height (Stack* stack, size_t height)
+{
+    stack->length = height + Segment_length (stack);
+}
+
+static inline Stack**
+Segment_table (Stack* stack)
+{
+    return stack->table;
+}
+
+static inline void
+Segment_set_table (Stack* stack, Stack** table)
+{
+    stack->table = table;
+}
+
+static Stack**
+Segment_copy_table (Stack* stack)
+{
+    Stack** table;
+    size_t n = popcount (stack->segment);
+
+    table = NPN_MemAlloc (n * sizeof table[0]);
+    if (table)
+        memcpy (table, Segment_get_table (stack), n * sizeof table[0]);
+    return table;
+}
+
+#if __GNUC__
+#define popcount(x) __builtin_popcount (x)
+#else
+
+static int
+popcount (unsigned int x)
+{
+    int ret;
+    for (ret = 0; x; x >>= 1)
+        ret += (x & 1);
+    return ret;
+}
+
+#endif  /* __GNUC__ */
+
+/* The following four functions share knowledge of stack->table.  The
+   table supports lookup by index or segment number in a segmented
+   array in O(log(N)) time and O(N*log(N)) space, where N is the
+   number of segments.
+
+   XXX The order of pointers in the table should probably be reversed,
+   shifting the popcount() burden from sequential to random access.
+   Alternatively, one could add the table length to the Stack
+   structure.  */
+
+/* Place this segment atop an arbitrary stack.  Return false if memory
+   allocation fails.  Assumes STACK->table is *not* live on entry.  */
+static bool
+Segment_set_prev (Stack* stack, const Stack* prev)
+{
+    assert (!stack->table);
+
+    if (prev) {
+        size_t n;
+        Stack** table;
+        unsigned int mask;
+
+        stack->segment = prev->segment + 1;
+        n = popcount (stack->segment);
+        table = (Stack**) NPN_MemAlloc (n * sizeof table[0]);
+        if (!table)
+            return false;
+
+        Segment_set_table (stack, table);
+        NPN_RetainObject ((NPObject*) prev);
+        mask = stack->segment;
+        for (unsigned int bit = 1; bit < stack->segment; bit <<= 1) {
+            if (stack->segment & bit)
+                table[--n] = Stack_segment (prev, mask &~ bit);
+            mask |= bit;
+        }
+        assert (n == 0);
+        Stack_set_length (stack, Segment_length (stack) + Stack_length (prev));
+    }
+    else {
+        stack->segment = 0;
+        Segment_set_table (stack, 0);
+        Stack_set_length (stack, Segment_length (stack));
+    }
+    return true;
+}
+
+/* Return the segment containing INDEX.  */
+static Stack*
+Stack_segment_containing (const Stack* stack, size_t index)
+{
+    assert (index < Stack_get_length (stack));
+    while (!Segment_contains (stack, index)) {
+        Stack** table = Segment_table (stack);
+        size_t i;
+        for (i = 0; index >= Stack_get_length (table[i]); i++)
+            continue;
+        stack = table[i];
+    }
+    return stack;
+}
+
+/* Return segment number SEGMENT.  */
+static Stack*
+Stack_get_segment (const Stack* stack, unsigned int segment)
+{
+    assert (segment <= stack->segment);
+    while (segment != stack->segment) {
+        Stack** table = Segment_table (stack);
+        size_t i;
+        for (i = 0; segment >= table[i]->segment; i++)
+            continue;
+        stack = table[i];
+    }
+    return stack;
+}
+
+/* Return a pointer to the table element holding a pointer to the
+   previous segment.  The stack is valid so long as the previous
+   segment's number is one less than STACK->segment, every segment's
+   length field is correct, and there are no empty segments.  */
+static inline Stack**
+Segment_prev_ref (const Stack* stack)
+{
+    return Segment_table (stack) + (popcount (stack->segment) - 1);
+}
+
+/* End of functions intimate with stack->table.  */
+
+#if EXAMPLE_FOR_DOCUMENTATION
+static bool
+Stack_valid_p (const Stack* stack)
+{
+    size_t segment_length = Segment_length (stack);
+    const Stack* prev = *(Stack_wprev_ref (stack));
+    size_t prev_length = (prev ? prev->length : 0);
+    size_t prev_number = (prev ? prev->segment : 0);
+
+    /* This assumes all STACK->table elements point to segments of STACK.  */
+    return segment_length > 0 &&
+        stack->length == prev_length + segment_length &&
+        stack->segment == prev_segment + 1 &&
+        (prev == 0 || Stack_valid_p (prev));
+}
+#endif  /* EXAMPLE_FOR_DOCUMENTATION */
+
+static NPVariant*
+Stack_ref (const Stack* stack, size_t index)
+{
+    size_t offset;
+    stack = Stack_segment_containing (stack, index);
+    return Segment_start (stack) + (index - Segment_height (stack));
+}
+
+static Stack*
+Segment_prev (const Stack* stack)
+{
+    return (stack->segment ? *Segment_prev_ref (stack) : 0);
+}
+
+static inline void
+Segment_init (Stack* stack, NPVariant* start, NPVariant* end,
+              size_t height, unsigned int segment, Stack** table)
+{
+    Segment_set_start  (stack, start);
+    Segment_set_end    (stack, end);
+    Segment_set_height (stack, height);
+    stack->segment = segment;
+    Segment_set_table  (stack, table);
+}
+
+static const Stack*
+Stack_create (TopObject* top, NPVariant* start, NPVariant* end,
+              size_t height, unsigned int segment, Stack** table)
+{
+    Stack* stack;
+
+    stack = (Stack*) NPN_CreateObject (top->instance, &top->Stack.npclass);
+
+    if (stack)
+        Segment_init (stack, start, end, height, segment, table);
+    return stack;
+}
+
+/* Return a pass-thru copy of the part of STACK from 0 to INDEX, or
+   null if allocation fails.  Requires INDEX > 0.  */
+
+static Stack*
+Stack_substack (TopObject* top, const Stack* stack, size_t index)
+{
+    Stack* copy;
+    Stack** table;
+    assert (index <= Stack_length (stack));
+    assert (index > 0);
+
+    copy = Stack_segment_containing (stack, index - 1);
+
+    if (index == Stack_length (copy)) {
+        NPN_RetainObject ((NPObject*) copy);
+        return copy;
+    }
+    assert (Segment_length (copy) > 1);
+
+    table = Segment_copy_table (copy);
+    if (!table)
+        return 0;
+
+    copy = Stack_create (top, Segment_start (copy),
+                         Segment_start (copy) + (index - Segment_height (copy)),
+                         Segment_height (copy), copy->segment, table);
+    if (!copy)
+        NPN_MemFree (table);
+    return copy;
+}
 
 static void
-Run_deallocate (NPObject *npobj)
+Segment_clear (Stack* stack)
 {
-    TopObject* top = Run_getTop (npobj);
+    Stack* prev = Segment_prev (stack);
+    if (prev) {
+        NPN_ReleaseObject ((NPObject*) prev);
+        NPN_MemFree (stack->table);
+#ifndef NDEBUG
+        stack->table = 0;
+#endif
+    }
+}
+
+static NPObject*
+Stack_allocate (NPP npp, NPClass *aClass)
+{
+    Stack* ret = (Stack*) NPN_MemAlloc (sizeof (Stack));
 #if DEBUG_ALLOC
-    fprintf (stderr, "Run deallocate %p; %u\n", npobj, (unsigned int) top->npobj.referenceCount);
+    fprintf (stderr, "Stack allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
-    /* Decrement the top object's reference count.  See comments in
-       Mpz_deallocate.  */
-    NPN_ReleaseObject (&top->npobj);
+    if (ret) {
+        memset (ret, '\0', sizeof *ret);
+        NPN_RetainObject ((NPObject*) CONTAINING (TopObject, Stack, aClass));
+    }
+    return (NPObject*) ret;
+}
+
+static void
+Stack_deallocate (NPObject *npobj)
+{
+    Stack* stack = (Stack*) npobj;
+#if DEBUG_ALLOC
+    fprintf (stderr, "Stack deallocate %p\n", npobj);
+#endif  /* DEBUG_ALLOC */
+    if (stack->table)
+        Segment_clear (stack);
+    NPN_ReleaseObject ((NPObject*) Stack_getTop (npobj));
+    NPN_MemFree (npobj);
 }
 
 static bool
-Run_hasMethod(NPObject *npobj, NPIdentifier name)
+Stack_hasProperty (NPObject *npobj, NPIdentifier key)
+{
+    return Tuple_hasProperty (npobj, key) ||
+        key == NPN_GetStringIdentifier ("segment") ||
+        key == NPN_GetStringIdentifier ("previousSegment");
+}
+
+static bool
+stack_getProperty (NPObject *npobj, NPIdentifier key, NPVariant *result)
+{
+    const Stack* stack = (Stack*) npobj;
+
+    if (tuple_getProperty (npobj, key, result))
+        return true;
+    if (key == NPN_GetStringIdentifier ("segment"))
+        DOUBLE_TO_NPVARIANT ((double) stack->segment, *result);
+    else if (key == NPN_GetStringIdentifier ("previousSegment")) {
+        stack = Segment_prev (stack);
+        if (stack)
+            OBJECT_TO_NPVARIANT (NPN_RetainObject ((NPObject*) stack), *result);
+        else
+            VOID_TO_NPVARIANT (*result);
+    }
+    else
+        VOID_TO_NPVARIANT (*result);
+    return true;
+}
+
+static bool
+Stack_getProperty (NPObject *npobj, NPIdentifier key, NPVariant *result)
+{
+    if (!stack_getProperty (npobj, key, result))
+        VOID_TO_NPVARIANT (*result);
+    return true;
+}
+
+typedef struct _Root {
+    NPObject npobj;
+    NPObject* payload;
+    struct _Root** prev;
+    struct _Root* next;
+} Root;
+
+static NPObject*
+Root_allocate (NPP npp, NPClass *aClass)
+{
+    Root* ret = (Root*) NPN_MemAlloc (sizeof (Root));
+#if DEBUG_ALLOC
+    fprintf (stderr, "Root allocate %p\n", ret);
+#endif  /* DEBUG_ALLOC */
+    if (ret) {
+        memset (ret, '\0', sizeof *ret);
+        NPN_RetainObject ((NPObject*) CONTAINING (TopObject, Root, aClass));
+        ret->payload = 0;
+    }
+    return (NPObject*) ret;
+}
+
+static void
+Root_deallocate (NPObject *npobj)
+{
+    Root* root = (Root*) npobj;
+#if DEBUG_ALLOC
+    fprintf (stderr, "Root deallocate %p\n", npobj);
+#endif  /* DEBUG_ALLOC */
+
+    if (root->prev)
+        *root->prev = root->next;
+    if (root->next)
+        root->next->prev = root->prev;
+
+    NPObject* payload = root->payload;
+    if (payload)
+        NPN_ReleaseObject (payload);
+    NPN_ReleaseObject ((NPObject*) &Root_getTop (npobj));
+    NPN_MemFree (npobj);
+}
+
+/* Forward all methods other than memory management to the payload object.  */
+
+static bool
+Root_hasMethod (NPObject *npobj, NPIdentifier name)
+{
+    Root* root = (Root*) npobj;
+    TopObject* top = Root_getTop (npobj);
+    return NPN_HasMethod (top->instance, root->payload, name);
+}
+static bool
+Root_invoke (NPObject *npobj, NPIdentifier name,
+             const NPVariant *args, uint32_t argCount, NPVariant *result)
+{
+    Root* root = (Root*) npobj;
+    TopObject* top = Root_getTop (npobj);
+    return NPN_Invoke (top->instance, root->payload, name, args, argCount,
+                       result);
+}
+static bool
+Root_invokeDefault (NPObject *npobj,
+                    const NPVariant *args, uint32_t argCount, NPVariant *result)
+{
+    Root* root = (Root*) npobj;
+    TopObject* top = Root_getTop (npobj);
+    return NPN_InvokeDefault (top->instance, root->payload, args, argCount,
+                              result);
+}
+static bool
+Root_hasProperty (NPObject *npobj, NPIdentifier name)
+{
+    Root* root = (Root*) npobj;
+    TopObject* top = Root_getTop (npobj);
+    return NPN_HasProperty (top->instance, root->payload, name);
+}
+static bool
+Root_getProperty (NPObject *npobj, NPIdentifier name, NPVariant *result)
+{
+    Root* root = (Root*) npobj;
+    TopObject* top = Root_getTop (npobj);
+    return NPN_GetProperty (top->instance, root->payload, name, result);
+}
+static bool
+Root_setProperty (NPObject *npobj, NPIdentifier name, const NPVariant *value)
+{
+    Root* root = (Root*) npobj;
+    TopObject* top = Root_getTop (npobj);
+    return NPN_SetProperty (top->instance, root->payload, name, value);
+}
+static bool
+Root_removeProperty (NPObject *npobj, NPIdentifier name)
+{
+    Root* root = (Root*) npobj;
+    TopObject* top = Root_getTop (npobj);
+    return NPN_RemoveProperty (top->instance, root->payload, name);
+}
+static bool
+Root_enumerate (NPObject *npobj, NPIdentifier **value, uint32_t *count)
+{
+    Root* root = (Root*) npobj;
+    TopObject* top = Root_getTop (npobj);
+    return NPN_Enumerate (top->instance, root->payload, value, count);
+}
+static bool
+Root_construct (NPObject *npobj,
+                const NPVariant *args, uint32_t argCount, NPVariant *result)
+{
+    Root* root = (Root*) npobj;
+    TopObject* top = Root_getTop (npobj);
+    return NPN_Construct (top->instance, root->payload, args, argCount, result);
+}
+
+
+typedef struct _Thread {
+    Stack stack;
+    Frame frame;
+    Heap* heap;
+    size_t alloc_since_gc;
+    size_t last_heap_size;  /* size in NPVariant structures */
+    Root* roots;            /* heap areas pointed to by JavaScript.  */
+    NPVariant* pc;
+    NPVariant* sp;
+    void* tls;              /* to be used with tsearch() */
+    Gc* gc;
+} Thread;
+
+static THREAD_LOCAL Thread* Current;
+
+typedef struct _Property {
+    NPUTF8* key;
+    NPVariant* value;
+} Property;
+
+static int
+compare_properties (const void* a1, const void* a2)
+{
+    const NPUTF8* s1 = ((Property*) a1)->key;
+    const NPUTF8* s2 = ((Property*) a2)->key;
+    return strcmp (s1, s2);
+}
+
+static void
+mark (Gc* gcobj, NPVariant* start, NPVariant* end)
+{
+    /* XXX do something */
+}
+
+static void
+mark_root (const void *nodep, VISIT value, int level)
+{
+    if (value == leaf) {
+        NPVariant* var = ((const Property*) nodep)->value;
+        mark (Current->gc, var, var + 1);
+    }
+}
+
+static void
+mark_stack (Gc* gcobj, const Stack* stack)
+{
+    if (stack) {
+        mark (gcobj, Segment_start (stack), Segment_end (stack));
+        mark_stack (gcobj, Segment_prev (stack));
+    }
+}
+
+static void
+mark_object (Gc* gcobj, NPObject* object)
+{
+    /* XXX do something */
+}
+
+static void
+gc (void)
+{
+    Heap* heap;
+    size_t nheaps = Current->heap->height + 1;
+    Heap* heaps[nheaps];
+    Gc gcobj = { heaps: heaps, nheaps: nheaps };
+
+    for (heap = Current->heap; heap; heap = heap->below) {
+        memset (heap->markbits, '\0', ((heap->size + 7) / 8));
+        heaps[heap->height] = heap;
+    }
+
+    for (Root* root = Current->roots; root; root = root->next)
+        mark_object (&gcobj, root->payload);
+
+    Current->gc = &gcobj;  /* twalk() deficiency */
+
+    mark (&gcobj, Current->pc, Current->frame.code->end);
+    for (Frame* frame = Current->frame.next; frame; frame = frame->next)
+        mark (&gcobj, frame->code->start, frame->code->end);
+
+    /* XXX should avoid marking the *contents* of positions between
+       thread->sp and the current segment's end. */
+    mark_stack (&gcobj, &Current->stack);
+
+    twalk (Current->roots, mark_root);
+
+    /* XXX sweep/compact */
+}
+
+static NPVariant*
+vector_alloc (uint32_t size)
+{
+    Heap* heap;
+    Heap** abovep;
+    NPVariant* ret;
+    size_t avail, largest, alloc, min, max;
+
+    heap = Current->heap;
+    while (1) {
+
+        if (!heap || heap->largest < size) {
+            heap = Current->heap;
+            if (heap &&
+                Current->alloc_since_gc * 2 >  Current->last_heap_size && 
+                heap->avail                 >= size                    &&
+                Current->last_heap_size     >= size)
+            {
+                gc ();
+                Current->alloc_since_gc = 0;
+                continue;
+            }
+            break;
+        }
+
+        avail = heap->end - heap->pointer;
+
+        if (avail >= size) {
+
+            /* Success.  */
+            ret = heap->pointer;
+            heap->pointer += size;
+
+            largest = heap->largest;
+            if (largest < avail - size) {
+                largest = avail - size;
+                if (heap->below && heap->below->largest > largest)
+                    largest = heap->below->largest;
+            }
+
+            for (; heap; heap = heap->above) {
+                if (heap->largest <= largest) {
+                    if (heap->end - heap->pointer > largest)
+                        largest = heap->end - heap->pointer;
+                    heap->largest = largest;
+                }
+                heap->avail -= size;
+            }
+
+            Current->alloc_since_gc += size;
+            return ret;
+        }
+
+        heap = heap->below;
+    }
+
+    min = 1024;
+    max = 1024*1024;
+    alloc = min;
+    if (alloc < Current->last_heap_size * 4)
+        alloc = Current->last_heap_size * 4;
+    if (alloc > max)
+        alloc = max;
+    if (alloc < size)  /* XXX should this affect thread->last_heap_size? */
+        alloc = size;
+
+    heap = (Heap*) NPN_MemAlloc (sizeof *heap + ((alloc + 7) / 8));
+    if (!heap)
+        return 0;
+
+    ret = (NPVariant*) NPN_MemAlloc (alloc * sizeof ret[0]);
+
+    if (!ret) {
+        NPN_MemFree (heap);
+        return 0;
+    }
+    memset (ret, '\0', alloc * sizeof ret[0]);
+
+    Current->last_heap_size = alloc;
+    avail = alloc - size;
+
+    heap->size    = alloc;
+    heap->end     = ret + alloc;
+    heap->pointer = ret + size;
+    heap->above   = 0;
+
+    /* Move heap to its place in the list ordered by address.  */
+    abovep = &Current->heap;
+    while (*abovep && (*abovep)->end > heap->end) {
+        heap->above = *abovep;
+        (*abovep)->height++;
+        (*abovep)->avail += avail;
+        if ((*abovep)->largest < avail)
+            (*abovep)->largest = avail;
+        abovep = &(*abovep)->below;
+    }
+    heap->below = *abovep;
+    *abovep = heap;
+
+    heap->largest = avail;
+    if (heap->below) {
+        heap->below->above = heap;
+        heap->height = heap->below->height + 1;
+        if (heap->below->largest > avail)
+            heap->largest = heap->below->largest;
+        heap->avail = avail + heap->below->avail;
+    }
+    else {
+        heap->height = 0;
+        heap->avail = avail;
+    }
+
+    Current->alloc_since_gc += size;
+
+    return ret;
+}
+
+static NPVariant*
+tuple_alloc (uint32_t size)
+{
+    return vector_alloc (size);
+}
+
+static void
+tuple_free (Tuple* tuple)
+{
+    /* Nothing to do, data is in a garbage-collected heap.  */
+}
+
+static bool
+retain_for_js (TopObject* top, NPObject* npobj)
+{
+    Root* root = (Root*) NPN_CreateObject (top->instance, &top->Root.npclass);
+    if (!root)
+        return false;
+    root->payload = NPN_RetainObject (npobj);
+    root->next = Current->roots;
+    if (root->next)
+        root->next->prev = &root->next;
+    root->prev = &Current->roots;
+    Current->roots = root;
+    return true;
+}
+
+static NPObject*
+Thread_allocate (NPP npp, NPClass *aClass)
+{
+    Thread* ret = (Thread*) NPN_MemAlloc (sizeof (Thread));
+#if DEBUG_ALLOC
+    fprintf (stderr, "Thread allocate %p\n", ret);
+#endif  /* DEBUG_ALLOC */
+    if (ret) {
+        memset (ret, '\0', sizeof *ret);
+        NPN_RetainObject ((NPObject*) CONTAINING (TopObject, Thread, aClass));
+    }
+    return (NPObject*) ret;
+}
+
+static void
+Thread_deallocate (NPObject *npobj)
+{
+    Thread* thr = (Thread*) npobj;
+#if DEBUG_ALLOC
+    fprintf (stderr, "Thread deallocate %p\n", npobj);
+#endif  /* DEBUG_ALLOC */
+
+    for (Heap* heap = thr->heap; heap;) {
+        for (NPVariant* v = heap->end - heap->size; v < heap->pointer; v++)
+            NPN_ReleaseVariantValue (v);
+
+        if (!heap->below) {
+            NPN_MemFree (heap);
+            break;
+        }
+        heap = heap->below;
+        NPN_MemFree (heap->above);
+    }
+
+    for (Frame* frame = thr->frame.next; frame; ) {
+        Frame* next = frame->next;
+        NPN_MemFree (frame);
+        if (!next)
+            break;
+        frame = next;
+    }
+
+    TopObject* top = Thread_getTop (npobj);
+    NPN_ReleaseObject ((NPObject*) top);
+    NPN_MemFree (npobj);
+}
+
+static bool
+Thread_hasProperty(NPObject *npobj, NPIdentifier key)
+{
+    NPUTF8* name;
+
+    if (!NPN_IdentifierIsString (key))
+        return false;
+    name = NPN_UTF8FromIdentifier (key);
+    return !!tfind (&name, &((Thread*) npobj)->tls, compare_properties);
+}
+
+static bool
+Thread_getProperty(NPObject *npobj, NPIdentifier key, NPVariant* result)
+{
+    if (NPN_IdentifierIsString (key)) {
+        NPUTF8* name = NPN_UTF8FromIdentifier (key);
+        Property* found = (Property*) tfind (&name, &((Thread*) npobj)->tls,
+                                             compare_properties);
+        if (found)
+            return copy_npvariant (npobj, result, found->value);
+    }
+    VOID_TO_NPVARIANT (*result);
+    return true;
+}
+
+/* Reject containers to avoid reference loops.  */
+static bool
+allowed_in_heap (TopObject* top, const NPVariant* var)
+{
+    NPObject* o;
+
+    if (!NPVARIANT_IS_OBJECT (*var))
+        return true;
+
+    o = NPVARIANT_TO_OBJECT (*var);
+    return (o->_class == &Opcode_npclass || IS_INSTANCE_OBJECT (top, o));
+}
+
+static bool
+Thread_setProperty(NPObject *npobj, NPIdentifier key, const NPVariant* value)
+{
+    return false;  // XXX use tsearch
+}
+
+static bool
+Thread_removeProperty(NPObject *npobj, NPIdentifier key)
+{
+    return false;  // XXX use tdelete
+}
+
+static bool
+Thread_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
+{
+    *count = 0;  // XXX use twalk
+    return true;
+}
+
+/*
+ * Class of the "op" object.
+ */
+
+static NPObject*
+Op_allocate (NPP npp, NPClass* aClass)
+{
+    NPObject* ret = (NPObject*) NPN_MemAlloc (sizeof (NPObject));
+    if (ret)
+        NPN_RetainObject ((NPObject*) CONTAINING (TopObject, Op, aClass));
+        //NPN_RetainObject ((NPObject*) npp->pdata);
+    return ret;
+}
+
+static void
+Op_deallocate (NPObject *npobj)
+{
+    TopObject* top = Op_getTop (npobj);
+#if DEBUG_ALLOC
+    fprintf (stderr, "Op deallocate %p; %u\n", npobj, (unsigned int) top->npobj.referenceCount);
+#endif  /* DEBUG_ALLOC */
+    top->npobjOp = 0;
+    NPN_MemFree (npobj);
+    /* Decrement the top object's reference count.  See comments in
+       Mpz_deallocate.  */
+    NPN_ReleaseObject ((NPObject*) top);
+}
+
+static bool
+Op_hasMethod(NPObject *npobj, NPIdentifier name)
 {
     return id_to_opnum (npobj, name) >= 0;
 }
 
 static bool
-Run_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
+Op_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 {
     *count = 0;
     return true;  // XXX
@@ -2383,7 +3292,7 @@ Run_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 }
 
 static bool
-Run_invoke (NPObject *npobj, NPIdentifier name,
+Op_invoke (NPObject *npobj, NPIdentifier name,
             const NPVariant *args, uint32_t argCount, NPVariant *result)
 {
     int number;
@@ -2396,17 +3305,15 @@ Run_invoke (NPObject *npobj, NPIdentifier name,
     return true;
 }
 
-static void
-free_stack (NPVariant* stack, size_t size)
-{
-    for (size_t i = 0; i < size; i++)
-        NPN_ReleaseVariantValue (&stack[i]);
-    NPN_MemFree (stack);
-}
-
 static bool
-extend (NPVariant** pstack, size_t* palloc, size_t init, size_t count)
+ensure_stack (Thread* thread, size_t count)
 {
+    Stack* stack = &thread->stack;
+    size_t avail = Segment_end (stack) - thread->sp;
+
+    if (count > avail) {
+        
+    }
     NPVariant* newStack;
     size_t want = init + count;
 
@@ -2429,157 +3336,444 @@ extend (NPVariant** pstack, size_t* palloc, size_t init, size_t count)
     return true;
 }
 
-/* Run a script represented as function arguments.  */
+/* Return a script represented as function arguments.  */
 
 static bool
-Run_invokeDefault (NPObject* npobj,
-                   const NPVariant *args, uint32_t argCount, NPVariant *result)
+Op_invokeDefault (NPObject* npobj,
+                  const NPVariant *args, uint32_t argCount, NPVariant *result)
 {
-    TopObject* top = Run_getTop (npobj);
-    size_t alloc = 8;
-    size_t init = 0;
-    enum Opcode opcode;
-    NPObject* fun;
-    bool isEntry;
-    size_t nargs;
-    NPVariant* stack;
-    NPVariant temp;
-    size_t temp_size;
-    size_t index;
-    Tuple* temp_tuple;
-    bool ok;
+    TopObject* top = Op_getTop (npobj);
+    Tuple* tuple;
 
-    stack = (NPVariant*) NPN_MemAlloc (alloc * sizeof stack[0]);
-    if (!stack) {
-        NPN_SetException (npobj, "out of memory");
+    for (uint32_t i = 0; i < argCount; i++) {
+        if (!allowed_in_heap (top, &args[i]))
+            return set_exception (npobj, "code includes a container", result,
+                                  true);
+    }
+
+    tuple = make_tuple (top, argCount);
+    for (uint32_t i = 0; i < argCount; i++) {
+        if (!copy_npvariant (npobj, &tuple->start[i], &args[i])) {
+            VOID_TO_NPVARIANT (*result);
+            NPN_ReleaseObject (&tuple->npobj);
+            return true;
+        }
+    }
+
+    OBJECT_TO_NPVARIANT (&tuple->npobj, *result);
+    return true;
+}
+
+/* Returns the number of valid stack elements, not beyond thread->sp.  */
+static size_t
+Thread_length (const Thread* thread)
+{
+    return Segment_height (&thread->stack) +
+        (thread->sp - Segment_start (&thread->stack));
+}
+
+static NPVariant*
+stack_get (const Stack* stack, size_t index, bool* shared)
+{
+    size_t length = stack->length;
+    assert (index < length);
+    while (!Segment_shared_p (stack)) {
+        length -= Segment_length (stack);
+        if (length <= index) {
+            *shared = false;
+            return Segment_start (stack) + (index - length);
+        }
+        stack = Segment_prev (stack);
+    }
+    *shared = true;
+    return Stack_ref (stack, index);
+}
+
+/* Splice out the top element of the (shared) previous segment. */
+static bool
+stack_drop_prev_elt (TopObject* top, Stack* stack)
+{
+    size_t pos = Segment_height (stack);
+    const Stack* prev = Stack_substack (top, stack, pos - 1);
+    bool ret;
+
+    if (!prev)
+        return false;
+
+    if (LIKELY (prev->segment == stack->segment - 1)) {
+        const Stack** pprev = Segment_prev_ref (stack);
+        NPN_ReleaseObject ((NPObject*) *pprev);
+        *pprev = prev;
+        Segment_set_height (stack, Segment_height (stack) - 1);
         return true;
     }
 
-    for (;; argCount--, args++) {
-        if (!argCount) {
-            if (init == 0)
-                VOID_TO_NPVARIANT (*result);
-            else if (init == 1)
-                *result = stack[--init];
-            else
-                NPN_SetException (npobj, "tuple return unsupported");
-            break;
+    Segment_clear (stack);
+    ret = Segment_set_prev (stack, prev);
+    NPN_ReleaseObject ((NPObject*) prev);
+    return ret;
+}
+
+static bool
+undef (NPVariant* result)
+{
+    VOID_TO_NPVARIANT (*result);
+    return true;
+}
+
+static NPVariant*
+peek_arg (Thread* thread, bool* shared)
+{
+    Stack* stack = &thread->stack;
+    const Stack* prev;
+
+    if (thread->sp != Segment_start (stack)) {
+        *shared = false;
+        return thread->sp - 1;
+    }
+    if (stack->segment == 0) {
+        raisef ((NPObject*) thread, "stack underflow");
+        return 0;
+    }
+    prev = Segment_prev (stack);
+    *shared = Segment_shared_p (prev);
+    return Segment_end (prev) - 1;
+}
+
+/* Drop the top stack element when SP points to base of segment.  */
+static bool
+drop1 (Thread* thread)
+{
+    TopObject* top = Thread_getTop ((NPObject*) thread);
+    Stack* stack = &thread->stack;
+    bool shared;
+    NPVariant* var;
+
+    assert (thread->sp == Segment_start (stack));
+
+    if (stack->segment == 0) {
+        raisef ((NPObject*) thread, "stack underflow");
+        return false;
+    }
+    prev = Segment_prev (stack);
+    assert (Segment_length (prev) > 0);
+
+    if (Segment_shared_p (prev)) {
+        if (!stack_drop_prev_elt (top, stack)) {
+            raise_oom ((NPObject*) thread);
+            return false;
+        }
+    }
+    else {
+        *stack = *prev;
+        Segment_set_table (prev, 0);
+        NPN_ReleaseObject ((NPObject*) prev);
+        thread->sp = Segment_end (stack) - 1;
+        NPN_ReleaseVariantValue (thread->sp);
+        VOID_TO_NPVARIANT (*thread->sp);
+    }
+    return true;
+}
+
+/* Drop the top stack element without releasing its variant value.  */
+static bool
+drop_uninit (Thread* thread)
+{
+    Stack* stack = &thread->stack;
+    if (thread->sp == Segment_start (stack))
+        return drop1 (thread);
+    thread->sp--;
+    VOID_TO_NPVARIANT (*thread->sp);
+    return true;
+}
+
+static bool
+op_roll (Thread* thread)
+{
+    TopObject* top = Thread_getTop ((NPObject*) thread);
+    Stack* stack = &thread->stack;
+    Stack* seg;
+    size_t index, pos, ipos, len;
+    bool shared;
+    NPVariant* var;
+    NPVariant temp;
+
+    var = peek_arg (thread, &shared);
+    if (!var)
+        return false;
+
+    if (!in_size_t (top, var, &index)) {
+        raisef ((NPObject*) thread, "expected stack index");
+        return false;
+    }
+
+    pos = Thread_length (thread);
+    if (index + 2 > pos) {
+        raisef ((NPObject*) thread, "stack bounds exceeded");
+        return false;
+    }
+
+    ipos = pos - index - 2;  /* position of item to move to the top */
+    len = stack->length - Segment_length (stack);  /* top segment base pos */
+
+    if (ipos >= len) {
+        /* XXX Should move data only if size is below a threshold.  */
+        NPN_ReleaseVariantValue (--thread->sp);
+        var = thread->sp - (index + 2);
+        temp = *var;
+        memmove (var, var + 1, index * sizeof var[0]);
+        thread->sp[-1] = temp;
+        return true;
+    }
+
+    /* Slow path.  */
+    var = Stack_ref (pos - 2);
+    seg = Stack_prev (stack);
+
+    /* Pop the operand.  */
+    if (thread->sp != Segment_start (stack)) {
+        NPN_ReleaseVariantValue (--thread->sp);
+    }
+
+    else if (!Segment_shared_p (seg)) {
+        NPVariant end = Segment_get_end (seg) - 1;
+        NPN_ReleaseVariantValue (end);
+        stack->length--;
+
+        if (end == Segment_get_start (seg)) {
+            /* Discard empty segment.  */
+            NPN_MemFree (stack->table);
+            stack->table = seg->table;
+            stack->segment--;
+            seg->table = 0;
+            NPN_ReleaseObject ((NPObject*) seg);
+            seg = Stack_prev (stack);
+        }
+        else
+            Segment_set_end (seg, end);
+    }
+    XXX;
+    for (; !Segment_shared_p (seg); seg = Stack_wprev (seg)) {
+            size_t height = Segment_prev_len (seg);
+            size_t offset = (height < ipos ? ipos - height : 0);
+
+    }
+
+}
+
+/* Run a script.  */
+
+static bool
+Tuple_invokeDefault (NPObject* npobj,
+                     const NPVariant *args, uint32_t argCount,
+                     NPVariant *result)
+{
+    TopObject* top = Tuple_getTop (npobj);
+    Thread* thread = Current;
+    Stack* stack = &thread->stack;
+    Frame* frame = &thread->frame;
+    enum Opcode opcode;
+    size_t pos;
+    const Stack* prev;
+    NPObject* fun;
+    bool isEntry;
+    size_t nargs, nret, needed;
+    NPVariant* temp_ptr;
+    NPVariant temp;
+    size_t index;
+    bool shared;
+    Tuple* temp_tuple;
+    bool ok;
+
+    if (Segment_length (stack) < argCount + 1) {
+        size_t alloc = (SEGMENT_THRESHOLD + argCount + 15) &~ 15;
+        NPVariant* sp = vector_alloc (alloc);
+
+        if (!sp)
+            /* XXX Could try allocating in segments for large argCount. */
+            return oom (npobj, result, true);
+
+        Segment_init (stack, sp, thread->sp + alloc, 0, 0, 0);
+        thread->sp = sp;
+    }
+
+    for (uint32_t i = 0; i < argCount; i++) {
+        if (!allowed_in_heap (top, &args[i]))
+            return throwf (npobj, result, true, "argument is a container");
+    }
+
+    /* Copy args to stack.  */
+    for (uint32_t i = 0; i < argCount; i++) {
+        if (copy_npvariant (npobj, thread->sp, &args[i])) {
+            thread->sp++;
+            continue;
+        }
+        /* Error. */
+        while (i--) {
+            NPN_ReleaseVariantValue (--thread->sp);
+            VOID_TO_NPVARIANT (*thread->sp);
+        }
+        return check_ex (top, npobj, result, true);
+    }
+
+    frame->code = (Tuple*) npobj;
+    frame->next = 0;
+
+    for (frame->pc = frame->code->start; ; frame->pc++) {
+
+        if (frame->pc == frame->code->end) {
+            Frame next = frame->next;
+            if (!frame)
+                break;
+            *frame = *next;
+            NPN_MemFree (next);
+            continue;
         }
 
-        opcode = var_to_opcode (&args[0]);
+        opcode = var_to_opcode (frame->pc);
         switch (opcode) {
 
         case OP_pick:
-            if (init < 1 || !in_size_t (top, &stack[init-1], &temp_size) ||
-                temp_size >= init - 1) {
-                /* XXX should report a few script+stack elts. */
-                NPN_SetException (npobj, "script error");
-                goto done;
+
+            temp_ptr = peek_arg (thread, &shared);
+            if (UNLIKELY (!temp_ptr))
+                return check_ex (top, npobj, result, true);
+            if (UNLIKELY (!in_size_t (top, temp_ptr, &index)))
+                return throwf (npobj, result, true, "expected stack index");
+
+            pos = Thread_length (thread);
+            if (UNLIKELY (index >= pos - 1))
+                return throwf (npobj, result, true, "stack bounds exceeded");
+
+            if (UNLIKELY (shared)) {
+                if (!stack_drop_prev_elt (top, stack))
+                    return oom (npobj, result, true);
+                temp_ptr = Segment_start (stack);
             }
-            NPN_ReleaseVariantValue (&stack[--init]);
-            if (!copy_npvariant (npobj, &stack[init],
-                                 &stack[init - temp_size - 1]))
-                goto done;
-            init++;
+            else {
+                NPN_ReleaseVariantValue (temp_ptr);
+                VOID_TO_NPVARIANT (*temp_ptr);  /* XXX Being careful. */
+            }
+            if (UNLIKELY (!copy_npvariant (npobj, temp_ptr,
+                                           Stack_ref (stack, pos - index - 2))))
+                return check_ex (top, npobj, result, true);
             continue;
 
         case OP_roll:
-            if (init < 1 || !in_size_t (top, &stack[init-1], &temp_size) ||
-                temp_size >= init - 1) {
-                /* XXX should report a few script+stack elts. */
-                NPN_SetException (npobj, "script error");
-                goto done;
-            }
-            NPN_ReleaseVariantValue (&stack[--init]);
-            index = init - 1 - temp_size;
-            temp = stack[index];
-            memmove (&stack[index], &stack[index + 1],
-                     temp_size * sizeof stack[0]);
-            stack[init - 1] = temp;
+            if (UNLIKELY (!op_roll (thread)))
+                return check_ex (top, npobj, result, true);
             continue;
 
         case OP_drop:
-            if (init < 1) {
-                /* XXX should report a few script+stack elts. */
-                NPN_SetException (npobj, "stack underflow");
-                goto done;
+            if (LIKELY (thread->sp != Segment_start (stack))) {
+                NPN_ReleaseVariantValue (--thread->sp);
+                VOID_TO_NPVARIANT (*thread->sp);  /* XXX Being careful. */
+                continue;
             }
-            NPN_ReleaseVariantValue (&stack[--init]);
+            if (UNLIKELY (!drop1 (thread)))
+                return check_ex (top, npobj, result, true);
             continue;
 
-        case OP_dump:
-            temp_tuple = make_tuple (top, init);
-            if (!temp_tuple) {
-                NPN_SetException (npobj, "out of memory");
-                goto done;
-            }
-            memcpy (temp_tuple->array, stack, init * sizeof stack[0]);
-            OBJECT_TO_NPVARIANT (&temp_tuple->npobj, stack[0]);
-            init = 1;
-            continue;
+        case OP_quote:
+            if (UNLIKELY (!advance_pc (frame)))
+                return throwf (npobj, result, true, "incomplete quotation");
 
+            /* FALL THROUGH */
         case OP_DATA:
-            // Push data.
-            if (!extend (&stack, &alloc, init, 1)) {
-                NPN_SetException (npobj, "out of memory");
-                break;
+
+            /* Push data.  */
+            if (UNLIKELY (!extend (thread, 1)))
+                return oom (npobj, result, true);
+
+            if (UNLIKELY (!copy_npvariant (npobj, thread->sp - 1, frame->pc))) {
+                drop_uninit (thread);
+                return check_ex (top, npobj, result, true);
             }
-            if (!copy_npvariant (npobj, &stack[init], &args[0]))
-                break;
-            init++;
+
             continue;
 
-        case OP_call:
+        default:
             break;
         }
 
-        if (init < 1) {
-            /* XXX should report a few script+stack elts. */
-            NPN_SetException (npobj, "stack underflow");
-            goto done;
+        if (UNLIKELY (!NPVARIANT_IS_OBJECT (frame->pc)))
+            return throwf (npobj, result, true, "not a function");
+
+        fun = NPVARIANT_TO_OBJECT (frame->pc);
+
+        if (fun->_class == &top->Tuple.npclass) {
+            Tuple* tuple = (Tuple*) fun;
+            Frame* next;
+
+            frame->pc++;
+            if (frame->pc == frame->code->end) {
+                /* Eliminate the tail call.  */
+                frame->code = tuple;
+                continue;
+            }
+
+            next = (Frame*) NPN_MemAlloc (sizeof (Frame));
+            if (!next) {
+                frame->pc--;
+                return oom (npobj, result, true);
+            }
+            *next = *frame;
+            frame->next = next;
+            frame->code = tuple;
+            frame->pc   = frame->code->start;
+            continue;
         }
 
-        if (!NPVARIANT_IS_OBJECT (stack[init-1])) {
-            /* XXX should report a few script+stack elts. */
-            NPN_SetException (npobj, "not a function");
-            break;
-        }
-
-        fun = NPVARIANT_TO_OBJECT (stack[init-1]);
-        NPN_ReleaseVariantValue (&stack[--init]);
-        isEntry = (fun->_class == &top->npclassEntry);
+        isEntry = (fun->_class == &top->Entry.npclass);
         ok = false;
 
         if (isEntry) {
             nargs = Entry_length (fun);
+            nret = Entry_outLength (fun);
             ok = true;
         }
-        else if (NPN_GetProperty (top->instance, fun,
-                                  NPN_GetStringIdentifier ("length"), &temp)) {
+        else if (NPN_GetProperty (top->instance, fun, ID_length, &temp)) {
             ok = in_size_t (top, &temp, &nargs);
             NPN_ReleaseVariantValue (&temp);
+            nret = 1;
         }
 
-        if (!ok) {
-            /* XXX should report a few script+stack elts. */
-            NPN_SetException (npobj, "can not find function arity");
-            break;
+        if (!ok)
+            return throwf (npobj, result, true, "can not find function arity");
+
+        if (nret > nargs) {
+            needed = nret;
+            if (UNLIKELY (!extend (thread, nret - nargs)))
+                return oom (npobj, result, true);
+        }
+        else {
+            needed = nargs;
         }
 
-        if (nargs > init) {
-            /* XXX should report a few script+stack elts. */
-            NPN_SetException (npobj, "stack underflow");
-            break;
+        if (UNLIKELY (needed > thread->sp - Segment_start (stack)) &&
+            UNLIKELY (!Stack_join (stack, needed)))
+            return check_ex (top, npobj, result, true);
+
+        if (nret > nargs)
+            memset (thread->sp - (nret - nargs), '\0',
+                    (nret - nargs) * sizeof thread->sp[0]);
+
+        if (isEntry) {
+            if (UNLIKELY (!enter (top, ((Entry*) fun)->number,
+                                  thread->sp - nargs, nargs,
+                                  thread->sp - nargs))) {
+                /* XXX Where should sp point? */
+                return check_ex (top, npobj, result, true);
+            }
+            if (nret > nargs)
+                XXX;  /* XXX can't use overlapping args+result buffers. */
         }
-
-        VOID_TO_NPVARIANT (temp);
-
-        if (isEntry)
-            Entry_invokeDefault (fun, &stack[init - nargs], nargs, &temp);
-        else if (!NPN_InvokeDefault (top->instance, fun, &stack[init - nargs],
-                                     nargs, &temp)) {
-            /* XXX should report a few script+stack elts. */
-            NPN_SetException (npobj, "call failed");
+        else {
+            /* XXX NPAPI does not report exceptions thrown.  */
+            if (!NPN_InvokeDefault (top->instance, fun, thread->sp - needed,
+                                    nargs, &temp)) {
+                /* XXX Where should sp point? */
+            raisef (npobj, "call failed");
             break;
         }
 
@@ -2598,8 +3792,8 @@ Run_invokeDefault (NPObject* npobj,
             continue;
 
         if (!extend (&stack, &alloc, init, nargs)) {
-            NPN_SetException (npobj, "out of memory");
-            break;
+            raise_oom (npobj);
+            return check_ex (top, npobj, result, true);
         }
         if (nargs == 1)
             stack[init++] = temp;
@@ -2611,8 +3805,19 @@ Run_invokeDefault (NPObject* npobj,
             NPN_ReleaseObject (&temp_tuple->npobj);
         }
     }
-    done:
-    free_stack (stack, init);
+
+    tuple = (Tuple*) NPN_CreateObject (top->instance, &top->Tuple.npclass);
+
+    if (tuple) {
+        tuple->array = thread->stack;
+        tuple->nelts = thread->sp - thread->stack;
+        retain_for_js (top, (NPObject*) tuple);
+        OPBJECT_TO_NPVARIANT (&tuple->npobj, *result);
+    }
+    else {
+        raisef (npobj, "tuple return unsupported");
+        return check_ex (top, npobj, result, true);
+    }
     return true;
 }
 
@@ -2620,7 +3825,7 @@ static void
 init_script ()
 {
     for (size_t i = 0; i < NUM_OPS; i++) {
-        Ops[i]._class = &Op_npclass;
+        Ops[i]._class = &Opcode_npclass;
         Ops[i].referenceCount = 0x7fffffff;
     }
 }
@@ -2635,6 +3840,7 @@ static NPObject*
 TopObject_allocate (NPP instance, NPClass *aClass)
 {
     TopObject* ret = (TopObject*) NPN_MemAlloc (sizeof (TopObject));
+
 #if DEBUG_ALLOC
     fprintf (stderr, "TopObject allocate %p\n", ret);
 #endif  /* DEBUG_ALLOC */
@@ -2644,154 +3850,193 @@ TopObject_allocate (NPP instance, NPClass *aClass)
 
         ret->instance                        = instance;
 
-        ret->npclassGmp.structVersion       = NP_CLASS_STRUCT_VERSION;
-        ret->npclassGmp.deallocate          = Gmp_deallocate;
-        ret->npclassGmp.invalidate          = obj_invalidate;
-        ret->npclassGmp.hasMethod           = obj_id_false;
-        ret->npclassGmp.hasProperty         = Gmp_hasProperty;
-        ret->npclassGmp.getProperty         = Gmp_getProperty;
-        ret->npclassGmp.setProperty         = setProperty_ro;
-        ret->npclassGmp.removeProperty      = removeProperty_ro;
-        ret->npclassGmp.enumerate           = Gmp_enumerate;
-
-        ret->npobjGmp._class                 = &ret->npclassGmp;
+        ret->Gmp.topOffset                   = TYPE_Gmp;
+        ret->Gmp.npclass.structVersion       = NP_CLASS_STRUCT_VERSION;
+        ret->Gmp.npclass.allocate            = Gmp_allocate;
+        ret->Gmp.npclass.deallocate          = Gmp_deallocate;
+        ret->Gmp.npclass.invalidate          = obj_invalidate;
+        ret->Gmp.npclass.hasMethod           = obj_id_false;
+        ret->Gmp.npclass.hasProperty         = Gmp_hasProperty;
+        ret->Gmp.npclass.getProperty         = Gmp_getProperty;
+        ret->Gmp.npclass.setProperty         = setProperty_ro;
+        ret->Gmp.npclass.removeProperty      = removeProperty_ro;
+        ret->Gmp.npclass.enumerate           = Gmp_enumerate;
 
 #if NPGMP_SCRIPT
-        ret->npclassRun.structVersion       = NP_CLASS_STRUCT_VERSION;
-        ret->npclassRun.deallocate          = Run_deallocate;
-        ret->npclassRun.invalidate          = obj_invalidate;
-        ret->npclassRun.hasMethod           = Run_hasMethod;
-        ret->npclassRun.invoke              = Run_invoke;
-        ret->npclassRun.invokeDefault       = Run_invokeDefault;
-        ret->npclassRun.hasProperty         = obj_id_false;
-        ret->npclassRun.getProperty         = obj_id_var_void;
-        ret->npclassRun.setProperty         = setProperty_ro;
-        ret->npclassRun.removeProperty      = removeProperty_ro;
-        ret->npclassRun.enumerate           = Run_enumerate;
+        ret->Op.topOffset                    = TYPE_Op;
+        ret->Op.npclass.structVersion        = NP_CLASS_STRUCT_VERSION;
+        ret->Op.npclass.allocate             = Op_allocate;
+        ret->Op.npclass.deallocate           = Op_deallocate;
+        ret->Op.npclass.invalidate           = obj_invalidate;
+        ret->Op.npclass.hasMethod            = Op_hasMethod;
+        ret->Op.npclass.invoke               = Op_invoke;
+        ret->Op.npclass.invokeDefault        = Op_invokeDefault;
+        ret->Op.npclass.hasProperty          = obj_id_false;
+        ret->Op.npclass.getProperty          = obj_id_var_void;
+        ret->Op.npclass.setProperty          = setProperty_ro;
+        ret->Op.npclass.removeProperty       = removeProperty_ro;
+        ret->Op.npclass.enumerate            = Op_enumerate;
 
-        ret->npobjRun._class                = &ret->npclassRun;
+        ret->Root.topOffset                  = TYPE_Root;
+        ret->Root.npclass.structVersion      = NP_CLASS_STRUCT_VERSION;
+        ret->Root.npclass.allocate           = Root_allocate;
+        ret->Root.npclass.deallocate         = Root_deallocate;
+        ret->Root.npclass.invalidate         = obj_invalidate;
+        ret->Root.npclass.hasMethod          = Root_hasMethod;
+        ret->Root.npclass.invoke             = Root_invoke;
+        ret->Root.npclass.invokeDefault      = Root_invokeDefault;
+        ret->Root.npclass.hasProperty        = Root_hasProperty;
+        ret->Root.npclass.getProperty        = Root_getProperty;
+        ret->Root.npclass.setProperty        = Root_setProperty;
+        ret->Root.npclass.removeProperty     = Root_removeProperty;
+        ret->Root.npclass.enumerate          = Root_enumerate;
+        ret->Root.npclass.construct          = Root_construct;
 
-        ret->npclassThread.structVersion    = NP_CLASS_STRUCT_VERSION;
-        ret->npclassThread.allocate         = Thread_allocate;
-        ret->npclassThread.deallocate       = Thread_deallocate;
-        ret->npclassThread.invalidate       = obj_invalidate;
-        ret->npclassThread.hasMethod        = obj_id_false;
-        ret->npclassThread.hasProperty      = Thread_hasProperty;
-        ret->npclassThread.getProperty      = Thread_getProperty;
-        ret->npclassThread.setProperty      = Thread_setProperty;
-        ret->npclassThread.removeProperty   = Thread_removeProperty;
-        ret->npclassThread.enumerate        = Thread_enumerate;
+        ret->Stack.topOffset                 = TYPE_Stack;
+        ret->Stack.npclass.structVersion     = NP_CLASS_STRUCT_VERSION;
+        ret->Stack.npclass.allocate          = Stack_allocate;
+        ret->Stack.npclass.deallocate        = Stack_deallocate;
+        ret->Stack.npclass.invalidate        = obj_invalidate;
+        ret->Stack.npclass.hasMethod         = obj_id_false;
+        ret->Stack.npclass.hasProperty       = Stack_hasProperty;
+        ret->Stack.npclass.getProperty       = Stack_getProperty;
+        ret->Stack.npclass.setProperty       = Stack_setProperty;
+        ret->Stack.npclass.removeProperty    = Stack_removeProperty;
+        ret->Stack.npclass.enumerate         = Stack_enumerate;
+ 
+        ret->Thread.topOffset                = TYPE_Thread;
+        ret->Thread.npclass.structVersion    = NP_CLASS_STRUCT_VERSION;
+        ret->Thread.npclass.allocate         = Thread_allocate;
+        ret->Thread.npclass.deallocate       = Thread_deallocate;
+        ret->Thread.npclass.invalidate       = obj_invalidate;
+        ret->Thread.npclass.hasMethod        = obj_id_false;
+        ret->Thread.npclass.hasProperty      = Thread_hasProperty;
+        ret->Thread.npclass.getProperty      = Thread_getProperty;
+        ret->Thread.npclass.setProperty      = Thread_setProperty;
+        ret->Thread.npclass.removeProperty   = Thread_removeProperty;
+        ret->Thread.npclass.enumerate        = Thread_enumerate;
 #endif
 
-        ret->npclassEntry.structVersion     = NP_CLASS_STRUCT_VERSION;
-        ret->npclassEntry.allocate          = Entry_allocate;
-        ret->npclassEntry.deallocate        = Entry_deallocate;
-        ret->npclassEntry.invalidate        = obj_invalidate;
-        ret->npclassEntry.invokeDefault     = Entry_invokeDefault;
+        ret->Entry.topOffset                 = TYPE_Entry;
+        ret->Entry.npclass.structVersion     = NP_CLASS_STRUCT_VERSION;
+        ret->Entry.npclass.allocate          = Entry_allocate;
+        ret->Entry.npclass.deallocate        = Entry_deallocate;
+        ret->Entry.npclass.invalidate        = obj_invalidate;
+        ret->Entry.npclass.invokeDefault     = Entry_invokeDefault;
 #if NPGMP_RTTI
-        ret->npclassEntry.hasMethod         = Entry_hasMethod;
-        ret->npclassEntry.invoke            = Entry_invoke;
-        ret->npclassEntry.hasProperty       = Entry_hasProperty;
-        ret->npclassEntry.getProperty       = Entry_getProperty;
+        ret->Entry.npclass.hasMethod         = Entry_hasMethod;
+        ret->Entry.npclass.invoke            = Entry_invoke;
+        ret->Entry.npclass.hasProperty       = Entry_hasProperty;
+        ret->Entry.npclass.getProperty       = Entry_getProperty;
 #else
-        ret->npclassEntry.hasMethod         = obj_id_false;
-        ret->npclassEntry.hasProperty       = obj_id_false;
-        ret->npclassEntry.getProperty       = obj_id_var_void;
+        ret->Entry.npclass.hasMethod         = obj_id_false;
+        ret->Entry.npclass.hasProperty       = obj_id_false;
+        ret->Entry.npclass.getProperty       = obj_id_var_void;
 #endif
-        ret->npclassEntry.setProperty       = setProperty_ro;
-        ret->npclassEntry.removeProperty    = removeProperty_ro;
-        ret->npclassEntry.enumerate         = enumerate_empty;
+        ret->Entry.npclass.setProperty       = setProperty_ro;
+        ret->Entry.npclass.removeProperty    = removeProperty_ro;
+        ret->Entry.npclass.enumerate         = enumerate_empty;
 
-        ret->npclassTuple.structVersion     = NP_CLASS_STRUCT_VERSION;
-        ret->npclassTuple.allocate          = Tuple_allocate;
-        ret->npclassTuple.deallocate        = Tuple_deallocate;
-        ret->npclassTuple.invalidate        = obj_invalidate;
-        ret->npclassTuple.hasMethod         = obj_id_false;
-        ret->npclassTuple.hasProperty       = Tuple_hasProperty;
-        ret->npclassTuple.getProperty       = Tuple_getProperty;
-        ret->npclassTuple.setProperty       = setProperty_ro;
-        ret->npclassTuple.removeProperty    = removeProperty_ro;
-        ret->npclassTuple.enumerate         = Tuple_enumerate;
+        ret->Tuple.topOffset                 = TYPE_Tuple;
+        ret->Tuple.npclass.structVersion     = NP_CLASS_STRUCT_VERSION;
+        ret->Tuple.npclass.allocate          = Tuple_allocate;
+        ret->Tuple.npclass.deallocate        = Tuple_deallocate;
+        ret->Tuple.npclass.invalidate        = obj_invalidate;
+#if NPGMP_SCRIPT
+        ret->Tuple.npclass.invokeDefault     = Tuple_invokeDefault;
+#endif
+        ret->Tuple.npclass.hasMethod         = obj_id_false;
+        ret->Tuple.npclass.hasProperty       = Tuple_hasProperty;
+        ret->Tuple.npclass.getProperty       = Tuple_getProperty;
+        ret->Tuple.npclass.setProperty       = setProperty_ro;
+        ret->Tuple.npclass.removeProperty    = removeProperty_ro;
+        ret->Tuple.npclass.enumerate         = enumerate_empty;
 
-        ret->npclassInteger.structVersion   = NP_CLASS_STRUCT_VERSION;
-        ret->npclassInteger.allocate        = Integer_allocate;
-        ret->npclassInteger.deallocate      = Integer_deallocate;
-        ret->npclassInteger.invalidate      = obj_invalidate;
-        ret->npclassInteger.hasMethod       = hasMethod_only_toString;
-        ret->npclassInteger.invoke          = Integer_invoke;
-        ret->npclassInteger.hasProperty     = obj_id_false;
-        ret->npclassInteger.getProperty     = obj_id_var_void;
-        ret->npclassInteger.setProperty     = setProperty_ro;
-        ret->npclassInteger.removeProperty  = removeProperty_ro;
-        ret->npclassInteger.enumerate       = enumerate_empty;
+        ret->Integer.topOffset               = TYPE_Integer;
+        ret->Integer.npclass.structVersion   = NP_CLASS_STRUCT_VERSION;
+        ret->Integer.npclass.allocate        = Integer_allocate;
+        ret->Integer.npclass.deallocate      = Integer_deallocate;
+        ret->Integer.npclass.invalidate      = obj_invalidate;
+        ret->Integer.npclass.hasMethod       = hasMethod_only_toString;
+        ret->Integer.npclass.invoke          = Integer_invoke;
+        ret->Integer.npclass.hasProperty     = obj_id_false;
+        ret->Integer.npclass.getProperty     = obj_id_var_void;
+        ret->Integer.npclass.setProperty     = setProperty_ro;
+        ret->Integer.npclass.removeProperty  = removeProperty_ro;
+        ret->Integer.npclass.enumerate       = enumerate_empty;
 
 #if NPGMP_MPQ
-        ret->npclassMpzRef.structVersion    = NP_CLASS_STRUCT_VERSION;
-        ret->npclassMpzRef.allocate         = MpzRef_allocate;
-        ret->npclassMpzRef.deallocate       = MpzRef_deallocate;
-        ret->npclassMpzRef.invalidate       = obj_invalidate;
-        ret->npclassMpzRef.hasMethod        = hasMethod_only_toString;
-        ret->npclassMpzRef.invoke           = MpzRef_invoke;
-        ret->npclassMpzRef.hasProperty      = obj_id_false;
-        ret->npclassMpzRef.getProperty      = obj_id_var_void;
-        ret->npclassMpzRef.setProperty      = setProperty_ro;
-        ret->npclassMpzRef.removeProperty   = removeProperty_ro;
-        ret->npclassMpzRef.enumerate        = enumerate_empty;
+        ret->MpzRef.topOffset                = TYPE_MpzRef;
+        ret->MpzRef.npclass.structVersion    = NP_CLASS_STRUCT_VERSION;
+        ret->MpzRef.npclass.allocate         = MpzRef_allocate;
+        ret->MpzRef.npclass.deallocate       = MpzRef_deallocate;
+        ret->MpzRef.npclass.invalidate       = obj_invalidate;
+        ret->MpzRef.npclass.hasMethod        = hasMethod_only_toString;
+        ret->MpzRef.npclass.invoke           = MpzRef_invoke;
+        ret->MpzRef.npclass.hasProperty      = obj_id_false;
+        ret->MpzRef.npclass.getProperty      = obj_id_var_void;
+        ret->MpzRef.npclass.setProperty      = setProperty_ro;
+        ret->MpzRef.npclass.removeProperty   = removeProperty_ro;
+        ret->MpzRef.npclass.enumerate        = enumerate_empty;
 
-        ret->npclassRational.structVersion  = NP_CLASS_STRUCT_VERSION;
-        ret->npclassRational.allocate       = Rational_allocate;
-        ret->npclassRational.deallocate     = Rational_deallocate;
-        ret->npclassRational.invalidate     = obj_invalidate;
-        ret->npclassRational.hasMethod      = hasMethod_only_toString;
-        ret->npclassRational.invoke         = Rational_invoke;
-        ret->npclassRational.hasProperty    = obj_id_false;
-        ret->npclassRational.getProperty    = obj_id_var_void;
-        ret->npclassRational.setProperty    = setProperty_ro;
-        ret->npclassRational.removeProperty = removeProperty_ro;
-        ret->npclassRational.enumerate      = enumerate_empty;
+        ret->Rational.topOffset              = TYPE_Rational;
+        ret->Rational.npclass.structVersion  = NP_CLASS_STRUCT_VERSION;
+        ret->Rational.npclass.allocate       = Rational_allocate;
+        ret->Rational.npclass.deallocate     = Rational_deallocate;
+        ret->Rational.npclass.invalidate     = obj_invalidate;
+        ret->Rational.npclass.hasMethod      = hasMethod_only_toString;
+        ret->Rational.npclass.invoke         = Rational_invoke;
+        ret->Rational.npclass.hasProperty    = obj_id_false;
+        ret->Rational.npclass.getProperty    = obj_id_var_void;
+        ret->Rational.npclass.setProperty    = setProperty_ro;
+        ret->Rational.npclass.removeProperty = removeProperty_ro;
+        ret->Rational.npclass.enumerate      = enumerate_empty;
 #endif  /* NPGMP_MPQ */
 
 #if NPGMP_RAND
-        ret->npclassRand.structVersion      = NP_CLASS_STRUCT_VERSION;
-        ret->npclassRand.allocate           = Rand_allocate;
-        ret->npclassRand.deallocate         = Rand_deallocate;
-        ret->npclassRand.invalidate         = obj_invalidate;
-        ret->npclassRand.hasMethod          = obj_id_false;
-        ret->npclassRand.hasProperty        = obj_id_false;
-        ret->npclassRand.getProperty        = obj_id_var_void;
-        ret->npclassRand.setProperty        = setProperty_ro;
-        ret->npclassRand.removeProperty     = removeProperty_ro;
-        ret->npclassRand.enumerate          = enumerate_empty;
+        ret->Rand.topOffset                  = TYPE_Rand;
+        ret->Rand.npclass.structVersion      = NP_CLASS_STRUCT_VERSION;
+        ret->Rand.npclass.allocate           = Rand_allocate;
+        ret->Rand.npclass.deallocate         = Rand_deallocate;
+        ret->Rand.npclass.invalidate         = obj_invalidate;
+        ret->Rand.npclass.hasMethod          = obj_id_false;
+        ret->Rand.npclass.hasProperty        = obj_id_false;
+        ret->Rand.npclass.getProperty        = obj_id_var_void;
+        ret->Rand.npclass.setProperty        = setProperty_ro;
+        ret->Rand.npclass.removeProperty     = removeProperty_ro;
+        ret->Rand.npclass.enumerate          = enumerate_empty;
 #endif  /* NPGMP_RAND */
 
 #if NPGMP_MPF
-        ret->npclassFloat.structVersion     = NP_CLASS_STRUCT_VERSION;
-        ret->npclassFloat.allocate          = Float_allocate;
-        ret->npclassFloat.deallocate        = Float_deallocate;
-        ret->npclassFloat.invalidate        = obj_invalidate;
-        ret->npclassFloat.hasMethod         = hasMethod_only_toString;
-        ret->npclassFloat.invoke            = Float_invoke;
-        ret->npclassFloat.hasProperty       = obj_id_false;
-        ret->npclassFloat.getProperty       = obj_id_var_void;
-        ret->npclassFloat.setProperty       = setProperty_ro;
-        ret->npclassFloat.removeProperty    = removeProperty_ro;
-        ret->npclassFloat.enumerate         = enumerate_empty;
+        ret->Float.topOffset                 = TYPE_Float;
+        ret->Float.npclass.structVersion     = NP_CLASS_STRUCT_VERSION;
+        ret->Float.npclass.allocate          = Float_allocate;
+        ret->Float.npclass.deallocate        = Float_deallocate;
+        ret->Float.npclass.invalidate        = obj_invalidate;
+        ret->Float.npclass.hasMethod         = hasMethod_only_toString;
+        ret->Float.npclass.invoke            = Float_invoke;
+        ret->Float.npclass.hasProperty       = obj_id_false;
+        ret->Float.npclass.getProperty       = obj_id_var_void;
+        ret->Float.npclass.setProperty       = setProperty_ro;
+        ret->Float.npclass.removeProperty    = removeProperty_ro;
+        ret->Float.npclass.enumerate         = enumerate_empty;
 
         ret->default_mpf_prec                = 0;
 #endif
     }
-    return &ret->npobj;
+    return (NPObject*) ret;
 }
 
 static void
 TopObject_deallocate (NPObject *npobj)
 {
+    TopObject* top = (TopObject*) npobj;
 #if DEBUG_ALLOC
     fprintf (stderr, "TopObject deallocate %p\n", npobj);
 #endif  /* DEBUG_ALLOC */
 
 #if 0
-    if (((TopObject*) npobj)->destroying) {
+    if (top->destroying) {
 #if DEBUG_ALLOC
         fprintf (stderr, "TopObject deallocate %p: skipping free\n", npobj);
 #endif  /* DEBUG_ALLOC */
@@ -2799,6 +4044,7 @@ TopObject_deallocate (NPObject *npobj)
     }
 #endif
 
+    free_errmsg (top->errmsg);
     NPN_MemFree (npobj);
 }
 
@@ -2807,7 +4053,7 @@ TopObject_hasProperty(NPObject *npobj, NPIdentifier key)
 {
     return key == NPN_GetStringIdentifier ("gmp")
 #if NPGMP_SCRIPT
-        || key == NPN_GetStringIdentifier ("run")
+        || key == NPN_GetStringIdentifier ("op")
 #endif
         ;
 }
@@ -2818,19 +4064,33 @@ TopObject_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
     TopObject* top = (TopObject*) npobj;
     NPObject* ret = 0;
 
-    if (key == NPN_GetStringIdentifier ("gmp"))
-        ret = &top->npobjGmp;
-
+    if (key == NPN_GetStringIdentifier ("gmp")) {
+        if (top->npobjGmp)
+            NPN_RetainObject ((NPObject*) top->npobjGmp);
+        else {
+            top->npobjGmp = NPN_CreateObject (top->instance,
+                                              (NPClass*) &top->Gmp);
+            if (!top->npobjGmp)
+                return oom (npobj, result, true);
+        }
+        ret = top->npobjGmp;
+    }
 #if NPGMP_SCRIPT
-    else if (key == NPN_GetStringIdentifier ("run"))
-        ret = &top->npobjRun;
+    else if (key == NPN_GetStringIdentifier ("op")) {
+        if (top->npobjOp)
+            NPN_RetainObject ((NPObject*) top->npobjOp);
+        else {
+            top->npobjOp = NPN_CreateObject (top->instance,
+                                             (NPClass*) &top->Op);
+            if (!top->npobjOp)
+                return oom (npobj, result, true);
+        }
+        ret = top->npobjOp;
+    }
 #endif
 
-    if (ret) {
-        if (!ret->referenceCount)
-            NPN_RetainObject (npobj);
+    if (ret)
         OBJECT_TO_NPVARIANT (NPN_RetainObject (ret), *result);
-    }
     else
         VOID_TO_NPVARIANT (*result);
 
@@ -2846,12 +4106,12 @@ TopObject_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 #endif
         ;
     *count = cnt;
-    *value = (NPIdentifier*) NPN_MemAlloc (cnt * sizeof (NPIdentifier*));
+    *value = (NPIdentifier*) NPN_MemAlloc (cnt * sizeof (NPIdentifier));
     if (!*value)
         return false;
     (*value)[0] = NPN_GetStringIdentifier ("gmp");
 #if NPGMP_SCRIPT
-    (*value)[1] = NPN_GetStringIdentifier ("run");
+    (*value)[1] = NPN_GetStringIdentifier ("op");
 #endif
     return true;
 }
@@ -2868,6 +4128,16 @@ static NPClass TopObject_npclass = {
     removeProperty  : removeProperty_ro,
     enumerate       : TopObject_enumerate
 };
+
+static TopObject*
+get_top (NPObject* npobj)
+{
+    if (npobj->_class == &TopObject_npclass)
+        return (TopObject*) npobj;
+    return (TopObject*) ((char*) npobj->_class -
+                         ((Class*) npobj->_class)->topOffset);
+}
+
 
 /*
  * NPAPI plug-in entry points.
@@ -2905,7 +4175,7 @@ npp_Destroy(NPP instance, NPSavedData** save) {
 #endif  /* DEBUG_ALLOC */
     instance->pdata = 0;
     if (top) {
-        NPN_ReleaseObject (&top->npobj);
+        NPN_ReleaseObject ((NPObject*) top);
         top->destroying = true;
     }
     return NPERR_NO_ERROR;
@@ -2917,7 +4187,7 @@ npp_GetValue(NPP instance, NPPVariable variable, void *value) {
     switch (variable) {
     case NPPVpluginScriptableNPObject:
         if (top) {
-            *((NPObject**)value) = NPN_RetainObject (&top->npobj);
+            *((NPObject**)value) = NPN_RetainObject ((NPObject*) top);
             break;
         }
         // FALL THROUGH
@@ -2942,6 +4212,7 @@ NP_Initialize(NPNetscapeFuncs* bFuncs, NPPluginFuncs* pFuncs)
     pFuncs->getvalue = npp_GetValue;
 
     ID_toString = NPN_GetStringIdentifier ("toString");
+    ID_length   = NPN_GetStringIdentifier ("length");
 
 #if NPGMP_SCRIPT
     init_script ();
