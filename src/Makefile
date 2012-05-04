@@ -1,7 +1,8 @@
 # Experimental browser plugin, tested only on Linux.
 
 OPTIMIZE = -O3 -g
-CFLAGS = -std=c99 -Wall -Wno-unused-label -fPIC $(OPTIMIZE) -DXP_UNIX=1
+CFLAGS = -std=c99 -Wall -Wno-unused-label -fPIC $(OPTIMIZE) -DXP_UNIX=1 \
+	-DNPGMP_SCRIPT=0
 
 libgmp-plugin.so: gmp-plugin.o
 	$(CC) $(CFLAGS) -shared $^ -lgmp -lm -o $@
