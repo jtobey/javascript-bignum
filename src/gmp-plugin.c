@@ -1018,21 +1018,20 @@ integer_toString (TopObject *top, mpz_ptr mpp, const NPVariant *args,
     if (argCount < 1)
         base = 10;
 
-    else if (in_output_base (top, &args[0], &base)) {
-        size_t len = mpz_sizeinbase (mpp, base) + 2;
-        NPUTF8* s = (NPUTF8*) NPN_MemAlloc (len);
-        if (s) {
-            mpz_get_str (s, base, mpp);
-            if (s[0] != '-')
-                len--;
-            STRINGN_TO_NPVARIANT (s, s[len-2] ? len-1 : len-2, *result);
-        }
-        else
-            return oom ((NPObject*) top, result, true);
-    }
-    else
+    else if (!in_output_base (top, &args[0], &base)) {
         return set_exception ((NPObject*) top, "invalid argument", result,
                               true);
+    }
+
+    size_t len = mpz_sizeinbase (mpp, base) + 2;
+    NPUTF8* s = (NPUTF8*) NPN_MemAlloc (len);
+    if (!s)
+        return oom ((NPObject*) top, result, true);
+
+    mpz_get_str (s, base, mpp);
+    if (s[0] != '-')
+        len--;
+    STRINGN_TO_NPVARIANT (s, s[len-2] ? len-1 : len-2, *result);
     return true;
 }
 
