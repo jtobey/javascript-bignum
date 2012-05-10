@@ -14,12 +14,15 @@ function onload() {
     arg = document.getElementById("arg");
     result = document.getElementById("result");
 
+    //gmp = trace_all_calls(gmp);
+
 fn = (function() {
 var
 sqrt             = Math.sqrt,
 min              = Math.min,
 max              = Math.max,
 mpf              = gmp.mpf,
+mpf_init         = gmp.mpf_init,
 mpf_get_prec     = gmp.mpf_get_prec,
 mpf_set_d        = gmp.mpf_set_d,
 mpf_set_prec_raw = gmp.mpf_set_prec_raw,
@@ -576,11 +579,11 @@ function main(d)
   mpz_addmul_ui(q1, p1, A);
   mpz_mul_ui(p1, p1, Math.floor(C/D));
 
-  //mpf_init(pi);
+  mpf_init(pi);
   mpf_set_z(pi, p1);
   mpz_clear(p1);
 
-  //mpf_init(qi);
+  mpf_init(qi);
   mpf_set_z(qi, q1);
   mpz_clear(q1);
 
@@ -591,9 +594,9 @@ function main(d)
   /* printf("time = %6.3f\n", (double)(mid2-mid1)/1000); */
 
   /* initialize temp float variables for sqrt & div */
-  //mpf_init(t1);
-  //mpf_init(t2);
-  /* mpf_set_prec_raw(t1, mpf_get_prec(pi)); */
+  mpf_init(t1);
+  mpf_init(t2);
+  mpf_set_prec_raw(t1, mpf_get_prec(pi));
 
   /* final step */
   //printf("div     ");  fflush(stdout);
@@ -643,6 +646,34 @@ function main(d)
 
 return main;
 })();
+}
+
+function trace_all_calls(gmp) {
+    // Wrap every gmp function...
+    var ret = {};
+    for (var i in gmp) {
+        var x = gmp[i];
+        if (typeof x === "function" && i === i.toLowerCase()) {
+            x = (function (o, i, len) {
+                function ret(a,b,c,d,e) {
+                    var args = Array.prototype.slice.call(arguments);
+                    console.log(i + "(" + args.join(",") + ")");
+                    switch (len) {
+                    case 0: return o();
+                    case 1: return o(a);
+                    case 2: return o(a,b);
+                    case 3: return o(a,b,c);
+                    case 4: return o(a,b,c,d);
+                    case 5: return o(a,b,c,d,e);
+                    default: throw "length " + len;
+                    }
+                }
+                return ret;
+            })(x, i, x.length + 0);
+        }
+        ret[i] = x;
+    }
+    return ret;
 }
 
 function doit() {
