@@ -1,12 +1,9 @@
 <html>
-<head><title>Pi calculator (buggy)</title>
+<head><title>Pi calculator</title>
 <embed type="application/x-gmplib" id="lib" width="0" height="0">
 <script>
 
-// Translation of gmp-chudnovsky.c by John Tobey.  It does not quite
-// get the answer right, and it sometimes crashes as of 2012-04-24.
-// Things to check: signed versus unsigned, truncating integer division,
-// >> on negative operand.
+// Translation of gmp-chudnovsky.c by John Tobey.
 
 function onload() {
     lib = document.getElementById("lib");
@@ -724,6 +721,7 @@ function doit() {
 <body onload="onload()">
 <form onsubmit="return false;">
 <textarea id="arg" rows="20" cols="80">(function(){
+    // Replace 10000 with a number of digits and click the button.
     return fn(10000);
 })()</textarea><button onclick="doit()">=</button><span id="result"></span>
 </form>
