@@ -148,6 +148,19 @@ var ftmp = {}, fmul = {};
 
 var INIT_FACS = 32;
 
+function fac_toString(f)
+{
+  var i, ret = "";
+  for (i=0; i<f.num_facs; i++)
+    if (f.pow[i]==1)
+      ret += f.fac[i] + " ";
+    else
+      ret += f.fac[i] + "^" + f.pow[i] + " ";
+  return ret;
+}
+
+function fac_show(f) { my_log(fac_toString(f)); }
+
 function fac_reset(f)
 {
   f.num_facs = 0;
@@ -168,6 +181,12 @@ function fac_init_size(f, s)
 function fac_init(f)
 {
   fac_init_size(f, INIT_FACS);
+}
+
+function fac() {
+    var ret = {};
+    fac_init(ret);
+    return ret;
 }
 
 function fac_clear(f)
@@ -229,15 +248,24 @@ function fac_mul2(r, f, g)
   //assert(k<=r.max_facs);
 }
 
+/* r = f */
+function fac_set(r, f)
+{
+    r.num_facs = f.num_facs;
+    r.max_facs = f.max_facs;
+    r.fac = f.fac;
+    r.pow = f.pow;
+}
+
 /* f *= g */
 function fac_mul(f, g)
 {
-  var tmp;
+  var tmp = fac();
   fac_resize(fmul, f.num_facs + g.num_facs);
   fac_mul2(fmul, f, g);
-  tmp  = f;
-  f    = fmul;
-  fmul = tmp;
+  fac_set(tmp, f);
+  fac_set(f, fmul);
+  fac_set(fmul, tmp);
 }
 
 /* f *= base^pow */
@@ -425,9 +453,9 @@ function bs(a, b, gflag, level)
   }
 
   if (out&2) {
-    //printf("p(%ld,%ld)=",a,b); fac_show(fp1);
-    //if (gflag)
-      //printf("g(%ld,%ld)=",a,b); fac_show(fg1);
+    my_log("p(" + a + "," + b + ")=" + fac_toString(fp1));
+    if (gflag)
+      my_log("g(" + a + "," + b + ")=" + fac_toString(fg1));
   }
 }
 
@@ -465,10 +493,11 @@ function build_sieve(n, s)
   }
 }
 
-function main(d)
+function main(d, outval)
 {
   var  pi = mpf(), qi = mpf();
   d = d || 100;
+  out = outval || 0;
   var i, depth=1, terms;
   var psize, qsize;
   var begin, mid0, mid1, mid2, mid3, mid4, end;
@@ -497,11 +526,6 @@ function main(d)
   fpstack = Array(depth);
   fgstack = Array(depth);
 
-  function fac() {
-      var ret = {};
-      fac_init(ret);
-      return ret;
-  }
   for (i=0; i<depth; i++) {
     pstack[i] = mpz();
     qstack[i] = mpz();
@@ -657,7 +681,7 @@ function trace_all_calls(gmp) {
             x = (function (o, i, len) {
                 function ret(a,b,c,d,e) {
                     var args = Array.prototype.slice.call(arguments);
-                    console.log(i + "(" + args.join(",") + ")");
+                    my_log(i + "(" + args.join(",") + ")");
                     switch (len) {
                     case 0: return o();
                     case 1: return o(a);
@@ -676,6 +700,17 @@ function trace_all_calls(gmp) {
     return ret;
 }
 
+var logged = 0;
+function my_log() {
+    console.log.apply(console.log, Array.prototype.slice.call(arguments));
+    logged++;
+    if (logged == 250) {
+        if (!confirm("logged a lot"))
+            throw Error("logged too much");
+        logged = 0;
+    }
+}
+
 function doit() {
     try {
         result.innerHTML = eval(arg.value);
@@ -689,7 +724,7 @@ function doit() {
 <body onload="onload()">
 <form onsubmit="return false;">
 <textarea id="arg" rows="20" cols="80">(function(){
-    return fn(100);
+    return fn(10000);
 })()</textarea><button onclick="doit()">=</button><span id="result"></span>
 </form>
 </body>
