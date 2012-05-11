@@ -57,11 +57,11 @@ typedef __gmp_randstate_struct* x_gmp_randstate_ptr;
  * Global constants.
  */
 
-#ifndef NPGMP_PORTING
-# define NPGMP_PORTING 1  /* Include dummy functions for ease of porting.  */
+#ifndef NPGMP_MPZ
+# define NPGMP_MPZ 1  /* Support integers (mpz_t).  */
 #endif
 #ifndef NPGMP_MPQ
-# define NPGMP_MPQ 1  /* Support rationals (mpq_t).  */
+# define NPGMP_MPQ NPGMP_MPZ  /* Support rationals (mpq_t).  */
 #endif
 #ifndef NPGMP_MPF
 # define NPGMP_MPF 1  /* Support floating-point numbers (mpf_t).  */
@@ -70,7 +70,7 @@ typedef __gmp_randstate_struct* x_gmp_randstate_ptr;
 # define NPGMP_RAND 1  /* Support random number generation.  */
 #endif
 #ifndef NPGMP_RTTI
-# define NPGMP_RTTI 1  /* Provide mpz.isInstance, Entry.length, etc.  */
+# define NPGMP_RTTI 1  /* Provide is_mpz, Entry.length, etc.  */
 #endif
 #ifndef NPGMP_SCRIPT
 # define NPGMP_SCRIPT 1  /* Provide script interpreter.  */
@@ -145,10 +145,6 @@ typedef struct _TopObject {
     const char* errmsg;
     NPObject*   npobjGmp;
 
-    Class       Gmp;
-#define Gmp_getTop(object) GET_TOP (Gmp, object)
-#define TYPE_Gmp (offsetof (TopObject, Gmp))
-
     Class       Entry;
 #define Entry_getTop(object) GET_TOP (Entry, object)
 #define TYPE_Entry (offsetof (TopObject, Entry))
@@ -157,9 +153,11 @@ typedef struct _TopObject {
 #define Tuple_getTop(object) GET_TOP (Tuple, object)
 #define TYPE_Tuple (offsetof (TopObject, Tuple))
 
+#if NPGMP_MPZ
     Class       Integer;
 #define Integer_getTop(object) GET_TOP (Integer, object)
 #define TYPE_Integer (offsetof (TopObject, Integer))
+#endif
 
 #if NPGMP_MPQ
     Class       MpzRef;
@@ -193,10 +191,6 @@ typedef struct _TopObject {
     Class       Root;
 #define Root_getTop(object) GET_TOP (Root, object)
 #define TYPE_Root (offsetof (TopObject, Root))
-    NPObject*   npobjOp;
-    Class       Op;
-#define Op_getTop(object) GET_TOP (Op, object)
-#define TYPE_Op (offsetof (TopObject, Op))
 #endif
 
 } TopObject;
@@ -945,10 +939,12 @@ typedef mpf_ptr uninit_mpf;
 typedef mpf_ptr defprec_mpf;
 typedef x_gmp_randstate_ptr uninit_rand;
 
+#if NPGMP_MPZ
 typedef struct _Integer {
     NPObject npobj;
     mpz_t mp;
 } Integer;
+#endif  /* NPGMP_MPZ */
 
 #if NPGMP_MPQ
 typedef struct _MpzRef {
@@ -982,6 +978,8 @@ typedef struct _Rand {
 /*
  * Integer objects wrap mpz_t.
  */
+
+#if NPGMP_MPZ
 
 static NPObject*
 Integer_allocate (NPP npp, NPClass *aClass)
@@ -1263,6 +1261,7 @@ x_x_mpq (TopObject* top)
 #define x_mpq() x_x_mpq (vTop)
 
 #endif  /* NPGMP_MPQ */
+#endif  /* NPGMP_MPZ */
 
 /*
  * Float objects wrap mpf_t.
@@ -1599,6 +1598,8 @@ x_randinit_lc_2exp_size (uninit_rand state, mp_bitcnt_t size)
 
 #endif  /* NPGMP_RAND */
 
+typedef char EntryInfo;
+
 /*
  * Class of ordinary functions like mpz_init and mpz_add.
  */
@@ -1606,6 +1607,7 @@ x_randinit_lc_2exp_size (uninit_rand state, mp_bitcnt_t size)
 typedef struct _Entry {
     NPObject npobj;
     int number;  /* unique ID; currently, a line number in gmp-entries.h */
+    const EntryInfo* info;
 } Entry;
 
 static NPObject*
@@ -1620,17 +1622,6 @@ Entry_allocate (NPP npp, NPClass *aClass)
     return &ret->npobj;
 }
 
-static void
-Entry_deallocate (NPObject *npobj)
-{
-#if DEBUG_ALLOC
-    fprintf (stderr, "Entry deallocate %p\n", npobj);
-#endif  /* DEBUG_ALLOC */
-    TopObject* top = Entry_getTop (npobj);
-    NPN_ReleaseObject ((NPObject*) top);
-    NPN_MemFree (npobj);
-}
-
 static const char GmpProperties[] =
 
 #define ENTRY(nargs, nret, string, id)    "\0" STRINGIFY(__LINE__) "|" string
@@ -1641,8 +1632,8 @@ static const char GmpProperties[] =
 
     "\0";
 
-static int
-name_to_number (NPUTF8* name)
+static const EntryInfo*
+lookup (const NPUTF8* name)
 {
     const char* n;
     const char* p;
@@ -1651,36 +1642,70 @@ name_to_number (NPUTF8* name)
     while (*n) {
         p = strchr (n, '|') + 1;
         if (!strcmp (p, name))
-            return atoi (n);
+            return n;
         n = p + strlen (p) + 1;
-    }
-    return -1;
-}
-
-#if NPGMP_RTTI
-
-static const char*
-number_to_name (int number)
-{
-    const char* n;
-    char buf[8];
-    size_t len;
-
-    if (number < 0 || number > 999999)
-        return "GMP function";  /* should not happen */
-
-    len = (size_t) sprintf (buf, "%d|", number);
-    n = &GmpProperties[1];
-
-    while (*n != '|') {
-        if (!strncmp (n, buf, len))
-            return n + len;
-        n += strlen (n) + 1;
     }
     return 0;
 }
 
-#endif  /* NPGMP_RTTI */
+static bool
+is_table_entry (const char* info)
+{
+    return info >= &GmpProperties[0] &&
+        info < &GmpProperties[sizeof GmpProperties];
+}
+
+static void
+EntryInfo_deallocate (const EntryInfo* info)
+{
+    /* If it's not in our const table, it came from NPN_MemAlloc. */
+    if (!is_table_entry (info))
+        NPN_MemFree ((void*) info);
+}
+
+static int
+EntryInfo_number (const EntryInfo* info)
+{
+    return atoi (info);
+}
+
+static bool
+has_properties (const NPUTF8* name)
+{
+    size_t len = strlen (name);
+    const char* n;
+    const char* p;
+
+    n = &GmpProperties[1];
+    while (*n) {
+        p = strchr (n, '|') + 1;
+        if (!strncmp (p, name, len) && p[len] == '.')
+            return true;
+        n = p + strlen (p) + 1;
+    }
+    return false;
+}
+
+static const char*
+Entry_name (Entry* entry)
+{
+    const char* ret = entry->info;
+    if (is_table_entry (ret))
+        ret = strchr (ret, '|') + 1;
+    return ret;
+}
+
+static void
+Entry_deallocate (NPObject *npobj)
+{
+#if DEBUG_ALLOC
+    fprintf (stderr, "Entry deallocate %p\n", npobj);
+#endif  /* DEBUG_ALLOC */
+    TopObject* top = Entry_getTop (npobj);
+    EntryInfo_deallocate (((Entry*) npobj)->info);
+    NPN_ReleaseObject ((NPObject*) top);
+    NPN_MemFree (npobj);
+}
 
 enum Entry_number {
 
@@ -2024,11 +2049,16 @@ Entry_invokeDefault (NPObject *npobj,
                      NPVariant *result)
 {
     TopObject* top = Entry_getTop (npobj);
-    size_t nargs = Entry_length (npobj);
-    size_t nret = Entry_outLength (npobj);
+    Entry* entry = (Entry*) npobj;
+    size_t nargs, nret;
     Tuple* tuple = 0;  /* avoid a warning */
     NPVariant* out;
 
+    if (entry->number == 0)
+        return false;
+
+    nargs = Entry_length (npobj);
+    nret = Entry_outLength (npobj);
     if (argCount != nargs)
         return throwf ((NPObject*) top, result, true,
                        "wrong argument count: %d, expected %d",
@@ -2043,7 +2073,7 @@ Entry_invokeDefault (NPObject *npobj,
         out = tuple->start;
     }
 
-    if (!enter (top, ((Entry*) npobj)->number, args, out)) {
+    if (!enter (top, entry->number, args, out)) {
         if (nret > 1)
             NPN_ReleaseObject ((NPObject*) tuple);
         nret = 0;
@@ -2064,60 +2094,18 @@ Entry_invokeDefault (NPObject *npobj,
     return check_ex (top, npobj, result, true);
 }
 
-#if NPGMP_RTTI
-
-static Class*
-ctor_to_class (NPObject *npobj)
-{
-    TopObject* top = Entry_getTop (npobj);
-    int number = ((Entry*) npobj)->number;
-    switch (number) {
-    case np_mpz:       return &top->Integer;
-    case np_mpq:       return &top->Rational;
-    case np_mpf:       return &top->Float;
-    case np_randstate: return &top->Rand;
-    default: return 0;
-    }
-}
-
 static bool
 Entry_hasMethod(NPObject *npobj, NPIdentifier name)
 {
-    return ctor_to_class (npobj) != 0;
+    return name == ID_toString;
 }
 
 static bool
 Entry_invoke (NPObject *npobj, NPIdentifier name,
               const NPVariant *args, uint32_t argCount, NPVariant *result)
 {
-    TopObject* top = Entry_getTop (npobj);
-
-    // XXX should implement isInstance as a property, not a method,
-    // so it can be detached and used stand-alone.
-    if (name == NPN_GetStringIdentifier ("isInstance")) {
-        NPClass* c = (NPClass*) ctor_to_class (npobj);
-
-        if (c) {
-            bool ret;
-
-            if (argCount != 1)
-                return set_exception (npobj, "Usage: isInstance(OBJECT)",
-                                      result, true);
-
-            ret = NPVARIANT_IS_OBJECT (args[0]) &&
-                (NPVARIANT_TO_OBJECT (args[0])->_class == c
-#if NPGMP_MPQ
-                 || (c == (NPClass*) &top->Integer &&
-                     NPVARIANT_TO_OBJECT (args[0])->_class ==
-                     (NPClass*) &top->MpzRef)
-#endif
-                 );
-            BOOLEAN_TO_NPVARIANT (ret, *result);
-            return true;
-        }
-    }
-    else if (name == ID_toString) {
-        const char* name = number_to_name (((Entry*) npobj)->number);
+    if (name == ID_toString) {
+        const char* name = Entry_name ((Entry*) npobj);
         const char format[] = "function %s() { [native code] }";
         size_t len = sizeof format + strlen (name) - 2;
         char* ret = (char*) NPN_MemAlloc (len);
@@ -2132,125 +2120,170 @@ Entry_invoke (NPObject *npobj, NPIdentifier name,
     return false;
 }
 
-static bool
-Entry_hasProperty(NPObject *npobj, NPIdentifier name)
+static NPUTF8*
+get_fullname (TopObject* top, Entry* entry, NPIdentifier key)
 {
-    return name == NPN_GetStringIdentifier ("length")
-        || name == NPN_GetStringIdentifier ("outLength");
-}
-
-static bool
-Entry_getProperty(NPObject *npobj, NPIdentifier name, NPVariant* result)
-{
-    if (name == NPN_GetStringIdentifier ("length"))
-        INT32_TO_NPVARIANT (Entry_length (npobj), *result);
-    else if (name == NPN_GetStringIdentifier ("outLength"))
-        INT32_TO_NPVARIANT (Entry_outLength (npobj), *result);
-    else
-        VOID_TO_NPVARIANT (*result);
-    return true;
-}
-
-#endif  /* NPGMP_RTTI */
-
-/*
- * Class of the "gmp" object.
- */
-
-static NPObject*
-Gmp_allocate (NPP npp, NPClass* aClass)
-{
-    NPObject* ret = (NPObject*) NPN_MemAlloc (sizeof (NPObject));
-    if (ret)
-        NPN_RetainObject ((NPObject*) CONTAINING (TopObject, Gmp, aClass));
-        //NPN_RetainObject ((NPObject*) npp->pdata);
-    return ret;
-}
-
-static void
-Gmp_deallocate (NPObject *npobj)
-{
-    TopObject* top = Gmp_getTop (npobj);
-#if DEBUG_ALLOC
-    fprintf (stderr, "Gmp deallocate %p; %u\n", npobj, (unsigned int) top->npobj.referenceCount);
-#endif  /* DEBUG_ALLOC */
-    top->npobjGmp = 0;
-    NPN_MemFree (npobj);
-    /* Decrement the top object's reference count.  See comments in
-       Mpz_deallocate.  */
-    NPN_ReleaseObject ((NPObject*) top);
-}
-
-static bool
-Gmp_hasProperty (NPObject *npobj, NPIdentifier key)
-{
+    size_t len;
     NPUTF8* name;
-    int ret;
+    const NPUTF8* ename;
+    NPUTF8* fullname;
+
+    name = NPN_UTF8FromIdentifier (key);
+    if (!name) {
+        raise_oom ((NPObject*) top);
+        return 0;
+    }
+
+    if (!entry)
+        return name;
+
+    ename = Entry_name (entry);
+    len = strlen (ename) + strlen (name) + 2;
+    fullname = (NPUTF8*) NPN_MemAlloc (len);
+    if (fullname)
+        sprintf (fullname, "%s.%s", ename, name);
+    NPN_MemFree (name);
+    if (fullname)
+        return fullname;
+    raise_oom ((NPObject*) top);
+    return 0;
+}
+
+static bool
+has_subproperty (TopObject* top, NPObject *npobj, NPIdentifier key)
+{
+    Entry* entry = (Entry*) npobj;
+    NPUTF8* fullname;
+    bool ret;
+
+    if (entry && entry->number &&
+        (key == NPN_GetStringIdentifier ("length")
+         || key == NPN_GetStringIdentifier ("outLength")))
+        return true;
 
     if (!NPN_IdentifierIsString (key))
         return false;
 
-    name = NPN_UTF8FromIdentifier (key);
-    if (!name)
-        return oom (npobj, 0, false);
+    fullname = get_fullname (top, entry, key);
+    if (!fullname)
+        return check_ex (top, npobj, 0, false);
 
-    ret = name_to_number (name);
-    NPN_MemFree (name);
-    return ret >= 0;
-}
+    ret = lookup (fullname) != 0 || has_properties (fullname);
 
-static void
-get_entry (NPObject *npobj, int number, NPVariant *result)
-{
-    TopObject* top = Gmp_getTop (npobj);
-
-    Entry* entry = (Entry*) NPN_CreateObject
-        (top->instance, &top->Entry.npclass);
-
-    if (entry) {
-        entry->number = number;
-        OBJECT_TO_NPVARIANT (&entry->npobj, *result);
-    }
-    else
-        raise_oom (npobj);
+    NPN_MemFree (fullname);
+    return ret;
 }
 
 static bool
-Gmp_getProperty (NPObject *npobj, NPIdentifier key, NPVariant *result)
+Entry_hasProperty(NPObject *npobj, NPIdentifier key)
 {
-    TopObject* top = Gmp_getTop (npobj);
-    NPUTF8* name;
-    int number;
+    return has_subproperty (Entry_getTop (npobj), npobj, key);
+}
+
+static bool
+get_entry (TopObject* top, const EntryInfo* info, NPVariant *result)
+{
+    int number = EntryInfo_number (info);
+    Entry* entry;
+
+    if (number == 0)
+        return false;
+
+    entry = (Entry*) NPN_CreateObject
+        (top->instance, &top->Entry.npclass);
+
+    if (entry) {
+        entry->info = info;
+        entry->number = number;
+        OBJECT_TO_NPVARIANT ((NPObject*) entry, *result);
+    }
+    else
+        raise_oom ((NPObject*) top);
+
+    return true;
+}
+
+static bool
+get_subproperty (TopObject* top, NPObject *npobj, NPIdentifier key,
+                 NPVariant *result)
+{
+    Entry* entry = (Entry*) npobj;
+    NPUTF8* fullname;
+    const EntryInfo* info;
 
     if (!NPN_IdentifierIsString (key)) {
         VOID_TO_NPVARIANT (*result);
         return true;
     }
 
-    name = NPN_UTF8FromIdentifier (key);
-    if (!name)
-        return oom (npobj, result, true);
+    if (entry && entry->number) {
+        if (key == NPN_GetStringIdentifier ("length")) {
+            INT32_TO_NPVARIANT (Entry_length (npobj), *result);
+            return true;
+        }
+        if (key == NPN_GetStringIdentifier ("outLength")) {
+            INT32_TO_NPVARIANT (Entry_outLength (npobj), *result);
+            return true;
+        }
+    }
 
-    number = name_to_number (name);
+    fullname = get_fullname (top, entry, key);
+    if (!fullname)
+        return check_ex (top, npobj, result, true);
 
-    if (number < 0)
-        VOID_TO_NPVARIANT (*result);
-    else if (number > 0)
-        get_entry (npobj, number, result);
+    info = lookup (fullname);
+    if (!info) {
+        if (has_properties (fullname)) {
+            Entry* subentry = (Entry*) NPN_CreateObject
+                (top->instance, &top->Entry.npclass);
+            if (subentry) {
+                subentry->number = 0;
+                subentry->info = fullname;
+                OBJECT_TO_NPVARIANT ((NPObject*) subentry, *result);
+                return true;
+            }
+        }
+        else
+            VOID_TO_NPVARIANT (*result);
+    }
+    else if (get_entry (top, info, result))
+        /* ok */ ;
 
 #define CONSTANT(value, string, type)           \
-    else if (!strcmp (string, name))            \
+    else if (!strcmp (string, fullname))        \
         out_ ## type (top, value, result);
 #include "gmp-constants.h"
 
-    NPN_MemFree (name);
-    return true;
+    NPN_MemFree (fullname);
+    return check_ex (top, npobj, result, true);
 }
 
 static bool
-Gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
+Entry_getProperty (NPObject *npobj, NPIdentifier key, NPVariant *result)
 {
-    const char* p;
+    return get_subproperty (Entry_getTop (npobj), npobj, key, result);
+}
+
+static bool
+enumerate_sub (TopObject* top, NPObject *npobj, NPIdentifier **value,
+               uint32_t *count)
+{
+    Entry* entry = (Entry*) npobj;
+    char* prefix;
+
+    *count = 0;
+    if (entry) {
+        const char* name = Entry_name (entry);
+        size_t len = strlen (name);
+        prefix = NPN_MemAlloc (len + 2);
+        if (!prefix)
+            return oom (npobj ?: (NPObject*) top, 0, true);
+        sprintf (prefix, "%s.", name);
+    }
+    else
+        prefix = "";
+
+    /* XXX
     uint32_t cnt = 0
 #define ENTRY(nargs, nret, string, id) +1
 #include "gmp-entries.h"
@@ -2262,7 +2295,16 @@ Gmp_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
     cnt = 0;
     for (p = &GmpProperties[1]; *p; p += strlen (p) + 1)
         (*value)[cnt++] = NPN_GetStringIdentifier (strchr (p, '|') + 1);
+    */
+    if (entry)
+        NPN_MemFree (prefix);
     return true;
+}
+
+static bool
+Entry_enumerate (NPObject *npobj, NPIdentifier **value, uint32_t *count)
+{
+    return enumerate_sub (Entry_getTop (npobj), npobj, value, count);
 }
 
 #if NPGMP_SCRIPT
@@ -3849,33 +3891,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
 
         ret->instance                        = instance;
 
-        ret->Gmp.topOffset                   = TYPE_Gmp;
-        ret->Gmp.npclass.structVersion       = NP_CLASS_STRUCT_VERSION;
-        ret->Gmp.npclass.allocate            = Gmp_allocate;
-        ret->Gmp.npclass.deallocate          = Gmp_deallocate;
-        ret->Gmp.npclass.invalidate          = obj_invalidate;
-        ret->Gmp.npclass.hasMethod           = obj_id_false;
-        ret->Gmp.npclass.hasProperty         = Gmp_hasProperty;
-        ret->Gmp.npclass.getProperty         = Gmp_getProperty;
-        ret->Gmp.npclass.setProperty         = setProperty_ro;
-        ret->Gmp.npclass.removeProperty      = removeProperty_ro;
-        ret->Gmp.npclass.enumerate           = Gmp_enumerate;
-
 #if NPGMP_SCRIPT
-        ret->Op.topOffset                    = TYPE_Op;
-        ret->Op.npclass.structVersion        = NP_CLASS_STRUCT_VERSION;
-        ret->Op.npclass.allocate             = Op_allocate;
-        ret->Op.npclass.deallocate           = Op_deallocate;
-        ret->Op.npclass.invalidate           = obj_invalidate;
-        ret->Op.npclass.hasMethod            = Op_hasMethod;
-        ret->Op.npclass.invoke               = Op_invoke;
-        ret->Op.npclass.invokeDefault        = Op_invokeDefault;
-        ret->Op.npclass.hasProperty          = obj_id_false;
-        ret->Op.npclass.getProperty          = obj_id_var_void;
-        ret->Op.npclass.setProperty          = setProperty_ro;
-        ret->Op.npclass.removeProperty       = removeProperty_ro;
-        ret->Op.npclass.enumerate            = Op_enumerate;
-
         ret->Root.topOffset                  = TYPE_Root;
         ret->Root.npclass.structVersion      = NP_CLASS_STRUCT_VERSION;
         ret->Root.npclass.allocate           = Root_allocate;
@@ -3934,7 +3950,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
 #endif
         ret->Entry.npclass.setProperty       = setProperty_ro;
         ret->Entry.npclass.removeProperty    = removeProperty_ro;
-        ret->Entry.npclass.enumerate         = enumerate_empty;
+        ret->Entry.npclass.enumerate         = Entry_enumerate;
 
         ret->Tuple.topOffset                 = TYPE_Tuple;
         ret->Tuple.npclass.structVersion     = NP_CLASS_STRUCT_VERSION;
@@ -3951,6 +3967,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->Tuple.npclass.removeProperty    = removeProperty_ro;
         ret->Tuple.npclass.enumerate         = enumerate_empty;
 
+#if NPGMP_MPZ
         ret->Integer.topOffset               = TYPE_Integer;
         ret->Integer.npclass.structVersion   = NP_CLASS_STRUCT_VERSION;
         ret->Integer.npclass.allocate        = Integer_allocate;
@@ -3963,6 +3980,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->Integer.npclass.setProperty     = setProperty_ro;
         ret->Integer.npclass.removeProperty  = removeProperty_ro;
         ret->Integer.npclass.enumerate       = enumerate_empty;
+#endif  /* NPGMP_MPZ */
 
 #if NPGMP_MPQ
         ret->MpzRef.topOffset                = TYPE_MpzRef;
@@ -4050,69 +4068,19 @@ TopObject_deallocate (NPObject *npobj)
 static bool
 TopObject_hasProperty(NPObject *npobj, NPIdentifier key)
 {
-    return key == NPN_GetStringIdentifier ("gmp")
-#if NPGMP_SCRIPT
-        || key == NPN_GetStringIdentifier ("op")
-#endif
-        ;
+    return has_subproperty ((TopObject*) npobj, 0, key);
 }
 
 static bool
 TopObject_getProperty(NPObject *npobj, NPIdentifier key, NPVariant *result)
 {
-    TopObject* top = (TopObject*) npobj;
-    NPObject* ret = 0;
-
-    if (key == NPN_GetStringIdentifier ("gmp")) {
-        if (top->npobjGmp)
-            NPN_RetainObject ((NPObject*) top->npobjGmp);
-        else {
-            top->npobjGmp = NPN_CreateObject (top->instance,
-                                              (NPClass*) &top->Gmp);
-            if (!top->npobjGmp)
-                return oom (npobj, result, true);
-        }
-        ret = top->npobjGmp;
-    }
-#if NPGMP_SCRIPT
-    else if (key == NPN_GetStringIdentifier ("op")) {
-        if (top->npobjOp)
-            NPN_RetainObject ((NPObject*) top->npobjOp);
-        else {
-            top->npobjOp = NPN_CreateObject (top->instance,
-                                             (NPClass*) &top->Op);
-            if (!top->npobjOp)
-                return oom (npobj, result, true);
-        }
-        ret = top->npobjOp;
-    }
-#endif
-
-    if (ret)
-        OBJECT_TO_NPVARIANT (NPN_RetainObject (ret), *result);
-    else
-        VOID_TO_NPVARIANT (*result);
-
-    return true;
+    return get_subproperty ((TopObject*) npobj, 0, key, result);
 }
 
 static bool
 TopObject_enumerate(NPObject *npobj, NPIdentifier **value, uint32_t *count)
 {
-    uint32_t cnt = 1
-#if NPGMP_SCRIPT
-        + 1
-#endif
-        ;
-    *count = cnt;
-    *value = (NPIdentifier*) NPN_MemAlloc (cnt * sizeof (NPIdentifier));
-    if (!*value)
-        return false;
-    (*value)[0] = NPN_GetStringIdentifier ("gmp");
-#if NPGMP_SCRIPT
-    (*value)[1] = NPN_GetStringIdentifier ("op");
-#endif
-    return true;
+    return enumerate_sub ((TopObject*) npobj, 0, value, count);
 }
 
 static NPClass TopObject_npclass = {

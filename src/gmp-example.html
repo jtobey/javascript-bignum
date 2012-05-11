@@ -4,12 +4,12 @@
 <script>
 function onload() {
     var lib = document.getElementById("lib");
-    var gmp = lib.gmp;
-    var ret = gmp.mpz();
-    gmp.mpz_set_str(ret,"0x10000000000000000",0);
-    gmp.mpz_add_ui(ret,ret,1);
-    gmp.mpz_mul(ret,ret,ret);
-    gmp.mpz_pow_ui(ret,ret,2);
+    var mpz = lib.mpz;
+    var ret = mpz();
+    mpz.set_str(ret,"0x10000000000000000",0);
+    mpz.add_ui(ret,ret,1);
+    mpz.mul(ret,ret,ret);
+    mpz.pow_ui(ret,ret,2);
     alert(ret.toString(16));
 }
 </script>

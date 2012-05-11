@@ -7,43 +7,40 @@
 
 function onload() {
     lib = document.getElementById("lib");
-    gmp = lib.gmp;
     arg = document.getElementById("arg");
     result = document.getElementById("result");
-
-    //gmp = trace_all_calls(gmp);
 
 fn = (function() {
 var
 sqrt             = Math.sqrt,
 min              = Math.min,
 max              = Math.max,
-mpf              = gmp.mpf,
-mpf_init         = gmp.mpf_init,
-mpf_get_prec     = gmp.mpf_get_prec,
-mpf_set_d        = gmp.mpf_set_d,
-mpf_set_prec_raw = gmp.mpf_set_prec_raw,
-mpf_mul          = gmp.mpf_mul,
-mpf_mul_ui       = gmp.mpf_mul_ui,
-mpf_ui_sub       = gmp.mpf_ui_sub,
-mpf_div_2exp     = gmp.mpf_div_2exp,
-my_div           = gmp.mpf_div,
-mpf_add          = gmp.mpf_add,
+mpf              = lib.mpf,
+mpf_init         = mpf.init,
+mpf_get_prec     = mpf.get_prec,
+mpf_set_d        = mpf.set_d,
+mpf_set_prec_raw = mpf.set_prec_raw,
+mpf_mul          = mpf.mul,
+mpf_mul_ui       = mpf.mul_ui,
+mpf_ui_sub       = mpf.ui_sub,
+mpf_div_2exp     = mpf.div_2exp,
+my_div           = mpf.div,
+mpf_add          = mpf.add,
 
-mpz_set_ui       = gmp.mpz_set_ui,
-mpz_mul_ui       = gmp.mpz_mul_ui,
-mpz              = gmp.mpz,
-mpz_add_ui       = gmp.mpz_add_ui,
-mpz_mul          = gmp.mpz_mul,
-mpz_neg          = gmp.mpz_neg,
-mpz_add          = gmp.mpz_add,
-mpz_divexact     = gmp.mpz_divexact,
-mpz_clear        = gmp.mpz_clear,
+mpz              = lib.mpz,
+mpz_set_ui       = mpz.set_ui,
+mpz_mul_ui       = mpz.mul_ui,
+mpz_add_ui       = mpz.add_ui,
+mpz_mul          = mpz.mul,
+mpz_neg          = mpz.neg,
+mpz_add          = mpz.add,
+mpz_divexact     = mpz.divexact,
+mpz_clear        = mpz.clear,
 
-mpf_set_default_prec= gmp.mpf_set_default_prec,
-mpz_sizeinbase   = gmp.mpz_sizeinbase,
-mpz_addmul_ui    = gmp.mpz_addmul_ui,
-mpf_set_z        = gmp.mpf_set_z;
+mpf_set_default_prec= mpf.set_default_prec,
+mpz_sizeinbase   = mpz.sizeinbase,
+mpz_addmul_ui    = mpz.addmul_ui,
+mpf_set_z        = mpf.set_z;
 
 /* Pi computation using Chudnovsky's algortithm.
 
