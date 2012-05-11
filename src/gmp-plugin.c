@@ -346,6 +346,21 @@ typedef bool Bool;  /* `bool' may be a macro. */
 typedef NPObject* npobj;
 typedef NPString npstring;  /* just a convention. XXX */
 
+/* Raw argument type.  */
+typedef struct _Variant {
+    TopObject* top;
+    const NPVariant* arg;
+} Variant;
+
+static bool UNUSED
+in_Variant (TopObject* top, const NPVariant* var, Variant* arg)
+{
+    arg->top = top;
+    arg->arg = var;
+    return true;
+}
+static inline void UNUSED del_Variant (Variant arg) {}
+
 /* double <=> NPVariantType_{Double|Int32} */
 
 static bool UNUSED
@@ -1058,7 +1073,24 @@ x_x_mpz (TopObject* top)
     return ret;
 }
 
+/* XXX Could avoid macro use of vTop by making x_mpz a no-op and having the
+   entry return a new type that creates the object in its output method. */
 #define x_mpz() x_x_mpz (vTop)
+
+static Bool
+is_mpz (Variant var)
+{
+    if (!NPVARIANT_IS_OBJECT (*var.arg))
+        return false;
+    NPObject* npobj = NPVARIANT_TO_OBJECT (*var.arg);
+    if (npobj->_class == (NPClass*) &var.top->Integer)
+        return true;
+#if NPGMP_MPQ
+    if (npobj->_class == (NPClass*) &var.top->MpzRef)
+        return true;
+#endif  /* NPGMP_MPQ */
+    return false;
+}
 
 /*
  * Class of objects "returned" by the mpq_numref and mpq_denref macros.
@@ -1265,6 +1297,17 @@ x_x_mpq (TopObject* top)
 
 #define x_mpq() x_x_mpq (vTop)
 
+static Bool
+is_mpq (Variant var)
+{
+    if (!NPVARIANT_IS_OBJECT (*var.arg))
+        return false;
+    NPObject* npobj = NPVARIANT_TO_OBJECT (*var.arg);
+    if (npobj->_class == (NPClass*) &var.top->Rational)
+        return true;
+    return false;
+}
+
 #endif  /* NPGMP_MPQ */
 #endif  /* NPGMP_MPZ */
 
@@ -1468,6 +1511,17 @@ x_x_mpf (TopObject* top)
 
 #define x_mpf() x_x_mpf (vTop)
 
+static Bool
+is_mpf (Variant var)
+{
+    if (!NPVARIANT_IS_OBJECT (*var.arg))
+        return false;
+    NPObject* npobj = NPVARIANT_TO_OBJECT (*var.arg);
+    if (npobj->_class == (NPClass*) &var.top->Float)
+        return true;
+    return false;
+}
+
 #define x_mpf_init(f) x_x_mpf_init (vTop, f)
 
 static void
@@ -1590,6 +1644,17 @@ x_x_randstate (TopObject* top)
 }
 
 #define x_randstate() x_x_randstate (vTop)
+
+static Bool
+is_randstate (Variant var)
+{
+    if (!NPVARIANT_IS_OBJECT (*var.arg))
+        return false;
+    NPObject* npobj = NPVARIANT_TO_OBJECT (*var.arg);
+    if (npobj->_class == (NPClass*) &var.top->Rand)
+        return true;
+    return false;
+}
 
 static int
 x_randinit_lc_2exp_size (uninit_rand state, mp_bitcnt_t size)

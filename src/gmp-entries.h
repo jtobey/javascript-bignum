@@ -119,6 +119,7 @@
 (__LINE__ + 2)
 #endif
 ENTRY0R1 (x_mpz, "mpz", np_mpz, npobj)
+ENTRY1R1 (is_mpz, "mpz.is_mpz", np_is_mpz, Bool, Variant)
 ENTRY1R0 (mpz_init, "mpz.init", np_mpz_init, uninit_mpz)
 // mpz_inits: unimplemented.
 ENTRY2R0 (mpz_init2, "mpz.init2", np_mpz_init2, uninit_mpz, mp_bitcnt_t)
@@ -278,6 +279,7 @@ ENTRY1R1 (mpz_size, "mpz.size", np_mpz_size, size_t, mpz_ptr)
 #if NPGMP_MPQ
 ENTRY1R0 (mpq_canonicalize, "mpq.canonicalize", np_mpq_canonicalize, mpq_ptr)
 ENTRY0R1 (x_mpq, "mpq", np_mpq, npobj)
+ENTRY1R1 (is_mpq, "mpq.is_mpq", np_is_mpq, Bool, Variant)
 ENTRY1R0 (mpq_init, "mpq.init", np_mpq_init, uninit_mpq)
 // mpq_inits: unimplemented.
 ENTRY1R0 (mpq_init, "mpq.clear", np_mpq_clear, uninit_mpq)
@@ -321,6 +323,7 @@ ENTRY2R0 (mpq_set_den, "mpq.set_den", np_mpq_set_den, mpq_ptr, mpz_ptr)
 ENTRY1R0 (x_mpf_set_default_prec, "mpf.set_default_prec", np_mpf_set_default_prec, mp_bitcnt_t)
 ENTRY0R1 (x_mpf_get_default_prec, "mpf.get_default_prec", np_mpf_get_default_prec, mp_bitcnt_t)
 ENTRY0R1 (x_mpf, "mpf", np_mpf, npobj)
+ENTRY1R1 (is_mpf, "mpf.is_mpf", np_is_mpf, Bool, Variant)
 ENTRY1R0 (x_mpf_init, "mpf.init", np_mpf_init, defprec_mpf)
 ENTRY2R0 (mpf_init2, "mpf.init2", np_mpf_init2, uninit_mpf, mp_bitcnt_t)
 // mpf_inits: unimplemented.
@@ -394,6 +397,7 @@ ENTRY3R0 (mpf_random2, "mpf.random2", np_mpf_random2, mpf_ptr, mp_size_t, mp_exp
 
 #if NPGMP_RAND
 ENTRY0R1 (x_randstate, "gmp.randstate", np_gmp_randstate, npobj)
+ENTRY1R1 (is_randstate, "gmp.randstate.is_randstate", np_is_randstate, Bool, Variant)
 ENTRY1R0 (gmp_randinit_default, "gmp.randinit_default", np_gmp_randinit_default, uninit_rand)
 ENTRY1R0 (gmp_randinit_mt, "gmp.randinit_mt", np_gmp_randinit_mt, uninit_rand)
 ENTRY4R0 (gmp_randinit_lc_2exp, "gmp.randinit_lc_2exp", np_gmp_randinit_lc_2exp, uninit_rand, mpz_ptr, ulong, mp_bitcnt_t)
