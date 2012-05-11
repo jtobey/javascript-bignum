@@ -342,6 +342,9 @@ oom (NPObject* npobj, NPVariant* result, bool ret)
 /* Single-token aliases required for preprocessor magic.  */
 typedef unsigned long ulong;
 typedef char const* stringz;
+typedef bool Bool;  /* `bool' may be a macro. */
+typedef NPObject* npobj;
+typedef NPString npstring;  /* just a convention. XXX */
 
 /* double <=> NPVariantType_{Double|Int32} */
 
@@ -1740,286 +1743,261 @@ Entry_outLength (NPObject *npobj) {
     return EntryNret[((Entry*) npobj)->number - FIRST_ENTRY];
 }
 
-typedef union {
-    bool ABool;
-    int Aint;
-    long Along;
-    ulong Aulong;
-    double Adouble;
-    stringz Astringz;
-    mpz_ptr Ampz_ptr;
-    mpq_ptr Ampq_ptr;
-    mpf_ptr Ampf_ptr;
-    x_gmp_randstate_ptr Ax_gmp_randstate_ptr;
-    uninit_mpz Auninit_mpz;
-    uninit_mpq Auninit_mpq;
-    uninit_mpf Auninit_mpf;
-    defprec_mpf Adefprec_mpf;
-    uninit_rand Auninit_rand;
-    mp_bitcnt_t Amp_bitcnt_t;
-    int Aint_0_or_2_to_62;
-    int Aint_2_to_62;
-    int Aint_abs_2_to_62;
-    int Aoutput_base;
-    mp_size_t Amp_size_t;
-    mp_exp_t Amp_exp_t;
-    mp_limb_t Amp_limb_t;
-    size_t Asize_t;
-    NPObject* Anpobj;
-    NPString Anpstring;
-} EntryArg;
-
-/* Convert arguments from NPVariant to C types.  */
-static inline bool ALWAYS_INLINE
-in (TopObject *vTop, int vEntryNumber,
-    const NPVariant *vArgs, EntryArg* vEntryArgs)
-{
-    int vArgNumber = -1;
+/* Convert arguments from NPVariant to C types and free them when done.  */
 
 #undef IN
-#define IN(a, t)                                                        \
-    (vArgNumber++,                                                      \
-     LIKELY (in_ ## t (vTop, vArgs + vArgNumber, &vEntryArgs[a].A ## t)))
+#define IN(i, t) LIKELY (in_ ## t (vTop, vArgs + i, &vEntryArgs->a ## i))
 
 #undef DEL
-#define DEL(a, t) del_ ## t (vEntryArgs[a].A ## t)
+#define DEL(i, t) del_ ## t (vEntryArgs->a ## i)
 
-    switch (vEntryNumber) {
+#undef PROTO_IN
+#define PROTO_IN(id)                                            \
+    static inline bool ALWAYS_INLINE                            \
+    in__ ## id (TopObject *vTop, const NPVariant *vArgs,        \
+                Args_ ## id* vEntryArgs)
 
-#define ENTRY0(fun, string, id)                                 \
-        case __LINE__:                                          \
-            return true;
-
-#define ENTRY1(fun, string, id, t0)                             \
-        case __LINE__:                                          \
-            if (!IN (0, t0)) goto del0_ ## id;                  \
-            return true; del0_ ## id:                           \
-            return false;
-
-#define ENTRY2(fun, string, id, t0, t1)                         \
-        case __LINE__:                                          \
-            if (!IN (0, t0)) goto del0_ ## id;                  \
-            if (!IN (1, t1)) goto del1_ ## id;                  \
-            return true; del1_ ## id:                           \
-            DEL (0, t0); del0_ ## id:                           \
-            return false;
-
-#define ENTRY3(fun, string, id, t0, t1, t2)                     \
-        case __LINE__:                                          \
-            if (!IN (0, t0)) goto del0_ ## id;                  \
-            if (!IN (1, t1)) goto del1_ ## id;                  \
-            if (!IN (2, t2)) goto del2_ ## id;                  \
-            return true; del2_ ## id:                           \
-            DEL (1, t1); del1_ ## id:                           \
-            DEL (0, t0); del0_ ## id:                           \
-            return false;
-
-#define ENTRY4(fun, string, id, t0, t1, t2, t3)                 \
-        case __LINE__:                                          \
-            if (!IN (0, t0)) goto del0_ ## id;                  \
-            if (!IN (1, t1)) goto del1_ ## id;                  \
-            if (!IN (2, t2)) goto del2_ ## id;                  \
-            if (!IN (3, t3)) goto del3_ ## id;                  \
-            return true; del3_ ## id:                           \
-            DEL (2, t2); del2_ ## id:                           \
-            DEL (1, t1); del1_ ## id:                           \
-            DEL (0, t0); del0_ ## id:                           \
-            return false;
-
-#define ENTRY5(fun, string, id, t0, t1, t2, t3, t4)             \
-        case __LINE__:                                          \
-            if (!IN (0, t0)) goto del0_ ## id;                  \
-            if (!IN (1, t1)) goto del1_ ## id;                  \
-            if (!IN (2, t2)) goto del2_ ## id;                  \
-            if (!IN (3, t3)) goto del3_ ## id;                  \
-            if (!IN (4, t4)) goto del4_ ## id;                  \
-            return true; del4_ ## id:                           \
-            DEL (3, t3); del3_ ## id:                           \
-            DEL (2, t2); del2_ ## id:                           \
-            DEL (1, t1); del1_ ## id:                           \
-            DEL (0, t0); del0_ ## id:                           \
-            return false;
-
-#include "gmp-entries.h"
-
-    default:
-        return false;
-    }
-}
-
-/* Call a C function.  */
-static inline void ALWAYS_INLINE
-call (TopObject* vTop, int vEntryNumber, const EntryArg *i, EntryArg *o)
-{
-    switch (vEntryNumber) {
-
-#define ENTRY0R1(fun, string, id, r0)                           \
-        case __LINE__:                                          \
-            o[0].A ## r0 = fun ();                              \
-            break;
-
-#define ENTRY1R0(fun, string, id, t0)                           \
-        case __LINE__:                                          \
-            fun (i[0].A ## t0);                                 \
-            break;
-
-#define ENTRY1R1(fun, string, id, r0, t0)                       \
-        case __LINE__:                                          \
-            o[0].A ## r0 = fun (i[0].A ## t0);                  \
-            break;
-
-#define ENTRY1R2(fun, string, id, r0, r1, t0)                   \
-        case __LINE__:                                          \
-            o[0].A ## r0 = fun (&o[1].A ## r1, i[0].A ## t0);   \
-            break;
-
-#define ENTRY2R0(fun, string, id, t0, t1)                       \
-        case __LINE__:                                          \
-            fun (i[0].A ## t0, i[1].A ## t1);                   \
-            break;
-
-#define ENTRY2R1(fun, string, id, r0, t0, t1)                   \
-        case __LINE__:                                          \
-            o[0].A ## r0 = fun (i[0].A ## t0, i[1].A ## t1);    \
-            break;
-
-#define ENTRY3R0(fun, string, id, t0, t1, t2)                   \
-        case __LINE__:                                          \
-            fun (i[0].A ## t0, i[1].A ## t1, i[2].A ## t2);     \
-            break;
-
-#define ENTRY3R1(fun, string, id, r0, t0, t1, t2)               \
-        case __LINE__:                                          \
-            o[0].A ## r0 = fun (i[0].A ## t0, i[1].A ## t1,     \
-                                i[2].A ## t2);                  \
-            break;
-
-#define ENTRY3R2(fun, string, id, r0, r1, t0, t1, t2)           \
-        case __LINE__:                                          \
-            o[0].A ## r0 = fun (&o[1].A ## r1, i[0].A ## t0,    \
-                                i[1].A ## t1, i[2].A ## t2);    \
-            break;
-
-#define ENTRY4R0(fun, string, id, t0, t1, t2, t3)               \
-        case __LINE__:                                          \
-            fun (i[0].A ## t0, i[1].A ## t1, i[2].A ## t2,      \
-                 i[3].A ## t3);                                 \
-            break;
-
-#define ENTRY4R1(fun, string, id, r0, t0, t1, t2, t3)           \
-        case __LINE__:                                          \
-            o[0].A ## r0 = fun (i[0].A ## t0, i[1].A ## t1,     \
-                                i[2].A ## t2, i[3].A ## t3);    \
-            break;
-
-#define ENTRY5R0(fun, string, id, t0, t1, t2, t3, t4)           \
-        case __LINE__:                                          \
-            fun (i[0].A ## t0, i[1].A ## t1, i[2].A ## t2,      \
-                 i[3].A ## t3, i[4].A ## t4);                   \
-            break;
-
-#include "gmp-entries.h"
-    }
-}
-
-/* Free C function arguments.  */
-static inline void ALWAYS_INLINE
-del (int vEntryNumber, EntryArg* vEntryArgs)
-{
-#undef DEL
-#define DEL(a, t) del_ ## t (vEntryArgs[a].A ## t)
-
-    switch (vEntryNumber) {
+#undef PROTO_DEL
+#define PROTO_DEL(id)                                           \
+    static inline void ALWAYS_INLINE                            \
+    del__ ## id (Args_ ## id* vEntryArgs)
 
 #define ENTRY0(fun, string, id)                                 \
-        case __LINE__:                                          \
-            return;
+    typedef struct { char dummy; } Args_ ## id;                 \
+    PROTO_IN (id)                                               \
+    {                                                           \
+        return true;                                            \
+    }                                                           \
+    PROTO_DEL (id)                                              \
+    {                                                           \
+    }
 
 #define ENTRY1(fun, string, id, t0)                             \
-        case __LINE__:                                          \
-            DEL (0, t0);                                        \
-            return;
+    typedef struct { t0 a0; } Args_ ## id;                      \
+    PROTO_IN (id)                                               \
+    {                                                           \
+        if (!IN (0, t0)) goto del0_ ## id;                      \
+        return true; del0_ ## id:                               \
+        return false;                                           \
+    }                                                           \
+    PROTO_DEL (id)                                              \
+    {                                                           \
+        DEL (0, t0);                                            \
+    }
 
 #define ENTRY2(fun, string, id, t0, t1)                         \
-        case __LINE__:                                          \
-            DEL (1, t1);                                        \
-            DEL (0, t0);                                        \
-            return;
+    typedef struct { t0 a0; t1 a1; } Args_ ## id;               \
+    PROTO_IN (id)                                               \
+    {                                                           \
+        if (!IN (0, t0)) goto del0_ ## id;                      \
+        if (!IN (1, t1)) goto del1_ ## id;                      \
+        return true; del1_ ## id:                               \
+        DEL (0, t0); del0_ ## id:                               \
+        return false;                                           \
+    }                                                           \
+    PROTO_DEL (id)                                              \
+    {                                                           \
+        DEL (1, t1);                                            \
+        DEL (0, t0);                                            \
+    }
 
 #define ENTRY3(fun, string, id, t0, t1, t2)                     \
-        case __LINE__:                                          \
-            DEL (2, t2);                                        \
-            DEL (1, t1);                                        \
-            DEL (0, t0);                                        \
-            return;
+    typedef struct { t0 a0; t1 a1; t2 a2; } Args_ ## id;        \
+    PROTO_IN (id)                                               \
+    {                                                           \
+        if (!IN (0, t0)) goto del0_ ## id;                      \
+        if (!IN (1, t1)) goto del1_ ## id;                      \
+        if (!IN (2, t2)) goto del2_ ## id;                      \
+        return true; del2_ ## id:                               \
+        DEL (1, t1); del1_ ## id:                               \
+        DEL (0, t0); del0_ ## id:                               \
+        return false;                                           \
+    }                                                           \
+    PROTO_DEL (id)                                              \
+    {                                                           \
+        DEL (2, t2);                                            \
+        DEL (1, t1);                                            \
+        DEL (0, t0);                                            \
+    }
 
 #define ENTRY4(fun, string, id, t0, t1, t2, t3)                 \
-        case __LINE__:                                          \
-            DEL (3, t3);                                        \
-            DEL (2, t2);                                        \
-            DEL (1, t1);                                        \
-            DEL (0, t0);                                        \
-            return;
+    typedef struct { t0 a0; t1 a1; t2 a2; t3 a3; } Args_ ## id; \
+    PROTO_IN (id)                                               \
+    {                                                           \
+        if (!IN (0, t0)) goto del0_ ## id;                      \
+        if (!IN (1, t1)) goto del1_ ## id;                      \
+        if (!IN (2, t2)) goto del2_ ## id;                      \
+        if (!IN (3, t3)) goto del3_ ## id;                      \
+        return true; del3_ ## id:                               \
+        DEL (2, t2); del2_ ## id:                               \
+        DEL (1, t1); del1_ ## id:                               \
+        DEL (0, t0); del0_ ## id:                               \
+        return false;                                           \
+    }                                                           \
+    PROTO_DEL (id)                                              \
+    {                                                           \
+        DEL (3, t3);                                            \
+        DEL (2, t2);                                            \
+        DEL (1, t1);                                            \
+        DEL (0, t0);                                            \
+    }
 
 #define ENTRY5(fun, string, id, t0, t1, t2, t3, t4)             \
-        case __LINE__:                                          \
-            DEL (4, t4);                                        \
-            DEL (3, t3);                                        \
-            DEL (2, t2);                                        \
-            DEL (1, t1);                                        \
-            DEL (0, t0);                                        \
-            return;
+    typedef struct { t0 a0; t1 a1; t2 a2; t3 a3; t4 a4; }       \
+        Args_ ## id;                                            \
+    PROTO_IN (id)                                               \
+    {                                                           \
+        if (!IN (0, t0)) goto del0_ ## id;                      \
+        if (!IN (1, t1)) goto del1_ ## id;                      \
+        if (!IN (2, t2)) goto del2_ ## id;                      \
+        if (!IN (3, t3)) goto del3_ ## id;                      \
+        if (!IN (4, t4)) goto del4_ ## id;                      \
+        return true; del4_ ## id:                               \
+        DEL (3, t3); del3_ ## id:                               \
+        DEL (2, t2); del2_ ## id:                               \
+        DEL (1, t1); del1_ ## id:                               \
+        DEL (0, t0); del0_ ## id:                               \
+        return false;                                           \
+    }                                                           \
+    PROTO_DEL (id)                                              \
+    {                                                           \
+        DEL (4, t4);                                            \
+        DEL (3, t3);                                            \
+        DEL (2, t2);                                            \
+        DEL (1, t1);                                            \
+        DEL (0, t0);                                            \
+    }
 
 #include "gmp-entries.h"
-    }
-}
 
 /* Convert C function results to NPVariant and deallocate the C values.  */
-static inline bool ALWAYS_INLINE
-out (TopObject *vTop, int vEntryNumber, EntryArg* vEntryResults,
-     NPVariant *vResults)
-{
-    int vRetNumber = -1;
-    bool ret = true;
 
 #undef OUT
-#define OUT(a, t)                                                       \
-    (vRetNumber++,                                                      \
-     outdel_ ## t (vTop, vEntryResults[a].A ## t, vResults + vRetNumber) \
-     || (del_ ## t (vEntryResults[a].A ## t), false))
+#define OUT(i, t)                                               \
+    (outdel_ ## t (vTop, vEntryResults->a ## i, vResults + i)   \
+     || (del_ ## t (vEntryResults->a ## i), false))
 
 #undef DEL
-#define DEL(a, t) del_ ## t (vEntryResults[a].A ## t)
+#define DEL(i, t) del_ ## t (vEntryResults->a ## i)
 
-    switch (vEntryNumber) {
+#undef PROTO_OUT
+#define PROTO_OUT(id)                                           \
+    static inline bool ALWAYS_INLINE                            \
+    out__ ## id (TopObject *vTop, Results_ ## id* vEntryResults,\
+                 NPVariant *vResults)
 
 #define ENTRYR0(fun, string, id)                                \
-        case __LINE__:                                          \
-            if (ret) return true;                               \
-            break;
+    typedef struct { char dummy; } Results_ ## id;              \
+    PROTO_OUT (id)                                              \
+    {                                                           \
+        return true;                                            \
+    }
 
-#define ENTRYR1(fun, string, id, r0)                             \
-        case __LINE__:                                           \
-            if (ret) ret = OUT (0, r0); else DEL (0, r0);        \
-            if (ret) return true;                                \
-            break;
+/* XXX not scalable to more return values */
+#define ENTRYR1(fun, string, id, r0)                            \
+    typedef struct { r0 a0; } Results_ ## id;                   \
+    PROTO_OUT (id)                                              \
+    {                                                           \
+        return OUT (0, r0);                                     \
+    }
 
-#define ENTRYR2(fun, string, id, r0, r1)                         \
-        case __LINE__:                                           \
-            if (ret) ret = OUT (0, r0); else DEL (0, r0);        \
-            if (ret) ret = OUT (1, r1); else DEL (1, r1);        \
-            if (ret) return true;                                \
-            break;
+/* XXX not scalable to more return values */
+#define ENTRYR2(fun, string, id, r0, r1)                        \
+    typedef struct { r0 a0; r1 a1; } Results_ ## id;            \
+    PROTO_OUT (id)                                              \
+    {                                                           \
+        bool ret = true;                                        \
+        if (ret) ret = OUT (0, r0); else DEL (0, r0);           \
+        if (ret) {                                              \
+            ret = OUT (1, r1);                                  \
+            if (!ret)                                           \
+                NPN_ReleaseVariantValue (&vResults[0]);         \
+        }                                                       \
+        else                                                    \
+            DEL (1, r1);                                        \
+        return ret;                                             \
+    }
 
 #include "gmp-entries.h"
 
-    default:
-        return false;
+#undef PROTO
+#define PROTO(id)                                               \
+    static inline void ALWAYS_INLINE                            \
+    call__ ## id (TopObject *vTop, Args_ ## id* i, Results_ ## id* o)
+
+#define ENTRY0R1(fun, string, id, r0)                           \
+    PROTO (id)                                                  \
+    {                                                           \
+        o->a0 = fun ();                                         \
     }
-    while (vRetNumber--)
-        NPN_ReleaseVariantValue (vResults + vRetNumber);
-    return false;
-}
+
+#define ENTRY1R0(fun, string, id, t0)                           \
+    PROTO (id)                                                  \
+    {                                                           \
+        fun (i->a0);                                            \
+    }
+
+#define ENTRY1R1(fun, string, id, r0, t0)                       \
+    PROTO (id)                                                  \
+    {                                                           \
+        o->a0 = fun (i->a0);                                    \
+    }
+
+#define ENTRY1R2(fun, string, id, r0, r1, t0)                   \
+    PROTO (id)                                                  \
+    {                                                           \
+        o->a0 = fun (&o->a1, i->a0);                            \
+    }
+
+#define ENTRY2R0(fun, string, id, t0, t1)                       \
+    PROTO (id)                                                  \
+    {                                                           \
+        fun (i->a0, i->a1);                                     \
+    }
+
+#define ENTRY2R1(fun, string, id, r0, t0, t1)                   \
+    PROTO (id)                                                  \
+    {                                                           \
+        o->a0 = fun (i->a0, i->a1);                             \
+    }
+
+#define ENTRY3R0(fun, string, id, t0, t1, t2)                   \
+    PROTO (id)                                                  \
+    {                                                           \
+        fun (i->a0, i->a1, i->a2);                              \
+    }
+
+#define ENTRY3R1(fun, string, id, r0, t0, t1, t2)               \
+    PROTO (id)                                                  \
+    {                                                           \
+        o->a0 = fun (i->a0, i->a1, i->a2);                      \
+    }
+
+#define ENTRY3R2(fun, string, id, r0, r1, t0, t1, t2)           \
+    PROTO (id)                                                  \
+    {                                                           \
+        o->a0 = fun (&o->a1, i->a0, i->a1, i->a2);              \
+    }
+
+#define ENTRY4R0(fun, string, id, t0, t1, t2, t3)               \
+    PROTO (id)                                                  \
+    {                                                           \
+        fun (i->a0, i->a1, i->a2, i->a3);                       \
+    }
+
+#define ENTRY4R1(fun, string, id, r0, t0, t1, t2, t3)           \
+    PROTO (id)                                                  \
+    {                                                           \
+        o->a0 = fun (i->a0, i->a1, i->a2, i->a3);               \
+    }
+
+#define ENTRY5R0(fun, string, id, t0, t1, t2, t3, t4)           \
+    PROTO (id)                                                  \
+    {                                                           \
+        fun (i->a0, i->a1, i->a2, i->a3, i->a4);                \
+    }
+
+#include "gmp-entries.h"
 
 static bool
 enter (TopObject* top, int entryNumber,
@@ -2030,12 +2008,13 @@ enter (TopObject* top, int entryNumber,
         /* XXX Could distinguish pre-call from post-call errors.  */
 #define ENTRY(nargs, nret, string, id)                  \
         case __LINE__: {                                \
-            EntryArg i[nargs], o[nret];                 \
-            if (!in (top, __LINE__, args, i))           \
+            Args_ ## id i;                              \
+            Results_ ## id o;                           \
+            if (!in__ ## id (top, args, &i))            \
                 return false;                           \
-            call (top, __LINE__, i, o);                 \
-            del (__LINE__, i);                          \
-            return out (top, __LINE__, o, results);     \
+            call__ ## id (top, &i, &o);                 \
+            del__ ## id (&i);                           \
+            return out__ ## id (top, &o, results);      \
         }
             
 #include "gmp-entries.h"
