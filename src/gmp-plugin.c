@@ -35,11 +35,13 @@ typedef __gmp_randstate_struct* x_gmp_randstate_ptr;
 #define THREAD_LOCAL1 __thread
 #define UNLIKELY(x) __builtin_expect ((x) != 0, 0)
 #define LIKELY(x)   __builtin_expect ((x) != 0, 1)
+#define ALWAYS_INLINE __attribute__ ((__always_inline__))
 #else
 #define UNUSED
 #define THREAD_LOCAL1
 #define UNLIKELY(x) (x)
 #define LIKELY(x)   (x)
+#define ALWAYS_INLINE
 #endif
 
 #ifndef THREAD_LOCAL
@@ -1768,7 +1770,7 @@ typedef union {
 } EntryArg;
 
 /* Convert arguments from NPVariant to C types.  */
-static inline bool
+static inline bool ALWAYS_INLINE
 in (TopObject *vTop, int vEntryNumber,
     const NPVariant *vArgs, EntryArg* vEntryArgs)
 {
@@ -1846,7 +1848,7 @@ in (TopObject *vTop, int vEntryNumber,
 }
 
 /* Call a C function.  */
-static inline void
+static inline void ALWAYS_INLINE
 call (TopObject* vTop, int vEntryNumber, const EntryArg *i, EntryArg *o)
 {
     switch (vEntryNumber) {
@@ -1921,7 +1923,7 @@ call (TopObject* vTop, int vEntryNumber, const EntryArg *i, EntryArg *o)
 }
 
 /* Free C function arguments.  */
-static inline void
+static inline void ALWAYS_INLINE
 del (int vEntryNumber, EntryArg* vEntryArgs)
 {
 #undef DEL
@@ -1973,7 +1975,7 @@ del (int vEntryNumber, EntryArg* vEntryArgs)
 }
 
 /* Convert C function results to NPVariant and deallocate the C values.  */
-static inline bool
+static inline bool ALWAYS_INLINE
 out (TopObject *vTop, int vEntryNumber, EntryArg* vEntryResults,
      NPVariant *vResults)
 {
