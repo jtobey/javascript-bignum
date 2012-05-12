@@ -272,7 +272,7 @@ ENTRY1R1 (mpz_odd_p, "mpz.odd_p", np_mpz_odd_p, Bool, mpz_ptr)
 ENTRY1R1 (mpz_even_p, "mpz.even_p", np_mpz_even_p, Bool, mpz_ptr)
 ENTRY2R1 (mpz_sizeinbase, "mpz.sizeinbase", np_mpz_sizeinbase, size_t, mpz_ptr, int_2_to_62)
 // mpz_array_init: tricky and unsuitable.
-ENTRY2R0 (_mpz_realloc, "_mpz_realloc", np__mpz_realloc, mpz_ptr, mp_size_t)
+ENTRY2R0 (_mpz_realloc, "mpz._realloc", np__mpz_realloc, mpz_ptr, mp_size_t)
 ENTRY2R1 (mpz_getlimbn, "mpz.getlimbn", np_mpz_getlimbn, mp_limb_t, mpz_ptr, mp_size_t)
 ENTRY1R1 (mpz_size, "mpz.size", np_mpz_size, size_t, mpz_ptr)
 
