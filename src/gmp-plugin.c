@@ -1692,7 +1692,7 @@ Entry_allocate (NPP npp, NPClass *aClass)
     return &ret->npobj;
 }
 
-static const char GmpProperties[] =
+static const char Properties[] =
 
 #define ENTRY(nargs, nret, string, id)    "\0" STRINGIFY(__LINE__) "|" string
 #include "gmp-entries.h"
@@ -1703,26 +1703,39 @@ static const char GmpProperties[] =
     "\0";
 
 static const EntryInfo*
-lookup (const NPUTF8* name)
+first_entry ()
 {
-    const char* n;
-    const char* p;
+    return &Properties[1];
+}
 
-    n = &GmpProperties[1];
-    while (*n) {
-        p = strchr (n, '|') + 1;
-        if (!strcmp (p, name))
-            return n;
-        n = p + strlen (p) + 1;
-    }
-    return 0;
+static const EntryInfo*
+next_entry (const EntryInfo* info)
+{
+    const char* ret = info + strlen (info) + 1;
+    return (*ret ? ret : 0);
+}
+
+static const char*
+EntryInfo_name (const EntryInfo* info)
+{
+    return strchr (info, '|') + 1;
 }
 
 static bool
 is_table_entry (const char* info)
 {
-    return info >= &GmpProperties[0] &&
-        info < &GmpProperties[sizeof GmpProperties];
+    return info >= &Properties[0] &&
+        info < &Properties[sizeof Properties];
+}
+
+static const EntryInfo*
+lookup (const NPUTF8* name)
+{
+    for (const EntryInfo* i = first_entry (); i; i = next_entry (i)) {
+        if (!strcmp (name, EntryInfo_name (i)))
+            return i;
+    }
+    return 0;
 }
 
 static void
@@ -1743,15 +1756,11 @@ static bool
 has_properties (const NPUTF8* name)
 {
     size_t len = strlen (name);
-    const char* n;
-    const char* p;
 
-    n = &GmpProperties[1];
-    while (*n) {
-        p = strchr (n, '|') + 1;
-        if (!strncmp (p, name, len) && p[len] == '.')
+    for (const EntryInfo* i = first_entry (); i; i = next_entry (i)) {
+        const char* iname = EntryInfo_name (i);
+        if (!strncmp (name, iname, len) && iname[len] == '.')
             return true;
-        n = p + strlen (p) + 1;
     }
     return false;
 }
@@ -1759,10 +1768,10 @@ has_properties (const NPUTF8* name)
 static const char*
 Entry_name (Entry* entry)
 {
-    const char* ret = entry->info;
+    const EntryInfo* ret = entry->info;
     if (is_table_entry (ret))
-        ret = strchr (ret, '|') + 1;
-    return ret;
+        return EntryInfo_name (ret);
+    return (const char*) ret;
 }
 
 static void
@@ -2073,7 +2082,7 @@ enter (TopObject* top, int entryNumber,
         /* XXX Could distinguish pre-call from post-call errors.  */
 #define ENTRY(nargs, nret, string, id)                  \
         case __LINE__: {                                \
-            Args_ ## id i;                              \
+            Args_    ## id i;                           \
             Results_ ## id o;                           \
             if (!in__ ## id (top, args, &i))            \
                 return false;                           \
@@ -2139,6 +2148,8 @@ Entry_invokeDefault (NPObject *npobj,
 
     return check_ex (top, npobj, result, true);
 }
+
+/* Non-detachable Entry methods.  XXX Should implement call and apply.  */
 
 static bool
 Entry_hasMethod(NPObject *npobj, NPIdentifier name)
@@ -2315,33 +2326,91 @@ enumerate_sub (TopObject* top, NPObject *npobj, NPIdentifier **value,
                uint32_t *count)
 {
     Entry* entry = (Entry*) npobj;
+    uint32_t cnt = 0;
+    NPIdentifier *ptr = 0;
     char* prefix;
+    size_t prefix_len;
+    const char* last = 0;
+    size_t last_len = 0;
+    size_t max_len = 0;
+    NPUTF8* buf = 0;
 
-    *count = 0;
     if (entry) {
         const char* name = Entry_name (entry);
-        size_t len = strlen (name);
-        prefix = NPN_MemAlloc (len + 2);
-        if (!prefix)
+        prefix_len = strlen (name) + 1;
+        prefix = NPN_MemAlloc (prefix_len + 1);
+        if (!prefix) {
+            *count = 0;
+            *value = 0;
             return oom (npobj ?: (NPObject*) top, 0, true);
+        }
         sprintf (prefix, "%s.", name);
     }
-    else
+    else {
         prefix = "";
+        prefix_len = 0;
+    }
 
-    /* XXX
-    uint32_t cnt = 0
-#define ENTRY(nargs, nret, string, id) +1
-#include "gmp-entries.h"
-#define CONSTANT(value, string, type) +1
-#include "gmp-constants.h"
-        ;
-    *value = (NPIdentifier*) NPN_MemAlloc (cnt * sizeof (NPIdentifier));
+    /* For simplicity, assume every entry and its subentries are
+       contiguous, not like this:
+       gmp.mpz
+       gmp.mpq      <-- interrupts the gmp.mpz subtree
+       gmp.mpz.init
+
+       Such interruptions will result in duplicates returned by (a in b).
+     */
+    /* Scan once for count, then allocate, and scan to fill the array.  */
+    for (const EntryInfo* i = first_entry (); i; i = next_entry (i)) {
+        const char* iname = EntryInfo_name (i);
+        if (strncmp (prefix, iname, prefix_len) != 0)
+            continue;
+        const char* sub = iname + prefix_len;
+        size_t sub_len = strcspn (sub, ".");
+        if (last && last_len == sub_len && !strncmp (last, sub, sub_len))
+            continue;  /* seen already */
+        cnt++;
+        last = sub;
+        last_len = sub_len;
+        if (sub_len > max_len)
+            max_len = sub_len;
+    }
+
+    if (cnt)
+        ptr = (NPIdentifier*) NPN_MemAlloc (cnt * sizeof ptr[0]);
+    if (ptr)
+        buf = (NPUTF8*) NPN_MemAlloc (max_len + 1);
+
+    if (!buf) {
+        if (entry)
+            NPN_MemFree (prefix);
+        if (ptr)
+            NPN_MemFree (ptr);
+        *count = 0;
+        *value = 0;
+        if (cnt)
+            return oom (npobj ?: (NPObject*) top, 0, true);
+        return true;
+    }
+
+    for (const EntryInfo* i = first_entry (); i; i = next_entry (i)) {
+        const char* iname = EntryInfo_name (i);
+        if (strncmp (prefix, iname, prefix_len) != 0)
+            continue;
+        const char* sub = iname + prefix_len;
+        size_t sub_len = strcspn (sub, ".");
+        if (last && last_len == sub_len && !strncmp (last, sub, sub_len))
+            continue;  /* seen already */
+        last = sub;
+        last_len = sub_len;
+        strncpy (buf, sub, sub_len);
+        buf[sub_len] = '\0';
+        *ptr++ = NPN_GetStringIdentifier (buf);
+    }
+
     *count = cnt;
-    cnt = 0;
-    for (p = &GmpProperties[1]; *p; p += strlen (p) + 1)
-        (*value)[cnt++] = NPN_GetStringIdentifier (strchr (p, '|') + 1);
-    */
+    *value = ptr - cnt;
+
+    NPN_MemFree (buf);
     if (entry)
         NPN_MemFree (prefix);
     return true;
