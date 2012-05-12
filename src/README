@@ -1,13 +1,13 @@
-This directory contains source code for a browser plug-in that gives
-scripts access to GMP, the GNU multiple precision arithmetic library.
-The code status is alpha to early beta.
+This directory contains source code for NPGMP, a browser plug-in that
+gives scripts access to GMP, the GNU multiple precision arithmetic
+library.  The code status is alpha to early beta.
 
-The plugin supports most GMP functions.  For a list, see
-gmp-entries.h.  The code uses NPAPI, so the plugin should run in all
-major browsers *except* Internet Explorer.  I have tested it (briefly)
-in Firefox 11.0 and Chrome 19.0.1084.30.
+NPGMP supports most GMP functions.  For a list, see gmp-entries.h.
+The code uses NPAPI, which all major browsers *except* Internet
+Explorer support.  I have tested it in Firefox 11 and 12 and Chrome
+19.0.1084.30.
 
-The plugin can crash on certain input, such as requesting the square
+The plug-in can crash on certain input, such as requesting the square
 root of a negative number.  This is hard to fix.
 
 The per-call time overhead is quite high, unless you configure your
@@ -17,7 +17,8 @@ crash the browser.
 This is free software and comes with NO WARRANTY as explained in
 ../LICENSE.
 
-You will need:
+
+INSTALLATION
 
     * GNU/Linux or a similar operating system, or some porting experience.
     * npapi.h and accompanying files: http://code.google.com/p/npapi-sdk/
@@ -26,11 +27,99 @@ You will need:
     * Make: http://www.gnu.org/software/make/
 
 To install, run the following commands.  If successful, restart your
-browser and open the example page, gmp-example.html.  The example
-simply pops up an alert containing the result of a calculation.
+browser and open one of the example pages, gmp-example.html or
+pi.html.  The former simply pops up an alert containing the result of
+a calculation.
 
     make
     mkdir -p ~/.mozilla/plugins/
     cp libgmp-plugin.so ~/.mozilla/plugins/
+
+
+USAGE
+
+Obtain a top-level scriptable object through the browser's Document
+Object Model (DOM) as in gmp-example.html, where it is the variable
+called "gmplib".  This documentation refers to the top-level object as
+gmplib or omits it, for example using "mpz.set_ui" to mean
+gmplib.mpz.set_ui.
+
+The NPGMP plug-in exposes three main types of objects:
+
+    * data types (mpz, mpq, mpf, randstate)
+    * functions (over 200 as documented in the GMP manual)
+    * constants (e.g., gmplib.gmp_version)
+
+Each data type is simply a function that returns a fresh value of the
+corresponding type.  A call to one of these functions serves the
+purpose of a variable declaration and default initialization in C.
+For example,
+
+    var my_mpz_t = gmplib.mpz();  // Create a multi-precision integer,
+    var my_mpq_t = gmplib.mpq();  // rational number,
+    var my_mpf_t = gmplib.mpf();  // floating-point number,
+    var rs = gmplib.randstate();  // and random state (gmp_randstate_t).
+
+Library functions are grouped by prefix; functions whose names begin
+with "mpz_" are properties of gmplib.mpz, named by removing the
+prefix.  Likewise for prefixes "mpq_" "mpf_" and "gmp_".  Examples:
+
+    mpf_get_prec    = gmplib.mpf.get_prec
+    gmp_urandomb_ui = gmplib.gmp.urandomb_ui
+    _mpz_realloc    = gmplib.mpz._realloc    // oddball case
+
+Refer to the GMP manual or http://gmplib.org/manual/ for function
+documentation.  Where a function accepts or returns a value of type
+double, NPGMP expects or returns a JavaScript number.  For integral
+types like "unsigned long" and "mp_bitcnt_t" a number or decimal
+string may be used.
+
+Functions that logically return two values, such as mpz_get_d_2exp,
+do so in C by returning the first value and storing the second in the
+position pointed to by the first argument.  NPGMP lacks the output
+pointer argument (so, for example, mpz.get_d_2exp takes only one
+argument, of type mpz) and returns both values in an array-like
+object, like this:
+
+    var values = gmplib.mpz.get_d_2exp(a);
+    var d = values[0], exp = values[1];
+
+Functions that logically return a string work differently due to C's
+lack of a string type.  NPGMP does not provide wrappers for
+mpz_get_str and mpq_get_str, but mpz and mpq objects support a
+toString method accepting a base, similarly to JavaScript numbers.
+
+The mpf_get_str function is more complex, and NPGMP does provide a
+wrapper, mpf.get_str.  This function accepts three arguments
+corresponding to the last three in C: base, n_digits, and the mpf
+object.  It returns the fraction (string) and exponent in an
+array-like object as described above.
+
+Extra functions not found in the C library include the type
+predicates:
+
+    * mpz.is_mpz
+    * mpq.is_mpq
+    * mpf.is_mpf
+    * gmp.randstate.is_randstate
+
+The above functions all accept one argument of arbitrary type and
+return true if it is of the type implied by the function's name, or
+otherwise false.
+
+NPGMP does not support the following GMP features:
+
+    * mpz_inits, mpz_clears, and other multiple init/clear functions;
+    * binary input and output via mpz_import and mpz_export;
+    * stream input and output via mpz_out_str, etc.;
+    * gmp_randinit, a variadic function described as obsolete;
+    * functions relating to C types like mpz_fits_sint_p; however, we do
+      support the ulong and slong versions;
+    * the mpz_array_init function;
+    * the low-level mpn family of functions;
+    * formatted input and output via gmp_printf, etc.;
+    * the C++ interface;
+    * the MINT (Berkeley MP compatibility) interface;
+    * custom memory allocation via mp_set_memory_functions.
 
 Errors?  Questions?  Ideas?  Email me: John.Tobey@gmail.com

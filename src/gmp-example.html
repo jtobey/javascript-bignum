@@ -3,8 +3,8 @@
 <embed type="application/x-gmplib" id="lib" width="0" height="0">
 <script>
 function onload() {
-    var lib = document.getElementById("lib");
-    var mpz = lib.mpz;
+    var gmplib = document.getElementById("lib");
+    var mpz = gmplib.mpz;
     var ret = mpz();
     mpz.set_str(ret,"0x10000000000000000",0);
     mpz.add_ui(ret,ret,1);
