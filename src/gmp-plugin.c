@@ -2332,8 +2332,8 @@ enumerate_sub (TopObject* top, NPObject *npobj, NPIdentifier **value,
     NPIdentifier *ptr = 0;
     char* prefix;
     size_t prefix_len;
-    const char* last = 0;
-    size_t last_len = 0;
+    const char* last;
+    size_t last_len;
     size_t max_len = 0;
     NPUTF8* buf = 0;
 
@@ -2362,6 +2362,8 @@ enumerate_sub (TopObject* top, NPObject *npobj, NPIdentifier **value,
        Such interruptions will result in duplicates returned by (a in b).
      */
     /* Scan once for count, then allocate, and scan to fill the array.  */
+    last = 0;
+    last_len = 0;
     for (const EntryInfo* i = first_entry (); i; i = next_entry (i)) {
         const char* iname = EntryInfo_name (i);
         if (strncmp (prefix, iname, prefix_len) != 0)
@@ -2394,6 +2396,8 @@ enumerate_sub (TopObject* top, NPObject *npobj, NPIdentifier **value,
         return true;
     }
 
+    last = 0;
+    last_len = 0;
     for (const EntryInfo* i = first_entry (); i; i = next_entry (i)) {
         const char* iname = EntryInfo_name (i);
         if (strncmp (prefix, iname, prefix_len) != 0)
