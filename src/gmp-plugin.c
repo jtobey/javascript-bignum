@@ -2131,7 +2131,9 @@ Entry_invokeDefault (NPObject *npobj,
     if (!enter (top, entry->number, args, out)) {
         if (nret > 1)
             NPN_ReleaseObject ((NPObject*) tuple);
-        nret = 0;
+        return throwf ((NPObject*) top, result, true,
+                       "%s: %s", Entry_name (entry),
+                       top->errmsg ?: "wrong argument type");
     }
 
     if (nret == 0)
