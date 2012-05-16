@@ -71,9 +71,6 @@ typedef __gmp_randstate_struct* x_gmp_randstate_ptr;
 #ifndef NPGMP_RAND
 # define NPGMP_RAND 1  /* Support random number generation.  */
 #endif
-#ifndef NPGMP_RTTI
-# define NPGMP_RTTI 1  /* Provide is_mpz, Entry.length, etc.  */
-#endif
 #ifndef NPGMP_SCRIPT
 # define NPGMP_SCRIPT 1  /* Provide script interpreter.  */
 #endif
@@ -2528,8 +2525,6 @@ id_to_opnum (NPObject *npobj, NPIdentifier key)
     return ret;
 }
 
-#if NPGMP_RTTI
-
 static const char*
 opcode_to_string (enum Opcode opcode, size_t* len)
 {
@@ -2569,18 +2564,12 @@ Opcode_invoke (NPObject *npobj, NPIdentifier name,
     return true;
 }
 
-#endif  /* NPGMP_RTTI */
-
 static NPClass Opcode_npclass = {
     structVersion   : NP_CLASS_STRUCT_VERSION,
     deallocate      : obj_noop,
     invalidate      : obj_invalidate,
-#if NPGMP_RTTI
     hasMethod       : hasMethod_only_toString,
     invoke          : Opcode_invoke,
-#else
-    hasMethod       : obj_id_false,
-#endif
     hasProperty     : obj_id_false,
     getProperty     : obj_id_var_void,
     setProperty     : setProperty_ro,
@@ -4059,16 +4048,10 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->Entry.npclass.deallocate        = Entry_deallocate;
         ret->Entry.npclass.invalidate        = obj_invalidate;
         ret->Entry.npclass.invokeDefault     = Entry_invokeDefault;
-#if NPGMP_RTTI
         ret->Entry.npclass.hasMethod         = Entry_hasMethod;
         ret->Entry.npclass.invoke            = Entry_invoke;
         ret->Entry.npclass.hasProperty       = Entry_hasProperty;
         ret->Entry.npclass.getProperty       = Entry_getProperty;
-#else
-        ret->Entry.npclass.hasMethod         = obj_id_false;
-        ret->Entry.npclass.hasProperty       = obj_id_false;
-        ret->Entry.npclass.getProperty       = obj_id_var_void;
-#endif
         ret->Entry.npclass.setProperty       = setProperty_ro;
         ret->Entry.npclass.removeProperty    = removeProperty_ro;
         ret->Entry.npclass.enumerate         = Entry_enumerate;
