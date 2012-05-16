@@ -11,7 +11,6 @@ npgmp.o: npgmp.c gmp-entries.h gmp-constants.h
 # Bare-bones plugin.
 npmpz.so: npgmp.c gmp-entries.h gmp-constants.h
 	$(CC) $(CFLAGS)				\
-		-DNPGMP_PORTING=0		\
 		-DNPGMP_MPQ=0			\
 		-DNPGMP_MPF=0			\
 		-DNPGMP_RAND=0			\
