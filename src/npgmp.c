@@ -2211,8 +2211,7 @@ has_subproperty (TopObject* top, NPObject *npobj, NPIdentifier key)
     bool ret;
 
     if (entry && entry->number &&
-        (key == NPN_GetStringIdentifier ("length")
-         || key == NPN_GetStringIdentifier ("outLength")))
+        (key == ID_length || key == NPN_GetStringIdentifier ("outLength")))
         return true;
 
     if (!NPN_IdentifierIsString (key))
@@ -2271,7 +2270,7 @@ get_subproperty (TopObject* top, NPObject *npobj, NPIdentifier key,
     }
 
     if (entry && entry->number) {
-        if (key == NPN_GetStringIdentifier ("length")) {
+        if (key == ID_length) {
             INT32_TO_NPVARIANT (Entry_length (npobj), *result);
             return true;
         }
