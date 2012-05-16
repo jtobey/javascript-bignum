@@ -132,7 +132,7 @@ static NPIdentifier ID_toString, ID_length;
 
 typedef struct _Class {
     NPClass     npclass;
-    size_t      topOffset;
+    struct _TopObject* top;
 } Class;
 
 typedef struct _TopObject {
@@ -2242,8 +2242,7 @@ get_entry (TopObject* top, const EntryInfo* info, NPVariant *result)
     if (number == 0)
         return false;
 
-    entry = (Entry*) NPN_CreateObject
-        (top->instance, &top->Entry.npclass);
+    entry = (Entry*) NPN_CreateObject (top->instance, &top->Entry.npclass);
 
     if (entry) {
         entry->info = info;
@@ -3999,7 +3998,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->instance                        = instance;
 
 #if NPGMP_SCRIPT
-        ret->Root.topOffset                  = TYPE_Root;
+        ret->Root.top                        = ret;
         ret->Root.npclass.structVersion      = NP_CLASS_STRUCT_VERSION;
         ret->Root.npclass.allocate           = Root_allocate;
         ret->Root.npclass.deallocate         = Root_deallocate;
@@ -4014,7 +4013,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->Root.npclass.enumerate          = Root_enumerate;
         ret->Root.npclass.construct          = Root_construct;
 
-        ret->Stack.topOffset                 = TYPE_Stack;
+        ret->Stack.top                       = ret;
         ret->Stack.npclass.structVersion     = NP_CLASS_STRUCT_VERSION;
         ret->Stack.npclass.allocate          = Stack_allocate;
         ret->Stack.npclass.deallocate        = Stack_deallocate;
@@ -4026,7 +4025,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->Stack.npclass.removeProperty    = Stack_removeProperty;
         ret->Stack.npclass.enumerate         = Stack_enumerate;
  
-        ret->Thread.topOffset                = TYPE_Thread;
+        ret->Thread.top                      = ret;
         ret->Thread.npclass.structVersion    = NP_CLASS_STRUCT_VERSION;
         ret->Thread.npclass.allocate         = Thread_allocate;
         ret->Thread.npclass.deallocate       = Thread_deallocate;
@@ -4039,7 +4038,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->Thread.npclass.enumerate        = Thread_enumerate;
 #endif
 
-        ret->Entry.topOffset                 = TYPE_Entry;
+        ret->Entry.top                       = ret;
         ret->Entry.npclass.structVersion     = NP_CLASS_STRUCT_VERSION;
         ret->Entry.npclass.allocate          = Entry_allocate;
         ret->Entry.npclass.deallocate        = Entry_deallocate;
@@ -4053,7 +4052,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->Entry.npclass.removeProperty    = removeProperty_ro;
         ret->Entry.npclass.enumerate         = Entry_enumerate;
 
-        ret->Tuple.topOffset                 = TYPE_Tuple;
+        ret->Tuple.top                       = ret;
         ret->Tuple.npclass.structVersion     = NP_CLASS_STRUCT_VERSION;
         ret->Tuple.npclass.allocate          = Tuple_allocate;
         ret->Tuple.npclass.deallocate        = Tuple_deallocate;
@@ -4069,7 +4068,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->Tuple.npclass.enumerate         = enumerate_empty;
 
 #if NPGMP_MPZ
-        ret->Integer.topOffset               = TYPE_Integer;
+        ret->Integer.top                     = ret;
         ret->Integer.npclass.structVersion   = NP_CLASS_STRUCT_VERSION;
         ret->Integer.npclass.allocate        = Integer_allocate;
         ret->Integer.npclass.deallocate      = Integer_deallocate;
@@ -4084,7 +4083,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
 #endif  /* NPGMP_MPZ */
 
 #if NPGMP_MPQ
-        ret->MpzRef.topOffset                = TYPE_MpzRef;
+        ret->MpzRef.top                      = ret;
         ret->MpzRef.npclass.structVersion    = NP_CLASS_STRUCT_VERSION;
         ret->MpzRef.npclass.allocate         = MpzRef_allocate;
         ret->MpzRef.npclass.deallocate       = MpzRef_deallocate;
@@ -4097,7 +4096,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
         ret->MpzRef.npclass.removeProperty   = removeProperty_ro;
         ret->MpzRef.npclass.enumerate        = enumerate_empty;
 
-        ret->Rational.topOffset              = TYPE_Rational;
+        ret->Rational.top                    = ret;
         ret->Rational.npclass.structVersion  = NP_CLASS_STRUCT_VERSION;
         ret->Rational.npclass.allocate       = Rational_allocate;
         ret->Rational.npclass.deallocate     = Rational_deallocate;
@@ -4112,7 +4111,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
 #endif  /* NPGMP_MPQ */
 
 #if NPGMP_RAND
-        ret->Rand.topOffset                  = TYPE_Rand;
+        ret->Rand.top                        = ret;
         ret->Rand.npclass.structVersion      = NP_CLASS_STRUCT_VERSION;
         ret->Rand.npclass.allocate           = Rand_allocate;
         ret->Rand.npclass.deallocate         = Rand_deallocate;
@@ -4126,7 +4125,7 @@ TopObject_allocate (NPP instance, NPClass *aClass)
 #endif  /* NPGMP_RAND */
 
 #if NPGMP_MPF
-        ret->Float.topOffset                 = TYPE_Float;
+        ret->Float.top                       = ret;
         ret->Float.npclass.structVersion     = NP_CLASS_STRUCT_VERSION;
         ret->Float.npclass.allocate          = Float_allocate;
         ret->Float.npclass.deallocate        = Float_deallocate;
@@ -4202,8 +4201,7 @@ get_top (NPObject* npobj)
 {
     if (npobj->_class == &TopObject_npclass)
         return (TopObject*) npobj;
-    return (TopObject*) ((char*) npobj->_class -
-                         ((Class*) npobj->_class)->topOffset);
+    return ((Class*) npobj->_class)->top;
 }
 
 
