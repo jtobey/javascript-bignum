@@ -33,7 +33,7 @@ a calculation.
 
     make
     mkdir -p ~/.mozilla/plugins/
-    cp libgmp-plugin.so ~/.mozilla/plugins/
+    cp npgmp.so ~/.mozilla/plugins/
 
 
 USAGE

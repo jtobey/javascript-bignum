@@ -1,4 +1,4 @@
-/* gmp-ops.h: header private to gmp-plugin.c.  */
+/* gmp-ops.h: header private to npgmp.c.  */
 OP (roll)
 OP (pick)
 OP (drop)

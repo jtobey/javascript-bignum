@@ -2,8 +2,6 @@
 
    TO DO:
 
-   * Document usage.
-
    * Reliable crash on reload test.html on FF 11 OOPP.  Retest and try
      to run plugin_container under Valgrind.
 

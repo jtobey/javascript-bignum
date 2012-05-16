@@ -1,4 +1,4 @@
-/* gmp-constants.h: header private to gmp-plugin.c.
+/* gmp-constants.h: header private to npgmp.c.
 
    Copyright(C) 2012 John Tobey, see ../LICENCE
 */
