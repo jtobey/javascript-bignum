@@ -198,6 +198,7 @@ sub gen_scheme {
 sub prolog_html {
     print(<<'END');
 <html><head>
+<meta charset="UTF-8"></meta>
 <script src="../biginteger.js"></script>
 <script src="../schemeNumber.js"></script>
 <script>
@@ -341,7 +342,8 @@ END
 sub epilog_html {
     print(<<END);
     update_stats();
-    document.getElementById('done').innerHTML = " Done!";
+    var msg = (ok == tried ? "Done!" : "see web console for details.");
+    document.getElementById('done').innerHTML = msg;
 }
 </script>
 </head><body onload="run_tests()">
