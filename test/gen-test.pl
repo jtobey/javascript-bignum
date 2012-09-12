@@ -255,7 +255,9 @@ if (typeof print !== "undefined")
 else
     show_result = function(expr, out) {
         console.log(expr + " " + out);
-        process.stdout.flush();
+        try {
+            process.stdout.flush(); // required for legacy support (Node <0.5)?
+        } catch (exc) {}
     };
 END
     setup_js();
