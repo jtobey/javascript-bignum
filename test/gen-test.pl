@@ -202,8 +202,22 @@ sub prolog_html {
 <script src="../biginteger.js"></script>
 <script src="../schemeNumber.js"></script>
 <script>
-var expected, okElt, triedElt, timeElt, ok, tried, started;
-function expect(output, fname, a, b, c) {
+var expect, expected;
+var okElt, nokElt, triedElt, timeElt, statusElt;
+var ok, tried, started, update_time;
+var ww_script, worker;
+
+function log_error(expr, out) {
+    console.log(expr + " " + out + ", expected " + expected);
+}
+function ww_expect(output, fname, a, b, c) {
+    //if (ww_script.length > 4000) return;  // XXX testing.
+    ww_script += "expected='" + output + "'; test('" + fname + "'";
+    for (var i = 2; i < arguments.length; i++)
+        ww_script += ",'" + arguments[i] + "'";
+    ww_script += ");\n";
+}
+function immediate_expect(output, fname, a, b, c) {
     expected = output;
     switch (arguments.length) {
     case 2: test(fname);          break;
@@ -215,28 +229,119 @@ function expect(output, fname, a, b, c) {
 function update_stats() {
     triedElt.innerHTML = String(tried);
     okElt.innerHTML = String(ok);
-    timeElt.innerHTML = String(((new Date).getTime() - started) / 1000);
+    nokElt.innerHTML = String(tried - ok);
+    timeElt.innerHTML = String((update_time - started) / 1000);
 }
 function show_result(expr, out) {
+    // non-ww version.
     tried++;
     if (out == expected)
         ok++;
     else
-        console.log(expr + " " + out + ", expected " + expected);
-    if (tried % 100 === 0)
-        update_stats();
+        log_error(expr, out);
+}
+function set_status(status) {
+    statusElt.innerHTML = status;
+}
+function done() {
+    update_stats();
+    var msg = (ok == tried ? "Success!" : "see web console for details.");
+    set_status(msg);
+}
+function handle_message(event) {
+    var ts = event.timeStamp;
+    if (ts > 1e12) ts /= 1000;  // XXX accommodate microseconds
+    var match = /^(\S*)(?: (.*))?$/.exec(event.data);
+    switch (match[1]) {
+    case "start":
+        started = ts;
+        update_time = started;
+        set_status("running...");
+        break;
+    case "ok":  ok++;  // Fall through.
+    case "nok": tried++;
+        if (ts >= update_time) {
+            update_time = ts;
+            update_stats();
+            update_time += 500;
+        }
+        break;
+    case "done":
+        done();
+        break;
+    case "status":
+        set_status(match[2]);  // for testing
+        break;
+    }
+    if (match[2])
+        console.log(match[2]);
+}
+function enable_use_ww() {
+    var elt = document.getElementById('use_ww');
+    elt.checked = (typeof Worker === "function");
+    use_ww_onchange(elt);
+    elt.disabled = false;
+}
+function use_ww_onchange(elt) {
+    document.getElementById('stop_button').disabled = !elt.checked;
+}
+function stop_tests() {
+    if (worker) {
+        worker.terminate();
+        worker = undefined;
+    }
 }
 END
-    setup_js();
+    print(setup_js());
     print(<<'END');
 function run_tests() {
     okElt = document.getElementById('ok');
+    nokElt = document.getElementById('nok');
     triedElt = document.getElementById('tried');
     timeElt = document.getElementById('time');
+    statusElt = document.getElementById('status');
     ok = 0;
     tried = 0;
-    alert("Click OK to start");
-    started = (new Date).getTime();
+    if (document.getElementById('use_ww').checked) {
+        expect = ww_expect;
+        var url = document.URL;
+        ww_script = 'var url = \"' + url.replace(/"/g, '\\"') + '\";\n';
+END
+    my $script = <<'END';
+url = url.replace(/\/[^\/]*$/, '/');
+importScripts(url + "biginteger.js", url + "schemeNumber.js");
+var expected;
+END
+    $script .= setup_js() . <<'END';
+function show_result(expr, out) {
+    var msg = "ok";
+    if (out != expected)
+        msg = "nok " + expr + " " + out + ", expected " + expected;
+    postMessage(msg);
+}
+postMessage("start");
+END
+    $script =~ s/\\/\\\\/g;
+    $script =~ s/\n/\\n/g;
+    $script =~ s/\'/\\'/g;
+    $script =~ s{</script>}{</'+'script>}g;
+    print("        ww_script += '$script';\n");
+    print(<<'END');
+        do_tests();  // build script
+        ww_script += "postMessage('done')";
+        var url = "data:," + encodeURIComponent(ww_script);
+        worker = new Worker(url);
+        worker.onmessage = handle_message;
+    }
+    else {
+        expect = immediate_expect;
+        started = (new Date).getTime();
+        do_tests();
+        update_time = (new Date).getTime();
+        done();
+    }
+}
+function do_tests() {
 END
 }
 
@@ -253,28 +358,35 @@ if (typeof require === "undefined") {
 var show_result;
 if (typeof print !== "undefined")
     show_result = function(expr, out) { print(expr + " " + out) };
-else
-    show_result = function(expr, out) {
-        console.log(expr + " " + out);
-        try {
+else {
+    try {
+        process.stdout.flush();
+        show_result = function(expr, out) {
+            console.log(expr + " " + out);
             process.stdout.flush(); // required for legacy support (Node <0.5)?
-        } catch (exc) {}
-    };
+        };
+    }
+    catch (exc) {
+        show_result = function(expr, out) {
+            console.log(expr + " " + out);
+        };
+    }
+}
 END
-    setup_js();
+    print(setup_js());
 }
 
 sub setup_js {
-    print(<<'END');
+    my $setup = <<'END';
 var fn = SchemeNumber.fn;
 var isNumber = fn["number?"];
 var ns = fn["number->string"];
 var nums = {
 END
     for my $num (@{$DATA{'o'}}) {
-        print(qq/    "$num":fn["string->number"]("$num"),\n/);
+        $setup .= qq/    "$num":fn["string->number"]("$num"),\n/;
     }
-    print(<<'END');
+    $setup .= <<'END';
 };
 function myNs(a) {
     return ns(a);  // Omit extra arguments.
@@ -310,6 +422,7 @@ function test(fname, a, b, c) {
     show_result(expr, out);
 }
 END
+    return($setup);
 }
 
 sub gen_js {
@@ -334,24 +447,25 @@ sub gen_html {
 sub epilog_js {
     print(<<'END');
 for (var i in this) {
-    print(i);
+    print("namespace pollution: " + i);
 }
 END
 }
 
 sub epilog_html {
     print(<<END);
-    update_stats();
-    var msg = (ok == tried ? "Done!" : "see web console for details.");
-    document.getElementById('done').innerHTML = msg;
-}
+}  // end of function do_tests()
 </script>
-</head><body onload="run_tests()">
-<p>Passed
-<span id="ok">0</span> of
-<span id="tried">0</span> in
-<span id="time">0</span> sec...
-<span id="done"></span></p>
+</head><body onload="enable_use_ww()">
+<p>Passed: <span id="ok">0</span></p>
+<p>Failed: <span id="nok">0</span></p>
+<p>Total: <span id="tried">0</span></p>
+<p>Time: <span id="time">0</span></p>
+<p>Status: <span id="status"></span></p>
+<p><label><input type="checkbox" id="use_ww" disabled="disabled" onchange="use_ww_onchange(this)" />
+ Use worker thread</label></p>
+<p><button onclick="run_tests()">Go</button>
+   <button onclick="stop_tests()" id="stop_button" disabled="disabled">Stop</button></p>
 </body></html>
 END
 }
