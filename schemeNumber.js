@@ -292,7 +292,7 @@ function makeContext(opts) {
                 ctor:    ctor,
                 base:    base,
                 sub:     [],
-                ename:   _replace(sep + name, /([\"\\])/g, "\\$1"),
+                ename:   _replace(sep + name, /([\"\\])/g, "\\$1")
             };
             //opts.debug && console.log("defClass:", name, "base:", base);
             if (typeof base !== "undefined") {
@@ -478,7 +478,7 @@ function makeContext(opts) {
             }
             ret.def = def;
             return ret;
-        },
+        }
         // lookup: TO DO
     };
     if (opts.debug)
@@ -563,7 +563,7 @@ function PluginContainer(init) {
         unsubscribe: function(listener) {
             function isNotIt(l) { return l !== listener; }
             listeners = listeners.filter(isNotIt);
-        },
+        }
     };
     t.onChange = onChange;
 
@@ -656,7 +656,7 @@ function getEs5Globals() {
         TypeError          : TypeError,
         URIError           : URIError,
         Math               : Math,
-        JSON               : JSON,
+        JSON               : JSON
     };
 }
 
@@ -3018,14 +3018,14 @@ function makeMinimalBase() {
     var SchemeNumber, debug;
 
     var disp = DispatchJs.makeContext({
-        methodNamePrefix: "SN_",
-        methodNameSeparator: " ",
         //debug: true,
+        methodNamePrefix: "SN_",
+        methodNameSeparator: " "
     });
 
     var plugins = new PluginContainer({
         Dispatch: disp,
-        es5globals: getEs5Globals(),
+        es5globals: getEs5Globals()
     });
 
     plugins.extend(implementUncurry(plugins));
