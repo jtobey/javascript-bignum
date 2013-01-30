@@ -890,10 +890,57 @@ SvgMoebius.prototype.redraw = function() {
 MoebiusApp = (function() {
 
     var App = {};
-    var Done = false;
+    var sn = SchemeNumber;
+    var fn = sn.fn;
+    var ns = fn["number->string"];
 
-    var Maths = MoebiusMaths;
-    var crect = Maths.crect, creal = Maths.creal, cimag = Maths.cimag, ceq = Maths.ceq, cadd = Maths.cadd, csub = Maths.csub, cneg = Maths.cneg, cmul = Maths.cmul, cdiv = Maths.cdiv, crdiv = Maths.crdiv, carg = Maths.carg, polar = Maths.polar, cabs = Maths.cabs, cabs2 = Maths.cabs2, radd = Maths.radd, rsub = Maths.rsub, rneg = Maths.rneg, rmul = Maths.rmul, rdiv = Maths.rdiv, rsin = Maths.rsin, rcos = Maths.rcos, log = Maths.log, min = Maths.min, max = Maths.max, lt0 = Maths.lt0, gt0 = Maths.gt0, le = Maths.le, lt = Maths.lt, ge = Maths.ge, gt = Maths.gt, isOdd = Maths.isOdd, finite = Maths.finite, isZero = Maths.isZero, cIsZero = Maths.cIsZero, abs = Maths.abs, ceil = Maths.ceil, sqrt = Maths.sqrt, PI = Maths.PI, ZERO = Maths.ZERO, ONE = Maths.ONE, cZERO = Maths.cZERO, cONE = Maths.cONE, INF = Maths.INF;
+    // Number type abstraction.
+    var crect = fn["make-rectangular"];
+    var creal = fn["real-part"];
+    var cimag = fn["imag-part"];
+    var ceq = fn["="];
+    var cadd = fn["+"];  // can handle more than 2 args
+    var csub = fn["-"];  // can handle more than 2 args
+    var cneg = fn["-"];
+    var cmul = fn["*"];  // can handle more than 2 args
+    var cdiv = fn["/"];  // can handle more than 2 args
+    var crdiv = fn["/"];  // can handle more than 2 args
+    var carg = fn.angle;
+    var polar = fn["make-polar"];
+    var cabs = fn.magnitude;
+    var cabs2 = function(z) {
+        var x = creal(z), y = cimag(z);
+        return radd(rmul(x, x), rmul(y, y));
+    };
+    var radd = function(a, b) { return a + b; };
+    var rsub = function(a, b) { return a - b; };
+    var rneg = function(a)    { return -a; };
+    var rmul = function(a, b) { return a * b; };
+    var rdiv = function(a, b) { return a / b; };
+    var rsin = Math.sin;
+    var rcos = Math.cos;
+    var log = Math.log;
+    var min = Math.min;
+    var max = Math.max;
+    var lt0 = function(x) { return x < 0; };
+    var gt0 = function(x) { return x > 0; };
+    var le = function(x, y) { return x <= y; };
+    var lt = function(x, y) { return x < y; };
+    var ge = function(x, y) { return x >= y; };
+    var gt = function(x, y) { return x > y; };
+    var isOdd = function(n) { return (n & 1) == 1; };
+    var finite = fn["finite?"];
+    var isZero = fn["zero?"];
+    var cIsZero = fn["zero?"];
+    var abs = Math.abs;
+    var ceil = Math.ceil;
+    var sqrt = Math.sqrt;
+    var PI = Math.PI;
+    var ZERO = 0;
+    var ONE = 1;
+    var cZERO = 0;
+    var cONE = 1;
+    var INF = Infinity;
 
     // Constant folding.
     var M1 = rneg(ONE);
