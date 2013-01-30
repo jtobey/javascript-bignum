@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8">
+    <script src="../biginteger.js" type="text/javascript"></script>
+    <script src="../schemeNumber.js" type="text/javascript"></script>
+    <script src="moebius_maths.js" type="text/javascript"></script>
+    <script src="moebius.js" type="text/javascript"></script>
+    <title>Interactive Möbius transformation</title>
+</head>
+<body onload="Moebius(document.getElementById('moebius'))">
+
+    <svg xmlns="http://www.w3.org/2000/svg"
+         xmlns:moebius="http://john-edwin-tobey.org/moebius"
+         id="moebius" width="62%" height="800"
+         style="float: right; cursor: move;">
+
+      <!-- border -->
+      <rect width="100%" height="100%" fill="white" stroke="black"/>
+
+      <moebius:g>
+        <rect x="100" y="100" width="310" height="310" fill-opacity="0" stroke="black"/>
+        <rect x="110" y="110" width="40" height="40" fill-opacity="0" stroke="yellow"/>
+        <rect x="160" y="110" width="40" height="40" fill-opacity="0" stroke="yellow"/>
+        <rect x="210" y="110" width="40" height="40" fill-opacity="0" stroke="yellow"/>
+        <rect x="260" y="110" width="40" height="40" fill-opacity="0" stroke="yellow"/>
+        <rect x="310" y="110" width="40" height="40" fill-opacity="0" stroke="yellow"/>
+        <rect x="360" y="110" width="40" height="40" fill-opacity="0" stroke="yellow"/>
+        <rect x="110" y="160" width="40" height="40" fill-opacity="0" stroke="orange"/>
+        <rect x="160" y="160" width="40" height="40" fill-opacity="0" stroke="orange"/>
+        <rect x="210" y="160" width="40" height="40" fill-opacity="0" stroke="orange"/>
+        <rect x="260" y="160" width="40" height="40" fill-opacity="0" stroke="orange"/>
+        <rect x="310" y="160" width="40" height="40" fill-opacity="0" stroke="orange"/>
+        <rect x="360" y="160" width="40" height="40" fill-opacity="0" stroke="orange"/>
+        <rect x="110" y="210" width="40" height="40" fill-opacity="0" stroke="red"/>
+        <rect x="160" y="210" width="40" height="40" fill-opacity="0" stroke="red"/>
+        <rect x="210" y="210" width="40" height="40" fill-opacity="0" stroke="red"/>
+        <rect x="260" y="210" width="40" height="40" fill-opacity="0" stroke="red"/>
+        <rect x="310" y="210" width="40" height="40" fill-opacity="0" stroke="red"/>
+        <rect x="360" y="210" width="40" height="40" fill-opacity="0" stroke="red"/>
+        <rect x="110" y="260" width="40" height="40" fill-opacity="0" stroke="purple"/>
+        <rect x="160" y="260" width="40" height="40" fill-opacity="0" stroke="purple"/>
+        <rect x="210" y="260" width="40" height="40" fill-opacity="0" stroke="purple"/>
+        <rect x="260" y="260" width="40" height="40" fill-opacity="0" stroke="purple"/>
+        <rect x="310" y="260" width="40" height="40" fill-opacity="0" stroke="purple"/>
+        <rect x="360" y="260" width="40" height="40" fill-opacity="0" stroke="purple"/>
+        <rect x="110" y="310" width="40" height="40" fill-opacity="0" stroke="blue"/>
+        <rect x="160" y="310" width="40" height="40" fill-opacity="0" stroke="blue"/>
+        <rect x="210" y="310" width="40" height="40" fill-opacity="0" stroke="blue"/>
+        <rect x="260" y="310" width="40" height="40" fill-opacity="0" stroke="blue"/>
+        <rect x="310" y="310" width="40" height="40" fill-opacity="0" stroke="blue"/>
+        <rect x="360" y="310" width="40" height="40" fill-opacity="0" stroke="blue"/>
+        <rect x="110" y="360" width="40" height="40" fill-opacity="0" stroke="green"/>
+        <rect x="160" y="360" width="40" height="40" fill-opacity="0" stroke="green"/>
+        <rect x="210" y="360" width="40" height="40" fill-opacity="0" stroke="green"/>
+        <rect x="260" y="360" width="40" height="40" fill-opacity="0" stroke="green"/>
+        <rect x="310" y="360" width="40" height="40" fill-opacity="0" stroke="green"/>
+        <rect x="360" y="360" width="40" height="40" fill-opacity="0" stroke="green"/>
+      </moebius:g>
+
+      <moebius:anchor-template style="cursor: pointer;" r="6">
+        <text text-anchor="middle" dominant-baseline="middle"
+              >&#9875;</text>  <!-- Unicode anchor-shaped character -->
+      </moebius:anchor-template>
+
+      <moebius:anchors>
+        <moebius:anchor x="255" y="100"/>
+        <moebius:anchor x="255" y="410"/>
+      </moebius:anchors>
+
+    </svg>
+
+    <div style="padding: 0em 1em;">
+      <h1>Interactive Möbius transformation</h1>
+      <p>This page shows an image and two small anchors (&#9875;).  You can move the anchors with the mouse.  You can also click and drag part of the image.</p>
+      <p>As you move the pattern, the anchored locations remain fixed.  The pattern deforms to preserve circles and angles.  This kind of deformation is a type of <a href="http://en.wikipedia.org/wiki/M%C3%B6bius_transformation">Möbius transformation</a>.</p>
+      <p>You can approximate almost any Möbius transformation this way, but the simplest kinds&#8212;<a href="http://en.wikipedia.org/wiki/Translation_%28geometry%29">shifts</a>, <a href="http://en.wikipedia.org/wiki/Rotation_%28mathematics%29">rotations</a>, and <a href="http://en.wikipedia.org/wiki/Scaling_%28geometry%29">scaling</a>&#8212;require one or both anchors to be <em>at infinity</em>.  (Note that <a href="http://en.wikipedia.org/wiki/Reflection_%28mathematics%29">flips</a> are not Möbius transformations.)</p>
+      <p>To place an anchor at infinity, double-click it.  It will disappear from the screen.  To bring an anchor back from infinity, or to create a new anchor, double-click where there is not currently an anchor.</p>
+      <p>Having more than two visible anchors holds everything still.  With fewer than two, the remaining anchor or anchors are considered to be at infinity.</p>
+    </div>
+
+</body>
+</html>
