@@ -3,7 +3,7 @@
 	http://silentmatt.com/biginteger/
 
 	Copyright (c) 2009 Matthew Crumley <email@matthewcrumley.com>
-	Copyright (c) 2010,2011 by John Tobey <John.Tobey@gmail.com>
+	Copyright (c) 2010,2011 by John Tobey <jtobey@john-edwin-tobey.org>
 	Licensed under the MIT license.
 
 	Support for arbitrary internal representation base was added by

@@ -3,7 +3,7 @@
   Minimalist implementation of CommonJS Modules 1.1.1.
   http://wiki.commonjs.org/wiki/Modules/1.1.1
 
-  Copyright (c) 2011 by John Tobey <John.Tobey@gmail.com>
+  Copyright (c) 2011 by John Tobey <jtobey@john-edwin-tobey.org>
 */
 
 var require = (function() {

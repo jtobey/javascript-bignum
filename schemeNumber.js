@@ -1,5 +1,5 @@
 // Scheme numerical tower in JavaScript.
-// Copyright (c) 2011,2012 by John Tobey <John.Tobey@gmail.com>
+// Copyright (c) 2011,2012 by John Tobey <jtobey@john-edwin-tobey.org>
 
 /*
     File: schemeNumber.js

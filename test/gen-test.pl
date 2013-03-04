@@ -251,30 +251,32 @@ function done() {
 function handle_message(event) {
     var ts = event.timeStamp;
     if (ts > 1e12) ts /= 1000;  // XXX accommodate microseconds
-    var match = /^(\S*)(?: (.*))?$/.exec(event.data);
-    switch (match[1]) {
-    case "start":
-        started = ts;
-        update_time = started;
-        set_status("running...");
-        break;
-    case "ok":  ok++;  // Fall through.
-    case "nok": tried++;
-        if (ts >= update_time) {
-            update_time = ts;
-            update_stats();
-            update_time += 500;
+    event.data.split('\n').forEach(function(line) {
+        var match = /^(\S*)(?: (.*))?$/.exec(line);
+        switch (match[1]) {
+        case "start":
+            started = ts;
+            update_time = started;
+            set_status("running...");
+            break;
+        case "ok":  ok++;  // Fall through.
+        case "nok": tried++;
+            if (ts >= update_time) {
+                update_time = ts;
+                update_stats();
+                update_time += 500;
+            }
+            break;
+        case "done":
+            done();
+            break;
+        case "status":
+            set_status(match[2]);  // for testing
+            break;
         }
-        break;
-    case "done":
-        done();
-        break;
-    case "status":
-        set_status(match[2]);  // for testing
-        break;
-    }
-    if (match[2])
-        console.log(match[2]);
+        if (match[2])
+            console.log(match[2]);
+    });
 }
 function enable_use_ww() {
     var elt = document.getElementById('use_ww');
@@ -310,14 +312,23 @@ END
     my $script = <<'END';
 url = url.replace(/\/[^\/]*$/, '/');
 importScripts(url + "biginteger.js", url + "schemeNumber.js");
-var expected;
+var expected, msgbuf = '', next_flush = (new Date).getTime();
 END
     $script .= setup_js() . <<'END';
+function flush() {
+    postMessage(msgbuf);
+    msgbuf = '';
+}
 function show_result(expr, out) {
     var msg = "ok";
     if (out != expected)
         msg = "nok " + expr + " " + out + ", expected " + expected;
-    postMessage(msg);
+    msgbuf += msg + '\n';
+    var now = (new Date).getTime();
+    if (now > next_flush || msgbuf.length > 10000) {
+        flush();
+        next_flush = now + 500;
+    }
 }
 postMessage("start");
 END
@@ -328,7 +339,7 @@ END
     print("        ww_script += '$script';\n");
     print(<<'END');
         do_tests();  // build script
-        ww_script += "postMessage('done')";
+        ww_script += "flush();\npostMessage('done');\n";
         var url = "data:," + encodeURIComponent(ww_script);
         worker = new Worker(url);
         worker.onmessage = handle_message;

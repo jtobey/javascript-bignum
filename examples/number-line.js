@@ -9,7 +9,7 @@
 
     See number-line.svg in this directory for usage.
 
-    Copyright (c) 2011 John Tobey <John.Tobey@gmail.com>
+    Copyright (c) 2011 John Tobey <jtobey@john-edwin-tobey.org>
  */
 
 var NumberLine = (function() {

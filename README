@@ -1,6 +1,6 @@
 Scheme arithmetic library for JavaScript,
 https://github.com/jtobey/javascript-bignum.
-Copyright (c) 2010,2011,2012 John Tobey <John.Tobey@gmail.com>
+Copyright (c) 2010,2011,2012 John Tobey <jtobey@john-edwin-tobey.org>
 Copyright (c) 2009 Matthew Crumley <email@matthewcrumley.com>
 Licensed under the MIT license, file LICENSE.
 Big integer implementation based on javascript-biginteger,

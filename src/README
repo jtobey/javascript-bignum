@@ -122,4 +122,4 @@ NPGMP does not support the following GMP features:
     * the MINT (Berkeley MP compatibility) interface;
     * custom memory allocation via mp_set_memory_functions.
 
-Errors?  Questions?  Ideas?  Email me: John.Tobey@gmail.com
+Errors?  Questions?  Ideas?  Email me: jtobey@john-edwin-tobey.org
