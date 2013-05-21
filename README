@@ -74,6 +74,8 @@ SIMILAR PROJECTS
 * node-gmp (https://github.com/postwait/node-gmp), node.js bindings
   for the GNU Multiple Precision Arithmetic Library.
 
+* bignumber.js (https://github.com/MikeMcl/bignumber.js)
+
 * Any others out there???
 
 
