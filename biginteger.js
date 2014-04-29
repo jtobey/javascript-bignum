@@ -102,7 +102,7 @@ function BigInteger(n, s) {
 		else if (typeof n === "undefined") {
 			return BigInteger.ZERO;
 		}
-		return BigInteger.parse(n);
+		return BigInteger.parse(n, s);
 	}
 
 	n = n || [];  // Provide the nullary constructor for subclasses.
