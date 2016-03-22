@@ -1,9 +1,9 @@
-Scheme arithmetic library for JavaScript,
-https://github.com/jtobey/javascript-bignum.
-Copyright (c) 2010,2011,2012 John Tobey <jtobey@john-edwin-tobey.org>
-Copyright (c) 2009 Matthew Crumley <email@matthewcrumley.com>
-Licensed under the MIT license, file LICENSE.
-Big integer implementation based on javascript-biginteger,
+Scheme arithmetic library for JavaScript,  
+https://github.com/jtobey/javascript-bignum.  
+Copyright (c) 2010, 2011, 2012 John Tobey <jtobey@john-edwin-tobey.org>  
+Copyright (c) 2009 Matthew Crumley <email@matthewcrumley.com>  
+Licensed under the MIT license, file LICENSE.  
+Big integer implementation based on javascript-biginteger,  
 https://github.com/silentmatt/javascript-biginteger.
 
 
@@ -21,13 +21,14 @@ exactly 1, not 1.0000000000000007 as in JavaScript.  Raising 2 to the
 1024th power returns a 308-digit integer with complete precision, not
 Infinity as in ECMAScript.
 
-This implementation provides all functions listed in the R6RS [1]
-Scheme specification, Section 11.7, along with "eqv?" from Section
-11.5.  ("eqv?" uses JavaScript's "===" to compare non-numbers.)
+This implementation provides all functions listed in the [R6RS][1]
+(I recommend the [PDF][2]) Scheme specification, Section 11.7, along 
+with `eqv?` from Section 11.5. (`eqv?` uses JavaScript's `===` to
+compare non-numbers.)
 
 Exact numbers support the standard ECMA Number formatting methods
-(toFixed, toExponential, and toPrecision) without a fixed upper limit
-to precision.
+(`toFixed`, `toExponential`, and `toPrecision`) without a fixed upper
+limit to precision.
 
 
 #Implementation Details
@@ -55,7 +56,7 @@ object.
 
 Number objects may contain properties and methods other than the
 standard toString, toFixed, etc.  Such properties have names beginning
-with "_" or "SN_".  They are private to the library, and applications
+with `_` or `SN_`.  They are private to the library, and applications
 should not use them.  The Scheme functions are *not* methods of number
 objects.
 
@@ -93,7 +94,7 @@ schemeNumber.js.
 
 See documentation in schemeNumber.js, or view it on the Web at
 http://john-edwin-tobey.org/Scheme/javascript-bignum/docs/files/schemeNumber-js.html,
-or try to extract it to HTML using NaturalDocs [2] and the build-docs
+or try to extract it to HTML using [NaturalDocs][2] and the build-docs
 script in this directory.
 
 
@@ -115,10 +116,8 @@ script in this directory.
 
 1.0.1 - 2011-02-10 - First numbered release.
 
-See file CHANGES for more.
+See file CHANGES.md for more.
 
-[1] R6RS Scheme specification.  See http://www.r6rs.org/ (I recommend
-the PDF, not the HTML version.  http://www.r6rs.org/final/r6rs.pdf),
-Section 11.7 (Base library, Arithmetic).
-
-[2] NaturalDocs.  http://www.naturaldocs.org/.
+[1]: http://www.r6rs.org/
+[2]: http://www.r6rs.org/final/r6rs.pdf
+[3]: http://www.naturaldocs.org/.
