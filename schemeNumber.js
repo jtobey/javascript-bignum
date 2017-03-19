@@ -2465,11 +2465,8 @@ function implementRnrsBase(plugins) {
                     return y;
                 return atan(SchemeNumber(y));
             case 2:
-                if (isZero(y)) {
-                    if (isZero(x))
-                        raise("&assertion", "atan undefined for", y, x);
-                    return isExact(x) ? y : INEXACT_ZERO;
-                };
+                if (isZero(y) && isZero(x) && isExact(y) && isExact(x))
+                    raise("&assertion", "atan undefined for", y, x);
                 return atan2(toReal(y), toReal(x));
             default: wrongArgCount("1-2", arguments);
             }
