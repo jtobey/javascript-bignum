@@ -2379,7 +2379,6 @@ function implementRnrsBase(plugins) {
                 exact = exact && isExact(arg);
                 ret = gcdNonnegative(ret, toExact(abs(arg)));
             }
-            ret = abs(ret);
             return (exact ? ret : toInexact(ret));
         },
 
@@ -2390,12 +2389,12 @@ function implementRnrsBase(plugins) {
             for (var i = 0; i < len; i++) {
                 var arg = toInteger(arguments[i]);
                 exact = exact && isExact(arg);
-                // Get the correct sign of the zero.
-                // And keep looking at args to get the exact flag correct.
-                if (isZero(arg)) ret = multiply(ret, arg);
-                if (!isZero(ret)) {
-                    arg = toExact(abs(arg));
-                    ret = divide(multiply(ret, arg), gcdNonnegative(ret, abs(arg)));
+                arg = toExact(abs(arg));
+                if (isZero(arg)) {
+                    // But keep looking at args to get the exact flag correct.
+                    ret = ZERO;
+                } else if (!isZero(ret)) {
+                    ret = divide(multiply(ret, arg), gcdNonnegative(ret, arg));
                 }
             }
             return (exact ? ret : toInexact(ret));
@@ -2411,9 +2410,10 @@ function implementRnrsBase(plugins) {
         exp         : makeUnary(SchemeNumber, exp),
 
         log : function(z, base) {
-            if (arguments.length == 2 && eq(base, ONE))
+            if (eq(z, ONE) && isExact(z))
+                return ZERO;
+            if (arguments.length == 2 && eq(base, ONE) && isExact(base))
                 raise("&assertion", "log undefined for base 1");
-            if (eq(z, ONE)) return isExact(z) ? ZERO : INEXACT_ZERO;
             var ret = log(SchemeNumber(z));
             switch (arguments.length) {
             case 2: ret = divide(ret, log(SchemeNumber(base)));  // fall through
@@ -2482,16 +2482,18 @@ function implementRnrsBase(plugins) {
             if (isZero(b)) {
                 if (isZero(p))
                     return isExact(b) && isExact(p) ? ONE : INEXACT_ONE;
+                if (SN_isNaN(p))
+                    return p;
                 if (isPositive(realPart(p)))
                     return isExact(p) ? b : INEXACT_ZERO;
-                raise("&assertion",
-                      "expt undefined for", b, p);
+                if (isExact(b) && isExact(p))
+                    raise("&assertion",
+                          "expt undefined for", b, p);
             }
             if (isInteger(p)) {
                 if (isZero(p)) {
-                    if (SN_isInfinite(b))
-                        raise("&assertion",
-                              "expt undefined for", b, p);
+                    if (SN_isNaN(b))
+                        return b;
                     if (isExact(p)) {
                         return ONE;
                     }
