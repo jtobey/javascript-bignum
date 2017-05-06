@@ -3738,7 +3738,7 @@ function implementPluginLibrary(plugins) {
     var _isFinite    = g.isFinite;
 
     // Imports from implementations via core library.
-    var ZERO, ONE, TWO, MINUS_ONE, I, MINUS_I, INEXACT_ZERO, INEXACT_ONE, PI;
+    var ZERO, ONE, TWO, MINUS_ONE, I, MINUS_I, INEXACT_ZERO, INEXACT_ONE, INFINITY, PI;
 
     // Imports from core library.
     var makePolar                = plugins.get("makePolar");
@@ -3760,6 +3760,7 @@ function implementPluginLibrary(plugins) {
         MINUS_ONE                = plugins.get("MINUS_ONE");
         INEXACT_ZERO             = plugins.get("INEXACT_ZERO");
         INEXACT_ONE              = plugins.get("INEXACT_ONE");
+        INFINITY                 = plugins.get("INFINITY");
         PI                       = plugins.get("PI");
         I                        = plugins.get("I");
         MINUS_I                  = plugins.get("MINUS_I");
@@ -3774,6 +3775,11 @@ function implementPluginLibrary(plugins) {
     //
 
     function Complex_sqrt() {
+        if (SN_isInfinite(this)) {
+            // Infinities will give us NaNs below, so use
+            // exp(log(this) / 2), simplified.
+            return makePolar(INFINITY, divide(angle(this), TWO));
+        }
         // For rectangular complex, compute it this way so that
         // we can get exact roots correctly.
         var thisMag = magnitude(this);
@@ -3993,21 +3999,35 @@ function implementPluginLibrary(plugins) {
     }
 
     function Complex_reciprocal() {
+        if (SN_isInfinite(this)) {
+            // Infinities will give us NaNs below, so use
+            // exp(-log(this)), simplified.
+            return makePolar(ZERO, negate(angle(this)));
+        }
         var x = realPart(this), y = imagPart(this);
         var m2 = add(square(x), square(y));
         return makeRectangular(divide(x, m2), negate(divide(y, m2)));
     }
 
     function complexDivide(x, y, z) {  // returns (x + iy) / z
+        // z is finite.
         var zx = realPart(z), zy = imagPart(z);
         var m2 = add(square(zx), square(zy));
         return complexMultiply(x, y, divide(zx, m2), negate(divide(zy, m2)));
     }
 
     function Real_divide_Complex(z) {
+        if (SN_isInfinite(z)) {
+            // Infinities will give us NaNs, in the formula below, so use reciprocal.
+            return multiply(this, reciprocal(z));
+        }
         return complexDivide(this, isExact(this) ? ZERO : INEXACT_ZERO, z);
     }
     function Complex_divide(z) {
+        if (SN_isInfinite(z)) {
+            // Infinities will give us NaNs, in the formula below, so use reciprocal.
+            return multiply(this, reciprocal(z));
+        }
         return complexDivide(realPart(this), imagPart(this), z);
     }
 
