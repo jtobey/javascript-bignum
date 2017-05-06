@@ -812,13 +812,13 @@ function implementUncurry(plugins) {
     tan - generic function(complex)
     As in Scheme.
 
-    SN_isFinite - generic function(real)
+    SN_isFinite - generic function(complex)  [r7rs]
     "finite?"
 
-    SN_isInfinite - generic function(real)
+    SN_isInfinite - generic function(complex)  [r7rs]
     "infinite?"
 
-    SN_isNaN - generic function(real)
+    SN_isNaN - generic function(complex)  [r7rs]
     "nan?"
 
     isUnit - generic function(real)
@@ -1304,7 +1304,6 @@ function implementCoreLibrary(plugins) {
     square                   = plugins.get("square");
     realPart                 = plugins.get("realPart");
     imagPart                 = plugins.get("imagPart");
-    expt                     = plugins.get("expt");
     expt                     = plugins.get("expt");
     exp                      = plugins.get("exp");
     magnitude                = plugins.get("magnitude");
@@ -2196,7 +2195,7 @@ function implementRnrsBase(plugins) {
     //"use strict";  // Strict mode hinders error reporting.
     var g = plugins.get("es5globals");
     var uncurry = plugins.get("uncurry");
-    var SchemeNumber, stringToNumber, ZERO, ONE, MINUS_ONE, INEXACT_ZERO, NAN, raise, isNumber, assertReal, toReal, toRational, toInteger, assertExact, makeRectangular, makePolar;
+    var SchemeNumber, stringToNumber, ZERO, ONE, MINUS_ONE, INEXACT_ZERO, INEXACT_ONE, NAN, raise, isNumber, assertReal, toReal, toRational, toInteger, assertExact, makeRectangular, makePolar;
     var numberToString, isExact, isInexact, isComplex, isReal, isRational, isInteger, isZero, toExact, toInexact, negate, reciprocal, eq, ne, add, subtract, multiply, divide, realPart, imagPart, expt, exp, magnitude, angle, sqrt, log, asin, acos, atan, sin, cos, tan, SN_isFinite, SN_isInfinite, SN_isNaN, abs, isPositive, isNegative, floor, ceiling, truncate, round, compare, gt, lt, ge, le, divAndMod, div, mod, atan2, numerator, denominator, isEven, isOdd, exactIntegerSqrt, gcdNonnegative;
     var Array_push = uncurry(g.Array.prototype.push);
 
@@ -2265,6 +2264,7 @@ function implementRnrsBase(plugins) {
         ONE                      = plugins.get("ONE");
         MINUS_ONE                = plugins.get("MINUS_ONE");
         INEXACT_ZERO             = plugins.get("INEXACT_ZERO");
+        INEXACT_ONE              = plugins.get("INEXACT_ONE");
         NAN                      = plugins.get("NAN");
         raise                    = plugins.get("raise");
         isNumber                 = plugins.get("isNumber");
@@ -2308,9 +2308,9 @@ function implementRnrsBase(plugins) {
         "negative?" : makeUnary(toReal, isNegative),
         "odd?"      : makeUnary(toInteger, isOdd),
         "even?"     : makeUnary(toInteger, isEven),
-        "finite?"   : makeUnary(toReal, SN_isFinite),
-        "infinite?" : makeUnary(toReal, SN_isInfinite),
-        "nan?"      : makeUnary(toReal, SN_isNaN),
+        "finite?"   : makeUnary(SchemeNumber, SN_isFinite),
+        "infinite?" : makeUnary(SchemeNumber, SN_isInfinite),
+        "nan?"      : makeUnary(SchemeNumber, SN_isNaN),
 
         max : makeMaxMin(gt),
         min : makeMaxMin(lt),
@@ -2379,7 +2379,6 @@ function implementRnrsBase(plugins) {
                 exact = exact && isExact(arg);
                 ret = gcdNonnegative(ret, toExact(abs(arg)));
             }
-            ret = abs(ret);
             return (exact ? ret : toInexact(ret));
         },
 
@@ -2391,7 +2390,12 @@ function implementRnrsBase(plugins) {
                 var arg = toInteger(arguments[i]);
                 exact = exact && isExact(arg);
                 arg = toExact(abs(arg));
-                ret = divide(multiply(ret, arg), gcdNonnegative(ret, abs(arg)));
+                if (isZero(arg)) {
+                    // But keep looking at args to get the exact flag correct.
+                    ret = ZERO;
+                } else if (!isZero(ret)) {
+                    ret = divide(multiply(ret, arg), gcdNonnegative(ret, arg));
+                }
             }
             return (exact ? ret : toInexact(ret));
         },
@@ -2406,6 +2410,10 @@ function implementRnrsBase(plugins) {
         exp         : makeUnary(SchemeNumber, exp),
 
         log : function(z, base) {
+            if (eq(z, ONE) && isExact(z))
+                return ZERO;
+            if (arguments.length == 2 && eq(base, ONE) && isExact(base))
+                raise("&assertion", "log undefined for base 1");
             var ret = log(SchemeNumber(z));
             switch (arguments.length) {
             case 2: ret = divide(ret, log(SchemeNumber(base)));  // fall through
@@ -2414,16 +2422,52 @@ function implementRnrsBase(plugins) {
             }
         },
 
-        sin  : makeUnary(SchemeNumber, sin),
-        cos  : makeUnary(SchemeNumber, cos),
-        tan  : makeUnary(SchemeNumber, tan),
-        asin : makeUnary(SchemeNumber, asin),
-        acos : makeUnary(SchemeNumber, acos),
+        sin  : function(x) {
+            if (isZero(x))
+                return x;
+            return sin(SchemeNumber(x));
+        },
+
+        cos  : function(x) {
+            if (isZero(x))
+                return isExact(x) ? ONE : INEXACT_ONE;
+            return cos(SchemeNumber(x));
+        },
+
+        tan  : function(x) {
+            if (isZero(x))
+                return x;
+            return tan(SchemeNumber(x));
+        },
+
+        asin  : function(x) {
+            if (isZero(x))
+                return x;
+            return asin(SchemeNumber(x));
+        },
+
+        acos : function(x) {
+            if (eq(x, ONE))
+                return isExact(x) ? ZERO : INEXACT_ZERO;
+            return acos(SchemeNumber(x));
+        },
+
+        exp : function(x) {
+            if (isZero(x))
+                return isExact(x) ? ONE : INEXACT_ONE;
+            return exp(SchemeNumber(x));
+        },
 
         atan : function(y, x) {
             switch (arguments.length) {
-            case 1: return atan(SchemeNumber(y));
-            case 2: return atan2(toReal(y), toReal(x));
+            case 1:
+                if (isZero(y))
+                    return y;
+                return atan(SchemeNumber(y));
+            case 2:
+                if (isZero(y) && isZero(x) && isExact(y) && isExact(x))
+                    raise("&assertion", "atan undefined for", y, x);
+                return atan2(toReal(y), toReal(x));
             default: wrongArgCount("1-2", arguments);
             }
         },
@@ -2431,9 +2475,39 @@ function implementRnrsBase(plugins) {
         sqrt : makeUnary(SchemeNumber, sqrt),
         "exact-integer-sqrt" : makeUnary(toInteger, exactIntegerSqrt),
 
-        expt : function(a, b) {
+        expt : function(b, p) {
             arguments.length === 2 || args2(arguments);
-            return expt(SchemeNumber(a), SchemeNumber(b));
+            b = SchemeNumber(b);
+            p = SchemeNumber(p);
+            if (isZero(b)) {
+                if (isZero(p))
+                    return isExact(b) && isExact(p) ? ONE : INEXACT_ONE;
+                if (SN_isNaN(p))
+                    return p;
+                if (isPositive(realPart(p)))
+                    return isExact(p) ? b : INEXACT_ZERO;
+                if (isExact(b) && isExact(p))
+                    raise("&assertion",
+                          "expt undefined for", b, p);
+            }
+            if (isInteger(p)) {
+                if (isZero(p)) {
+                    if (SN_isNaN(b))
+                        return b;
+                    if (isExact(p)) {
+                        return ONE;
+                    }
+                    return isReal(b) ? INEXACT_ONE :
+                        makeRectangular(INEXACT_ONE, INEXACT_ZERO);
+                }
+                // If exponent is an exact integer, compute as exactly as we can.
+                // If it is an inexact integer, use the same core computation,
+                // so a real power always returns a real result. If we use the general
+                // formula, we often get complex results (with tiny imaginary part).
+                return isExact(p) ?
+                    expt(b, p) : toInexact(expt(b, toExact(p)));
+            }
+            return expt(b, p);
         },
 
         "make-rectangular" : function(x, y) {
@@ -3289,9 +3363,9 @@ function installStubFunctions(plugins) {
     def("cos",            [Complex]);
     def("tan",            [Complex]);
 
-    def("SN_isFinite",    [Real]);
-    def("SN_isInfinite",  [Real]);
-    def("SN_isNaN",       [Real]);
+    def("SN_isFinite",    [Complex]);
+    def("SN_isInfinite",  [Complex]);
+    def("SN_isNaN",       [Complex]);
 
     def("isUnit",         [Real]);
     def("abs",            [Real]);
@@ -3599,7 +3673,6 @@ function implementPluginLibrary(plugins) {
     realPart                 = plugins.get("realPart");
     imagPart                 = plugins.get("imagPart");
     expt                     = plugins.get("expt");
-    expt                     = plugins.get("expt");
     exp                      = plugins.get("exp");
     magnitude                = plugins.get("magnitude");
     angle                    = plugins.get("angle");
@@ -3665,7 +3738,7 @@ function implementPluginLibrary(plugins) {
     var _isFinite    = g.isFinite;
 
     // Imports from implementations via core library.
-    var ZERO, ONE, TWO, MINUS_ONE, I, MINUS_I, INEXACT_ZERO, INEXACT_ONE, PI;
+    var ZERO, ONE, TWO, MINUS_ONE, I, MINUS_I, INEXACT_ZERO, INEXACT_ONE, INFINITY, PI;
 
     // Imports from core library.
     var makePolar                = plugins.get("makePolar");
@@ -3687,6 +3760,7 @@ function implementPluginLibrary(plugins) {
         MINUS_ONE                = plugins.get("MINUS_ONE");
         INEXACT_ZERO             = plugins.get("INEXACT_ZERO");
         INEXACT_ONE              = plugins.get("INEXACT_ONE");
+        INFINITY                 = plugins.get("INFINITY");
         PI                       = plugins.get("PI");
         I                        = plugins.get("I");
         MINUS_I                  = plugins.get("MINUS_I");
@@ -3701,7 +3775,24 @@ function implementPluginLibrary(plugins) {
     //
 
     function Complex_sqrt() {
-        return makePolar(sqrt(magnitude(this)), divide(angle(this), TWO));
+        if (SN_isInfinite(this)) {
+            // Infinities will give us NaNs below, so use
+            // exp(log(this) / 2), simplified.
+            return makePolar(INFINITY, divide(angle(this), TWO));
+        }
+        // For rectangular complex, compute it this way so that
+        // we can get exact roots correctly.
+        var thisMag = magnitude(this);
+        var thisReal = realPart(this);
+        var imag = sqrt(divide(subtract(thisMag, thisReal), TWO));
+        return makeRectangular(sqrt(divide(add(thisMag, thisReal), TWO)),
+                               // Choose principal branch.
+                               isNegative(imagPart(this)) ?
+                               negate(imag) : imag);
+
+        // If we implemented exact polar, then we would compute
+        // sqrt for them this way:
+        // return makePolar(sqrt(magnitude(this)), divide(angle(this), TWO));
     }
     function Complex_exp() {
         return makePolar(exp(realPart(this)), imagPart(this));
@@ -3717,14 +3808,6 @@ function implementPluginLibrary(plugins) {
     }
 
     function Complex_expt_fn(b, p) {
-        if (isZero(b)) {
-            if (isZero(p))
-                return isExact(b) && isExact(p) ? ONE : INEXACT_ONE;
-            if (isPositive(realPart(p)))
-                return isExact(p) ? b : INEXACT_ZERO;
-            raise("&implementation-restriction",
-                  "invalid power for zero expt", p);
-        }
         return exp(multiply(log(b), p));
     }
     function Complex_asin_fn(z) {
@@ -3758,6 +3841,18 @@ function implementPluginLibrary(plugins) {
         if (isZero(imagPart(this)))
             return realPart(this).valueOf();
         return _NaN;
+    }
+
+    function Complex_isFinite() {
+        return SN_isFinite(realPart(this)) && SN_isFinite(imagPart(this));
+    }
+
+    function Complex_isInfinite() {
+        return SN_isInfinite(realPart(this)) || SN_isInfinite(imagPart(this));
+    }
+
+    function Complex_isNaN() {
+        return SN_isNaN(realPart(this)) || SN_isNaN(imagPart(this));
     }
 
     //
@@ -3904,21 +3999,35 @@ function implementPluginLibrary(plugins) {
     }
 
     function Complex_reciprocal() {
+        if (SN_isInfinite(this)) {
+            // Infinities will give us NaNs below, so use
+            // exp(-log(this)), simplified.
+            return makePolar(ZERO, negate(angle(this)));
+        }
         var x = realPart(this), y = imagPart(this);
         var m2 = add(square(x), square(y));
         return makeRectangular(divide(x, m2), negate(divide(y, m2)));
     }
 
     function complexDivide(x, y, z) {  // returns (x + iy) / z
+        // z is finite.
         var zx = realPart(z), zy = imagPart(z);
         var m2 = add(square(zx), square(zy));
         return complexMultiply(x, y, divide(zx, m2), negate(divide(zy, m2)));
     }
 
     function Real_divide_Complex(z) {
+        if (SN_isInfinite(z)) {
+            // Infinities will give us NaNs, in the formula below, so use reciprocal.
+            return multiply(this, reciprocal(z));
+        }
         return complexDivide(this, isExact(this) ? ZERO : INEXACT_ZERO, z);
     }
     function Complex_divide(z) {
+        if (SN_isInfinite(z)) {
+            // Infinities will give us NaNs, in the formula below, so use reciprocal.
+            return multiply(this, reciprocal(z));
+        }
         return complexDivide(realPart(this), imagPart(this), z);
     }
 
@@ -3969,11 +4078,6 @@ function implementPluginLibrary(plugins) {
         return multiply(this, reciprocal(n));
     }
 
-    function complex_or_exact_expt(n) {
-        if (isExact(this))
-            return expt_N_EI_fn(this, n);
-        return Complex_expt_fn(this, n);
-    }
     function tan_via_divide_sin_cos() {
         return divide(sin(this), cos(this));
     }
@@ -4107,6 +4211,7 @@ function implementPluginLibrary(plugins) {
         }
         return (isNegative(p) ? reciprocal(ret) : ret);
     }
+
     function expt_N_EI(p) {
         return expt_N_EI_fn(this, p);
     }
@@ -4343,7 +4448,6 @@ function implementPluginLibrary(plugins) {
     api.ne_via_eq                = ne_via_eq;
     api.subtract_via_negate_add  = subtract_via_negate_add;
     api.divide_via_reciprocal_multiply= divide_via_reciprocal_multiply;
-    api.complex_or_exact_expt    = complex_or_exact_expt;
     api.tan_via_divide_sin_cos   = tan_via_divide_sin_cos;
     api.isUnit_via_eq            = isUnit_via_eq;
     api.Real_magnitude_via_abs   = Real_magnitude_via_abs;
@@ -4384,6 +4488,9 @@ function implementPluginLibrary(plugins) {
     api.Real_toExponential       = Real_toExponential;
     api.Real_toPrecision         = Real_toPrecision;
     api.Complex_valueOf          = Complex_valueOf;
+    api.Complex_isFinite         = Complex_isFinite;
+    api.Complex_isInfinite       = Complex_isInfinite;
+    api.Complex_isNaN            = Complex_isNaN;
 
     return api;
 }
@@ -4515,6 +4622,9 @@ function installGenericFunctions(plugins) {
     def("SN_isNaN",      [ExactReal], "retFalse");
     def("SN_isFinite",   [ExactReal], "retTrue");
     def("SN_isInfinite", [ExactReal], "retFalse");
+    def("SN_isNaN",      [Complex],   "Complex_isNaN");
+    def("SN_isFinite",   [Complex],   "Complex_isFinite");
+    def("SN_isInfinite", [Complex],   "Complex_isInfinite");
     def("angle",         [ExactReal], "ExactReal_angle_via_isNegative");
 
     def("isRational",     [ExactRational], "retTrue");
@@ -4536,14 +4646,7 @@ function installGenericFunctions(plugins) {
 
     def("bitwiseNot",     [ExactInteger], "bitwiseNot_via_subtract");
 
-    // The following expt definition is invalid for (ExactReal, ExactInteger)...
-    def("expt", [Complex, Complex], "Complex_expt");
-
-    // ... so override it.
-    def("expt", [ExactReal, ExactInteger], "expt_N_EI");
-
-    // Avoid lots of work for inexact bases.
-    def("expt", [Complex, ExactInteger], "complex_or_exact_expt");
+    def("expt",           [Complex, Complex], "Complex_expt");
 
     def("numberToString", [ExactRational], "ExactRational_numberToString");
     def("numberToString", [ExactInteger], undefined);
@@ -4804,9 +4907,11 @@ function implementNativeInexactReal(plugins) {
     var Flonum = NativeInexactReal;
 
     var INEXACT_ZERO = new NativeInexactReal(0);
+    var INEXACT_NEGATIVE_ZERO = new NativeInexactReal(-0);
     function nativeToInexact(x) {
         //assert(typeof x === "number");
-        return (x === 0 ? INEXACT_ZERO : new NativeInexactReal(x));
+        return (x === 0 ? (1/x === -Infinity ? INEXACT_NEGATIVE_ZERO : INEXACT_ZERO) :
+                          new NativeInexactReal(x));
     }
 
     function parseInexact(sign, string) {
@@ -5045,7 +5150,8 @@ function implementNativeFlonumLibrary(plugins) {
             return (t > 0 ? "+inf.0" : "-inf.0");
         }
 
-        var s = Number_toString(t);
+        var s = t === 0 ? (1/t === -Infinity ? "-0" : "0") :
+                          Number_toString(t);
 
         if (String_indexOf(s, '.') === -1) {
             // Force the result to contain a decimal point as per R6RS.
@@ -5523,7 +5629,7 @@ function implementBigInteger(plugins, BigInteger) {
     var toBigInteger = plugins.get("Dispatch").defGeneric(
         "to" + BigIntegerName, 1);
 
-    var raise, numberToString, isNegative, negate, abs, mod, reciprocal, divide, sign, exp10, nativeToInexact, inexactRectangular, ZERO, ONE, MINUS_ONE, _2_32, PI, INEXACT_ZERO;
+    var raise, numberToString, isNegative, negate, abs, mod, reciprocal, divide, sign, exp10, nativeToInexact, exactRectangular, inexactRectangular, ZERO, ONE, MINUS_ONE, _2_32, PI, INEXACT_ZERO;
 
     raise                    = plugins.get("raise");
 
@@ -5541,6 +5647,7 @@ function implementBigInteger(plugins, BigInteger) {
 
     function onPluginsChanged(plugins, changed) {
         nativeToInexact          = plugins.get("nativeToInexact");
+        exactRectangular         = plugins.get("exactRectangular");
         inexactRectangular       = plugins.get("inexactRectangular");
         ZERO                     = plugins.get("ZERO");
         ONE                      = plugins.get("ONE");
@@ -5644,15 +5751,25 @@ function implementBigInteger(plugins, BigInteger) {
         var s = this.sign();
         if (s === 0)
             return this;
+
+        var isqrt = exactIntegerSqrt(this.abs());
+        if (isqrt[1] == 0) {
+            if (this.isNegative()) {
+                return exactRectangular(ZERO, isqrt[0]);
+            } else {
+                return isqrt[0];
+            }
+        }
+
         var mag = nativeToInexact(Math_exp(this.abs().log() / 2));
         if (s < 0)
             return inexactRectangular(INEXACT_ZERO, mag);
         return mag;
     }
 
-    function BigInteger_exactIntegerSqrt() {
+    function exactIntegerSqrt(n) {
 
-        // I know of no use cases for this.  Be stupid.  Be correct.
+        // Be stupid.  Be correct.
 
         function doit(n, a) {
             while (true) {
@@ -5677,26 +5794,30 @@ function implementBigInteger(plugins, BigInteger) {
             }
         }
 
-        switch (this.sign()) {
+        switch (n.sign()) {
         case -1:
-            raise("&assertion", "negative number", this);
+            raise("&assertion", "negative number", n);
         case 0:
             return [ ZERO, ZERO ];
         case 1: default:
             break;
         }
-        var l = this.log() / 2 / Math_LN10;
+        var l = n.log() / 2 / Math_LN10;
 
         if (l < 7) {
             // Use native arithmetic.
-            var x = this.valueOf();
+            var x = n.valueOf();
             var f = Math_floor(Math_sqrt(x));
             return [BigInteger(f), BigInteger(x - f * f)];
         }
 
         var a = BigInteger(Number_toString(Math_pow(10, l - Math_floor(l)))
                            + "e" + Math_floor(l));
-        return doit(this, a);
+        return doit(n, a);
+    }
+
+    function BigInteger_exactIntegerSqrt() {
+        return exactIntegerSqrt(this);
     }
 
     function BigInteger_gcdNonnegative(n) {
