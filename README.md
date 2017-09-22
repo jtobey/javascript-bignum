@@ -7,7 +7,7 @@ Big integer implementation based on javascript-biginteger,
 https://github.com/silentmatt/javascript-biginteger.
 
 
-#What is it?
+# What is it?
 
 The Scheme language supports "exact" arithmetic and mixing exact with
 inexact numbers.  Several basic operations, including add, subtract,
@@ -31,7 +31,7 @@ Exact numbers support the standard ECMA Number formatting methods
 limit to precision.
 
 
-#Implementation Details
+# Implementation Details
 
 This release contains a plugin API designed to support alternative
 implementations of four broad types: exact integer, exact rational,
@@ -61,7 +61,7 @@ should not use them.  The Scheme functions are *not* methods of number
 objects.
 
 
-#Similar Projects
+# Similar Projects
 
 * Danny Yoo's Whalesong (http://hashcollision.org/whalesong/), a
   Racket (Scheme) to JavaScript compiler with its own Scheme numeric
@@ -83,14 +83,14 @@ objects.
 * Any others out there???
 
 
-#Installation
+# Installation
 
 Copy biginteger.js and schemeNumber.js from this directory to your Web
 or JavaScript directory.  Load biginteger.js first, then
 schemeNumber.js.
 
 
-#Usage
+# Usage
 
 See documentation in schemeNumber.js, or view it on the Web at
 http://john-edwin-tobey.org/Scheme/javascript-bignum/docs/files/schemeNumber-js.html,
@@ -98,7 +98,7 @@ or try to extract it to HTML using [NaturalDocs][2] and the build-docs
 script in this directory.
 
 
-#Changes
+# Changes
 
 1.3.0 (unstable) - 2012-03-07
 
